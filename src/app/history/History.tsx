@@ -105,11 +105,11 @@ export function History() {
         <div className="cr-title">
           <span className="evo-name">{e.subagent && nested ? e.subagent : e.subject}</span>
           {e.reverted ? (
-            <span className="chip evo-badge-undone" style={{ height: 18 }}>
+            <span className="chip chip-sm evo-badge-undone">
               <Icon name="arrow-counter-clockwise" className="ico-12" /> Undone
             </span>
           ) : (
-            <span className="chip chip-accent" style={{ height: 18 }}>
+            <span className="chip chip-sm chip-accent">
               <Icon name="check" className="ico-12" /> Applied
             </span>
           )}
@@ -198,7 +198,7 @@ export function History() {
                     <div className="cr-body">
                       <div className="cr-title">
                         <span className="evo-name">{base}</span>
-                        <span className="chip" style={{ height: 18 }}>{g.members.length} parallel edits</span>
+                        <span className="chip chip-sm">{g.members.length} parallel edits</span>
                       </div>
                     </div>
                     <button

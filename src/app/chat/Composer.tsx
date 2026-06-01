@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AgentKind, ModelState } from '../../../electron/shared/protocol'
 import { Icon } from '@/shell/Icon'
+import { Seg } from '@/app/settings/controls'
 import { GitPanel } from '@/app/workbench/GitPanel'
 
-const MODES = [
+type Mode = 'plan' | 'auto' | 'ask'
+const MODES: [Mode, string, string][] = [
   ['plan', 'Plan', 'list-bullets'],
   ['auto', 'Auto', 'lightning'],
   ['ask', 'Ask', 'hand'],
-] as const
-type Mode = (typeof MODES)[number][0]
+]
 
 const BACKENDS: Record<AgentKind, { name: string; sub: string; icon: string }> = {
   claude: { name: 'Claude', sub: 'Claude Agent · ACP', icon: 'terminal-window' },
@@ -178,14 +179,7 @@ export function Composer({
           placeholder="Reply to Hearth, or ask it to change itself…"
         />
         <div className="composer-bar">
-          <div className="mini-seg">
-            {MODES.map(([v, l, ic]) => (
-              <span key={v} className={'seg' + (mode === v ? ' is-active' : '')} onClick={() => setMode(v)}>
-                <Icon name={ic} />
-                {l}
-              </span>
-            ))}
-          </div>
+          <Seg value={mode} options={MODES} onChange={setMode} />
           <span className="spacer" />
           <button
             className={'send' + (busy ? '' : input.trim() ? '' : ' is-disabled')}

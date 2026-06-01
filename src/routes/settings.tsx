@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { Icon } from '@/shell/Icon'
 import { useShell, ACCENT_OPTIONS, type Accent } from '@/shell/store'
-import { Seg, SetRow, Switch } from '@/app/settings/controls'
+import { Seg, SetRow, Switch, SecLabel } from '@/app/settings/controls'
 import type { AgentKind, ModelState } from '../../electron/shared/protocol'
 import type { SoulConfig } from '../../electron/main/soul/soul'
 
@@ -55,9 +55,7 @@ function SettingsScreen() {
           Your files and conversations stay on your machine. Hearth only talks to the agents you connect.
         </p>
 
-        <div className="sec-label">
-          <Icon name="user-circle" /> Account
-        </div>
+        <SecLabel icon="user-circle">Account</SecLabel>
         <SetRow k="Signed in" h="Local profile · this machine">
           <span className="chip">
             <Icon name="user" /> you@hearth.local
@@ -69,11 +67,7 @@ function SettingsScreen() {
           </span>
         </SetRow>
 
-        <div className="sec">
-          <div className="sec-label">
-            <Icon name="plugs-connected" /> Agent
-          </div>
-        </div>
+        <SecLabel icon="plugs-connected">Agent</SecLabel>
         <SetRow k="Default backend" h="Which ACP agent new sessions start with.">
           <Seg<AgentKind> value={backend} options={[['claude', 'Claude'], ['codex', 'Codex']]} onChange={setBe} />
         </SetRow>
@@ -100,11 +94,7 @@ function SettingsScreen() {
           />
         </SetRow>
 
-        <div className="sec">
-          <div className="sec-label">
-            <Icon name="palette" /> Appearance
-          </div>
-        </div>
+        <SecLabel icon="palette">Appearance</SecLabel>
         <SetRow k="Theme">
           <Seg value={s.theme} options={[['light', 'Light'], ['dark', 'Dark']]} onChange={s.setTheme} />
         </SetRow>
@@ -124,11 +114,7 @@ function SettingsScreen() {
           <Switch on={s.reduceMotion} onChange={s.setReduceMotion} />
         </SetRow>
 
-        <div className="sec">
-          <div className="sec-label">
-            <Icon name="chat-text" /> Personality
-          </div>
-        </div>
+        <SecLabel icon="chat-text">Personality</SecLabel>
         {soul && (
           <>
             <SetRow k="Response length">
@@ -147,11 +133,7 @@ function SettingsScreen() {
           </>
         )}
 
-        <div className="sec">
-          <div className="sec-label">
-            <Icon name="brain" /> Memory
-          </div>
-        </div>
+        <SecLabel icon="brain">Memory</SecLabel>
         <SetRow k="Long-term memory" h="Managed through chat — say “remember this” or “forget that”. Read every session.">
           <span className="chip">
             <Icon name="file-text" /> {memory ? 'In use' : 'Empty'}
