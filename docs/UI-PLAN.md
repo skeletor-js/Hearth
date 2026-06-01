@@ -190,7 +190,7 @@ Terminal/Browser land in P4).
       user's manual editor edits.)*
 - [x] **P4-2.** ∥ **Terminal:** `node-pty` PTY per panel (cwd = workspace) streamed
       to `xterm.js`. Add deps. *Accept:* a real shell runs in the panel.
-- [ ] **P4-3.** ∥ **Browser (real, persistent):** an embedded Chromium pane
+- [x] **P4-3.** ∥ **Browser (real, persistent):** an embedded Chromium pane
       (`WebContentsView`) the user can navigate **anywhere** and **log into** — backed
       by a persistent session partition (`persist:hearth-browser`) so cookies/logins
       survive restarts. Full chrome: editable URL bar, back/forward/reload, loading
@@ -200,7 +200,7 @@ Terminal/Browser land in P4).
       dev-server URL (via `extractDevUrl`) and default Hearth to its renderer URL — but
       it's a general browser, not just a preview. Per-workspace last-URL remembered.
       *Accept:* browse to a site, log in, restart, still logged in.
-- [ ] **P4-3b.** ∥ **Agent browser control** (same pattern as `view_app`/control, but
+- [x] **P4-3b.** ∥ **Agent browser control** (same pattern as `view_app`/control, but
       targeting the browser view's webContents): extend the Hearth MCP server with
       `browser_navigate / browser_read (snapshot+text) / browser_screenshot /
       browser_click / browser_fill / browser_eval / browser_back|forward|reload`.
@@ -209,7 +209,7 @@ Terminal/Browser land in P4).
       tools; backend-agnostic (works on Claude AND Codex without relying on either's
       native/add-on browser support). *Accept:* the agent navigates + reads a page via
       the tools; a user login is visible to the agent's reads.
-- [ ] **P4-4.** Gates + visual; checkpoint commit.
+- [x] **P4-4.** Gates + visual; checkpoint commit.
 
 ### P5 — Settings + Personality/Memory + Agents  ∥
 - [ ] **P5-1.** ∥ Settings screen: Account (display), Appearance (✅ wire),

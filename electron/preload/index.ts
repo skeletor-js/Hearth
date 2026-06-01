@@ -10,6 +10,7 @@ import type { SelfModResult } from '../main/self-mod/self-mod-service.js'
 import type { SelfModLogEntry } from '../main/self-mod/git.js'
 import type { Workspace } from '../main/workspaces/registry.js'
 import type { FileContent, FileEntry } from '../main/fs/files.js'
+import type { BrowserState } from '../main/browser/browser-view.js'
 import type { CreateSessionInput, SessionDetail, SessionMeta, TranscriptEntry } from '../main/sessions/store.js'
 
 interface WorkspaceStatus {
@@ -114,6 +115,20 @@ const api = {
     read: (cwd: string | undefined, rel: string): Promise<FileContent> => ipcRenderer.invoke(CH.fsRead, cwd, rel),
     write: (cwd: string | undefined, rel: string, content: string): Promise<void> =>
       ipcRenderer.invoke(CH.fsWrite, cwd, rel, content),
+  },
+  browser: {
+    open: (workspaceId: string | undefined, fallback: string) => ipcRenderer.send(CH.browserOpen, { workspaceId, fallback }),
+    navigate: (url: string, workspaceId?: string) => ipcRenderer.send(CH.browserNavigate, { url, workspaceId }),
+    back: () => ipcRenderer.send(CH.browserBack),
+    forward: () => ipcRenderer.send(CH.browserForward),
+    reload: () => ipcRenderer.send(CH.browserReload),
+    setBounds: (rect: { x: number; y: number; width: number; height: number }) => ipcRenderer.send(CH.browserSetBounds, rect),
+    hide: () => ipcRenderer.send(CH.browserHide),
+    onState: (cb: (state: BrowserState) => void) => {
+      const h = (_e: unknown, state: BrowserState) => cb(state)
+      ipcRenderer.on(CH.browserState, h)
+      return () => void ipcRenderer.off(CH.browserState, h)
+    },
   },
   microApps: {
     create: (name: string) => ipcRenderer.invoke(CH.microAppCreate, name),

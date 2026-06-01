@@ -46,6 +46,15 @@ export const HEARTH_CHANNELS = {
   terminalKill: 'terminal:kill',
   terminalData: 'terminal:data', // main → renderer
   terminalExit: 'terminal:exit', // main → renderer
+  // browser: embedded persistent WebContentsView (floats above the renderer).
+  browserOpen: 'browser:open',
+  browserNavigate: 'browser:navigate',
+  browserBack: 'browser:back',
+  browserForward: 'browser:forward',
+  browserReload: 'browser:reload',
+  browserSetBounds: 'browser:set-bounds',
+  browserHide: 'browser:hide',
+  browserState: 'browser:state', // main → renderer
   microAppCreate: 'micro-app:create',
   microAppStart: 'micro-app:start',
   microAppStop: 'micro-app:stop',

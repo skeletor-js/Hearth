@@ -203,4 +203,149 @@ server.registerTool(
   },
 )
 
+// ─── BROWSER (the same persistent, logged-in browser the user uses) ───────────
+// These drive the embedded WebContentsView via the bridge's /browser/* endpoints,
+// so the agent acts inside the user's authenticated sessions. Works on any backend.
+async function browserCall(action, { method = 'POST', body } = {}) {
+  const res = await fetch(`${BRIDGE}/browser/${action}`, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: method === 'POST' ? JSON.stringify(body ?? {}) : undefined,
+  })
+  if (!res.ok) throw new Error(`bridge /browser/${action} HTTP ${res.status}`)
+  const out = await res.json()
+  if (out.ok === false) throw new Error(out.error || `${action} failed`)
+  return out.result ?? out
+}
+
+server.registerTool(
+  'browser_navigate',
+  {
+    title: 'Navigate the embedded browser',
+    description:
+      'Navigate the embedded browser (a real, persistent Chromium the user also uses and logs into) to a URL. ' +
+      'A bare domain is upgraded to https; non-URL text becomes a search.',
+    inputSchema: { url: z.string().describe('URL or search query.') },
+  },
+  async ({ url }) => {
+    if (!BRIDGE) return noBridge()
+    try {
+      await browserCall('navigate', { body: { url } })
+      return textResult(await browserCall('read'))
+    } catch (e) {
+      return errResult(e)
+    }
+  },
+)
+
+server.registerTool(
+  'browser_read',
+  {
+    title: 'Read the embedded browser page',
+    description:
+      "Return the current page's URL, title, and visible text (truncated). Use to read content — including pages " +
+      'behind the user’s login, since it’s the same authenticated browser.',
+    inputSchema: {},
+  },
+  async () => {
+    if (!BRIDGE) return noBridge()
+    try {
+      return textResult(await browserCall('read'))
+    } catch (e) {
+      return errResult(e)
+    }
+  },
+)
+
+server.registerTool(
+  'browser_screenshot',
+  {
+    title: 'Screenshot the embedded browser',
+    description: 'Capture a PNG of the current embedded-browser page.',
+    inputSchema: {},
+  },
+  async () => {
+    if (!BRIDGE) return noBridge()
+    try {
+      const res = await fetch(`${BRIDGE}/browser/screenshot`)
+      if (!res.ok) return errResult(new Error(`screenshot HTTP ${res.status}`))
+      const data = Buffer.from(await res.arrayBuffer()).toString('base64')
+      return { content: [{ type: 'text', text: 'Embedded browser:' }, { type: 'image', data, mimeType: 'image/png' }] }
+    } catch (e) {
+      return errResult(e)
+    }
+  },
+)
+
+server.registerTool(
+  'browser_click',
+  {
+    title: 'Click in the embedded browser',
+    description: 'Click the first element matching a CSS selector on the current page.',
+    inputSchema: { selector: z.string().describe('CSS selector to click.') },
+  },
+  async ({ selector }) => {
+    if (!BRIDGE) return noBridge()
+    try {
+      return textResult(await browserCall('click', { body: { selector } }))
+    } catch (e) {
+      return errResult(e)
+    }
+  },
+)
+
+server.registerTool(
+  'browser_fill',
+  {
+    title: 'Fill an input in the embedded browser',
+    description: 'Set the value of an input/textarea matching a CSS selector on the current page.',
+    inputSchema: { selector: z.string().describe('CSS selector.'), value: z.string().describe('Value to set.') },
+  },
+  async ({ selector, value }) => {
+    if (!BRIDGE) return noBridge()
+    try {
+      return textResult(await browserCall('fill', { body: { selector, value } }))
+    } catch (e) {
+      return errResult(e)
+    }
+  },
+)
+
+server.registerTool(
+  'browser_eval',
+  {
+    title: 'Run JavaScript in the embedded browser',
+    description: 'Evaluate JavaScript in the embedded-browser page context and return its JSON-serializable result.',
+    inputSchema: { code: z.string().describe('JavaScript to evaluate in the page.') },
+  },
+  async ({ code }) => {
+    if (!BRIDGE) return noBridge()
+    try {
+      return textResult(await browserCall('eval', { body: { code } }))
+    } catch (e) {
+      return errResult(e)
+    }
+  },
+)
+
+for (const action of ['back', 'forward', 'reload']) {
+  server.registerTool(
+    `browser_${action}`,
+    {
+      title: `Browser ${action}`,
+      description: `${action[0].toUpperCase() + action.slice(1)} the embedded browser.`,
+      inputSchema: {},
+    },
+    async () => {
+      if (!BRIDGE) return noBridge()
+      try {
+        await browserCall(action)
+        return textResult(await browserCall('read'))
+      } catch (e) {
+        return errResult(e)
+      }
+    },
+  )
+}
+
 await server.connect(new StdioServerTransport())

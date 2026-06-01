@@ -13,6 +13,8 @@ import { SelfModService } from './self-mod/self-mod-service.js'
 import { HmrController } from './self-mod/hmr.js'
 import { WorkspaceRegistry } from './workspaces/registry.js'
 import { SessionStore } from './sessions/store.js'
+import { BrowserManager } from './browser/browser-view.js'
+import { HEARTH_CHANNELS } from '../shared/channels.js'
 import { join } from 'node:path'
 import { stopAllMicroApps } from './micro-apps/server.js'
 import { startAgentBridge } from './agent-bridge.js'
@@ -79,11 +81,16 @@ async function bootstrap(): Promise<void> {
   const workspaces = new WorkspaceRegistry(join(dataDir, 'workspaces.json'), REPO_ROOT)
   const sessions = new SessionStore(join(dataDir, 'sessions'))
 
+  // Embedded persistent browser; the agent drives the same view (browser_* tools).
+  const browser = new BrowserManager(window, (state) =>
+    window.webContents.send(HEARTH_CHANNELS.browserState, state),
+  )
+
   // Loopback bridge: lets the agent see (snapshot) AND drive (eval) the live app.
   // Route captures use a hidden window so the user's view is never disturbed.
-  startAgentBridge({ mainWindow: window, createSnapshotWindow }, REPO_ROOT)
+  startAgentBridge({ mainWindow: window, createSnapshotWindow, browser }, REPO_ROOT)
 
-  registerIpc({ repoRoot: REPO_ROOT, host, selfMod, workspaces, sessions, window })
+  registerIpc({ repoRoot: REPO_ROOT, host, selfMod, workspaces, sessions, browser, window })
 
   // Connect the current backend in the background; the UI renders immediately.
   // A failed connect must surface, not crash boot.

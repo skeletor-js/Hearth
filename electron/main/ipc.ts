@@ -10,6 +10,7 @@ import type { SessionStore, TranscriptEntry } from './sessions/store.js'
 import type { CreateSessionInput } from './sessions/store.js'
 import { listDir, readFile as fsReadFile, writeFile as fsWriteFile } from './fs/files.js'
 import { TerminalManager } from './terminal/pty.js'
+import type { BrowserManager, Rect } from './browser/browser-view.js'
 import { getDiff } from './self-mod/git-diff.js'
 import {
   branches as gitBranches,
@@ -34,11 +35,12 @@ export interface MainServices {
   selfMod: SelfModService
   workspaces: WorkspaceRegistry
   sessions: SessionStore
+  browser: BrowserManager
   window: BrowserWindow
 }
 
 export function registerIpc(services: MainServices): void {
-  const { repoRoot, host, selfMod, workspaces, sessions, window } = services
+  const { repoRoot, host, selfMod, workspaces, sessions, browser, window } = services
 
   // Stream agent updates to the renderer (forwarded from whichever backend is live).
   host.onUpdate((sessionId, update) => {
@@ -158,6 +160,19 @@ export function registerIpc(services: MainServices): void {
     terminals.resize(p.id, p.cols, p.rows),
   )
   ipcMain.on(HEARTH_CHANNELS.terminalKill, (_e, p: { id: string }) => terminals.kill(p.id))
+
+  // Browser (embedded WebContentsView). The renderer reports the content-area rect.
+  ipcMain.on(HEARTH_CHANNELS.browserOpen, (_e, p: { workspaceId?: string; fallback: string }) =>
+    browser.open(p.workspaceId, p.fallback),
+  )
+  ipcMain.on(HEARTH_CHANNELS.browserNavigate, (_e, p: { url: string; workspaceId?: string }) =>
+    browser.navigate(p.url, p.workspaceId),
+  )
+  ipcMain.on(HEARTH_CHANNELS.browserBack, () => browser.back())
+  ipcMain.on(HEARTH_CHANNELS.browserForward, () => browser.forward())
+  ipcMain.on(HEARTH_CHANNELS.browserReload, () => browser.reload())
+  ipcMain.on(HEARTH_CHANNELS.browserSetBounds, (_e, rect: Rect) => browser.setBounds(rect))
+  ipcMain.on(HEARTH_CHANNELS.browserHide, () => browser.hide())
 
   // Files (workspace-rooted; cwd defaults to the Hearth repo).
   ipcMain.handle(HEARTH_CHANNELS.fsList, (_e, cwd: string | undefined, rel?: string) => listDir(cwd || repoRoot, rel))

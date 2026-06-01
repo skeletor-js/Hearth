@@ -6,7 +6,7 @@ import { PlanTab } from './PlanTab'
 import { SelfTab } from './SelfTab'
 import { FilesTab } from './FilesTab'
 import { TerminalTab } from './TerminalTab'
-import { BrowserTab } from './placeholders'
+import { BrowserTab } from './BrowserTab'
 import { GitPanel } from './GitPanel'
 
 const WB_TABS = [

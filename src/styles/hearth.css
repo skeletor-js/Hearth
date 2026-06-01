@@ -811,3 +811,8 @@ select.field{ cursor:default; }
 .md-preview hr{ border:0;border-top:1px solid var(--border);margin:16px 0; }
 .md-preview table{ border-collapse:collapse;margin:10px 0; }
 .md-preview th,.md-preview td{ border:1px solid var(--border);padding:5px 9px;text-align:left; }
+
+/* Browser URL-bar input (embedded browser chrome). */
+.bview-url .bar input{ flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--strong);
+  font:inherit;font-size:var(--t-13); }
+.bview-url .bar input::placeholder{ color:var(--faint); }

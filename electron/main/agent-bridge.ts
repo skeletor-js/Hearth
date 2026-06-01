@@ -23,6 +23,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { BrowserWindow } from 'electron'
 import { HEARTH_CHANNELS } from '../shared/channels.js'
+import type { BrowserManager } from './browser/browser-view.js'
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
@@ -46,7 +47,16 @@ export interface AgentBridgeDeps {
   mainWindow: BrowserWindow
   /** Lazily create a hidden window for off-screen route captures. */
   createSnapshotWindow: () => BrowserWindow
+  /** The embedded browser the agent can drive (same view the user logs into). */
+  browser: BrowserManager
 }
+
+// JS run inside the embedded browser page for read/click/fill.
+const READ_JS = `({ url: location.href, title: document.title, text: (document.body && document.body.innerText || '').slice(0, 20000) })`
+const clickJS = (sel: string) =>
+  `(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return { ok:false, error:'no element for ${sel.replace(/'/g, "\\'")}' }; el.click(); return { ok:true }; })()`
+const fillJS = (sel: string, value: string) =>
+  `(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return { ok:false, error:'no element' }; el.focus(); el.value = ${JSON.stringify(value)}; el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); return { ok:true }; })()`
 
 export function startAgentBridge(deps: AgentBridgeDeps, repoRoot: string): () => void {
   // One reusable hidden window for route captures, created on first use.
@@ -90,12 +100,56 @@ export function startAgentBridge(deps: AgentBridgeDeps, repoRoot: string): () =>
         sendJson(res, 200, { ok: true, result })
         return
       }
+      // ── Embedded-browser control (same view the user logs into) ──────────
+      if (url.pathname.startsWith('/browser/')) {
+        const action = url.pathname.slice('/browser/'.length)
+        const wc = deps.browser.contents()
+        if (req.method === 'GET' && action === 'screenshot') {
+          const png = (await wc.capturePage()).toPNG()
+          res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': png.length })
+          res.end(png)
+          return
+        }
+        const body = req.method === 'POST' ? (JSON.parse((await readBody(req)) || '{}') as Record<string, unknown>) : {}
+        if (action === 'navigate') {
+          deps.browser.navigate(String(body.url ?? ''))
+          await sleep(300)
+          sendJson(res, 200, { ok: true })
+          return
+        }
+        if (action === 'back') { deps.browser.back(); sendJson(res, 200, { ok: true }); return }
+        if (action === 'forward') { deps.browser.forward(); sendJson(res, 200, { ok: true }); return }
+        if (action === 'reload') { deps.browser.reload(); sendJson(res, 200, { ok: true }); return }
+        if (action === 'read') {
+          const result = await wc.executeJavaScript(READ_JS, true)
+          sendJson(res, 200, { ok: true, result })
+          return
+        }
+        if (action === 'click') {
+          const result = await wc.executeJavaScript(clickJS(String(body.selector ?? '')), true)
+          sendJson(res, 200, result)
+          return
+        }
+        if (action === 'fill') {
+          const result = await wc.executeJavaScript(fillJS(String(body.selector ?? ''), String(body.value ?? '')), true)
+          sendJson(res, 200, result)
+          return
+        }
+        if (action === 'eval') {
+          const result = await wc.executeJavaScript(String(body.code ?? ''), true)
+          sendJson(res, 200, { ok: true, result })
+          return
+        }
+        sendJson(res, 404, { ok: false, error: `unknown browser action: ${action}` })
+        return
+      }
+
       res.writeHead(404)
       res.end('not found')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      // /eval errors are returned as ok:false so the agent sees the failure text.
-      if (url.pathname === '/eval') sendJson(res, 200, { ok: false, error: message })
+      // /eval and /browser errors are returned as ok:false so the agent sees them.
+      if (url.pathname === '/eval' || url.pathname.startsWith('/browser/')) sendJson(res, 200, { ok: false, error: message })
       else {
         res.writeHead(500)
         res.end(message)
