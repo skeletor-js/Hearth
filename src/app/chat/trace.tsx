@@ -19,8 +19,11 @@ export type TraceStep = {
 
 function fmtSecs(ms?: number): string {
   if (!ms || ms < 400) return ''
+  return ` for ${fmtDur(ms)}`
+}
+function fmtDur(ms: number): string {
   const s = ms / 1000
-  return ` for ${s < 10 ? s.toFixed(1) : Math.round(s)}s`
+  return `${s < 10 ? s.toFixed(1) : Math.round(s)}s`
 }
 
 export type TraceResult = { text: string; hasDiff: boolean }
@@ -120,12 +123,14 @@ export function LiveTrace({
   backend,
   running,
   result,
+  durationMs,
   onOpenReview,
 }: {
   steps: TraceStep[]
   backend: AgentKind
   running: boolean
   result?: TraceResult
+  durationMs?: number
   onOpenReview?: () => void
 }) {
   const be = BACKEND_META[backend]
@@ -136,6 +141,7 @@ export function LiveTrace({
           {running ? <span className="tspin big" /> : <Icon name="check-circle" fill className="ico-14" />}
         </span>
         <span className="trace-title">{running ? 'Working' : 'Worked'}</span>
+        {!running && durationMs ? <span className="trace-elapsed">· {fmtDur(durationMs)}</span> : null}
         <span className="spacer" />
         <span className="trace-be">
           <Icon name={be.icon} className="ico-12" /> {be.name}

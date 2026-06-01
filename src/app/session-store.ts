@@ -61,6 +61,10 @@ interface SessionState {
   /** Whether the active workspace's scratchpad has content — drives the composer chip. */
   scratchpadNonEmpty: boolean
   setScratchpadNonEmpty: (v: boolean) => void
+
+  /** Text pushed into the composer for editing/resend (e.g. "edit" a past prompt). */
+  composerDraft: string | null
+  setComposerDraft: (t: string | null) => void
 }
 
 export const useSession = create<SessionState>((set, get) => ({
@@ -91,4 +95,7 @@ export const useSession = create<SessionState>((set, get) => ({
 
   scratchpadNonEmpty: false,
   setScratchpadNonEmpty: (scratchpadNonEmpty) => set({ scratchpadNonEmpty }),
+
+  composerDraft: null,
+  setComposerDraft: (composerDraft) => set({ composerDraft }),
 }))

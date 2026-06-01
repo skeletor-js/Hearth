@@ -325,6 +325,14 @@ button.rail-item{ width:100%;border:0;background:transparent;font:inherit;text-a
 .msg-role .who{ color:var(--strong); }
 .msg-role .flame{ color:var(--accent);font-size:14px; }
 .msg-role .time{ color:var(--faint);font-weight:400; }
+.msg-role .spacer{ flex:1; }
+/* Per-message hover actions (copy / retry / edit) */
+.msg-actions{ display:inline-flex;align-items:center;gap:2px;opacity:0;transition:opacity .12s ease; }
+.msg:hover .msg-actions{ opacity:1; }
+.msg-act{ width:24px;height:22px;border-radius:var(--r-sm);display:inline-flex;align-items:center;justify-content:center;
+  color:var(--faint);transition:background .12s ease,color .12s ease; }
+.msg-act:hover{ background:var(--hover);color:var(--strong); }
+.msg-act .ph-thin{ font-size:13px; }
 .msg-body{ font-size:var(--t-13);color:var(--strong);line-height:1.65; }
 .msg-body p{ margin:0 0 10px; } .msg-body p:last-child{ margin-bottom:0; }
 .msg-body code{ font-family:var(--mono);font-size:12px;background:var(--code-bg);

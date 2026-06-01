@@ -13,7 +13,7 @@ import { renderMd, handleCodeCopyClick } from './markdown'
 
 type Block =
   | { kind: 'text'; text: string }
-  | { kind: 'trace'; steps: TraceStep[]; result?: TraceResult; edits: number }
+  | { kind: 'trace'; steps: TraceStep[]; result?: TraceResult; edits: number; turnMs?: number }
   | { kind: 'planref'; done: number; total: number }
 type Msg =
   | { id: number; role: 'user'; text: string }
@@ -24,6 +24,14 @@ const MAX_DIFF_ROWS = 60
 
 function basename(p: string): string {
   return p.split('/').pop() || p
+}
+
+function copyText(text: string): void {
+  try {
+    void navigator.clipboard?.writeText(text)
+  } catch {
+    /* clipboard unavailable in this context */
+  }
 }
 
 function diffRows(oldText: string | null, newText: string): { add: number; del: number; rows: DiffRow[] } {
@@ -53,6 +61,7 @@ export function ChatView() {
   const nextId = useRef(0)
   const openText = useRef(false) // last hearth block is a coalescing text block
   const openThought = useRef(false) // streaming a single reasoning block (coalesce deltas)
+  const turnStart = useRef(0) // wall-clock turn start, for the "Worked · Ns" badge
   const scrollRef = useRef<HTMLDivElement>(null)
   const openRightTab = useShell((s) => s.openRightTab)
   const active = useSession((s) => s.active)
@@ -183,18 +192,16 @@ export function ChatView() {
               break
             }
           }
-          if (ti >= 0) {
-            const tb = blocks[ti] as Extract<Block, { kind: 'trace' }>
-            if (tb.edits > 0 && !tb.result) {
-              const next = [...blocks]
-              next[ti] = {
-                ...tb,
-                result: { text: `Applied changes to ${tb.edits} file${tb.edits > 1 ? 's' : ''}`, hasDiff: true },
-              }
-              return replaceTail(next)
-            }
-          }
-          return prev
+          if (ti < 0) return prev
+          const tb = blocks[ti] as Extract<Block, { kind: 'trace' }>
+          const turnMs = replay ? tb.turnMs : turnStart.current ? Date.now() - turnStart.current : tb.turnMs
+          const result =
+            tb.edits > 0 && !tb.result
+              ? { text: `Applied changes to ${tb.edits} file${tb.edits > 1 ? 's' : ''}`, hasDiff: true }
+              : tb.result
+          const next = [...blocks]
+          next[ti] = { ...tb, result, turnMs }
+          return replaceTail(next)
         }
       }
     })
@@ -287,6 +294,7 @@ export function ChatView() {
     openText.current = false
     pushUser(text)
     setBusy(true)
+    turnStart.current = Date.now()
     void window.hearth.sessions.append(a.id, [{ kind: 'user', text }])
     try {
       // Auto-attach: when on for this workspace, the agent sees the pad fenced in
@@ -317,6 +325,9 @@ export function ChatView() {
     void send(promptReq.text)
   }, [promptReq, busy])
 
+  const lastUser = [...msgs].reverse().find((x) => x.role === 'user')
+  const lastUserText = lastUser && lastUser.role === 'user' ? lastUser.text : null
+
   return (
     <div className="chat-col" data-screen-label="Chat">
       <div className="chat-scroll scroll" ref={scrollRef}>
@@ -328,6 +339,7 @@ export function ChatView() {
               backend={backend}
               busy={busy}
               isLast={i === msgs.length - 1}
+              onRetry={!busy && i === msgs.length - 1 && m.role === 'hearth' && lastUserText ? () => void send(lastUserText) : undefined}
               onOpenReview={() => openRightTab('review')}
               onOpenPlan={() => openRightTab('plan')}
             />
@@ -351,6 +363,7 @@ function MessageView({
   backend,
   busy,
   isLast,
+  onRetry,
   onOpenReview,
   onOpenPlan,
 }: {
@@ -358,6 +371,7 @@ function MessageView({
   backend: AgentKind
   busy: boolean
   isLast: boolean
+  onRetry?: () => void
   onOpenReview: () => void
   onOpenPlan: () => void
 }) {
@@ -375,6 +389,15 @@ function MessageView({
       <div className="msg user">
         <div className="msg-role">
           <span className="who">You</span>
+          <span className="spacer" />
+          <div className="msg-actions">
+            <button className="msg-act" title="Copy" onClick={() => copyText(m.text)}>
+              <Icon name="copy" />
+            </button>
+            <button className="msg-act" title="Edit & resend" onClick={() => useSession.getState().setComposerDraft(m.text)}>
+              <Icon name="pencil-simple" />
+            </button>
+          </div>
         </div>
         <div className="msg-body">{m.text}</div>
       </div>
@@ -388,6 +411,23 @@ function MessageView({
           <FlameMark size={14} />
         </span>
         <span className="who">Hearth</span>
+        <span className="spacer" />
+        {m.blocks.length > 0 && (
+          <div className="msg-actions">
+            <button
+              className="msg-act"
+              title="Copy answer"
+              onClick={() => copyText(m.blocks.flatMap((b) => (b.kind === 'text' ? [b.text] : [])).join('\n\n'))}
+            >
+              <Icon name="copy" />
+            </button>
+            {onRetry && (
+              <button className="msg-act" title="Retry" onClick={onRetry}>
+                <Icon name="arrow-clockwise" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
       {m.blocks.length === 0 && liveTurn && (
         <div style={{ marginTop: 4 }}>
@@ -418,6 +458,7 @@ function MessageView({
             backend={backend}
             running={running}
             result={b.result}
+            durationMs={b.turnMs}
             onOpenReview={onOpenReview}
           />
         )

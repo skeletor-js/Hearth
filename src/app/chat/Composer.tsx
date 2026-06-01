@@ -3,6 +3,7 @@ import type { AgentKind, ModelState } from '../../../electron/shared/protocol'
 import { Icon } from '@/shell/Icon'
 import { Seg } from '@/app/settings/controls'
 import { GitPanel } from '@/app/workbench/GitPanel'
+import { useSession } from '@/app/session-store'
 
 type Mode = 'plan' | 'auto' | 'ask'
 const MODES: [Mode, string, string][] = [
@@ -112,6 +113,15 @@ export function Composer({
     el.style.height = 'auto'
     el.style.height = Math.min(el.scrollHeight, 200) + 'px'
   }, [input])
+
+  // Load a prompt pushed in for editing/resend (e.g. "Edit" on a past message).
+  const composerDraft = useSession((s) => s.composerDraft)
+  useEffect(() => {
+    if (composerDraft == null) return
+    setInput(composerDraft)
+    useSession.getState().setComposerDraft(null)
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }, [composerDraft])
 
   useEffect(() => {
     void window.hearth.agent.getBackend().then(setBackend)
