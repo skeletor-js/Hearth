@@ -79,6 +79,24 @@ describe('SelfModService.captureTurn', () => {
     expect(result!.reload).toBe<ReloadKind>('full-reload')
     expect(calls).toEqual(['reload'])
   })
+
+  test('commits ONLY what changed during the turn, not pre-existing dirty files', async () => {
+    const { hmr } = recordingHmr()
+    const svc = new SelfModService(repo, hmr)
+
+    // The developer was already editing this when the turn started.
+    write(repo, 'src/dev-wip.tsx', 'unfinished dev work\n')
+    const before = await svc.dirtyPaths()
+    expect(before).toContain('src/dev-wip.tsx')
+
+    // The agent turn edits a different file.
+    write(repo, 'src/agent-edit.tsx', 'agent change\n')
+    const result = await svc.captureTurn('conv-x', 'agent edit', before)
+
+    // Only the agent's file is committed; the dev's WIP stays dirty + uncommitted.
+    expect(result!.changedPaths).toEqual(['src/agent-edit.tsx'])
+    expect(await svc.dirtyPaths()).toEqual(['src/dev-wip.tsx'])
+  })
 })
 
 describe('SelfModService.undo', () => {

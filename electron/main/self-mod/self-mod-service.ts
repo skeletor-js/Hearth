@@ -22,12 +22,29 @@ export class SelfModService {
     private readonly hmr: HmrController,
   ) {}
 
-  /** Call after an agent turn that touched the repo. No-op if nothing changed. */
-  async captureTurn(conversationId: string, subject: string): Promise<SelfModResult | null> {
-    const changedPaths = await listDirty(this.repoRoot)
+  /** The repo's currently-dirty paths — snapshot this BEFORE a turn. */
+  dirtyPaths(): Promise<string[]> {
+    return listDirty(this.repoRoot)
+  }
+
+  /**
+   * Call after an agent turn. Commits ONLY paths that became dirty *during* the
+   * turn — `before` is the dirty set captured before the prompt. This is the
+   * critical safety boundary: files the developer was already editing (or any
+   * unrelated dirty state) must NOT be swept into a self-mod commit. No-op if the
+   * turn changed nothing. Returns null when there's nothing new to commit.
+   */
+  async captureTurn(
+    conversationId: string,
+    subject: string,
+    before: string[] = [],
+  ): Promise<SelfModResult | null> {
+    const beforeSet = new Set(before)
+    const after = await listDirty(this.repoRoot)
+    const changedPaths = after.filter((p) => !beforeSet.has(p))
     if (changedPaths.length === 0) return null
 
-    const commit = await commitSelfMod(this.repoRoot, { subject, conversationId })
+    const commit = await commitSelfMod(this.repoRoot, { paths: changedPaths, subject, conversationId })
     const reload = this.hmr.apply(changedPaths)
     return { commit, changedPaths, reload }
   }

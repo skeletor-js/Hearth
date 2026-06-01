@@ -46,9 +46,18 @@ export interface SelfModCommit {
 }
 
 export async function commitSelfMod(repoRoot: string, c: SelfModCommit): Promise<string> {
-  await git(repoRoot, ['add', ...(c.paths?.length ? c.paths : ['-A'])])
   const message = `${c.subject}\n\nHearth-Conversation: ${c.conversationId}\nHearth-SelfMod: true`
-  await git(repoRoot, ['commit', '-m', message])
+  if (c.paths?.length) {
+    // Stage AND commit only these paths (pathspec on commit) so any other dirty
+    // or already-staged files in the tree are left untouched — the self-mod
+    // commit must contain ONLY what this turn changed, never the developer's
+    // unrelated work.
+    await git(repoRoot, ['add', '--', ...c.paths])
+    await git(repoRoot, ['commit', '-m', message, '--', ...c.paths])
+  } else {
+    await git(repoRoot, ['add', '-A'])
+    await git(repoRoot, ['commit', '-m', message])
+  }
   return (await git(repoRoot, ['rev-parse', 'HEAD'])).trim()
 }
 

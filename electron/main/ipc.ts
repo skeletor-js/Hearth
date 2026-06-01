@@ -48,9 +48,11 @@ export function registerIpc(services: MainServices): void {
   })
 
   ipcMain.handle(HEARTH_CHANNELS.agentPrompt, async (_e, text: string) => {
+    // Snapshot what's already dirty BEFORE the turn so captureTurn commits only
+    // what this turn changes — never the developer's pre-existing uncommitted work.
+    const before = await selfMod.dirtyPaths()
     const sessionId = await host.prompt(text)
-    // After the turn, capture any self-edits the agent made.
-    return selfMod.captureTurn(sessionId, text.slice(0, 72))
+    return selfMod.captureTurn(sessionId, text.slice(0, 72), before)
   })
   ipcMain.handle(HEARTH_CHANNELS.agentCancel, () => host.cancel())
 
