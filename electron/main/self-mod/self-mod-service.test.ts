@@ -129,4 +129,19 @@ describe('SelfModService.history', () => {
     expect(history[0]).toMatchObject({ subject: 'edit b', conversationId: 'conv-B' })
     expect(history[1]).toMatchObject({ subject: 'edit a', conversationId: 'conv-A' })
   })
+
+  test('an entry is flagged reverted once it has been undone', async () => {
+    const { hmr } = recordingHmr()
+    const svc = new SelfModService(repo, hmr)
+    write(repo, 'src/c.tsx', 'c\n')
+    const captured = await svc.captureTurn('conv-C', 'edit c')
+
+    expect((await svc.history())[0].reverted).toBe(false)
+
+    await svc.undo(captured!.commit)
+
+    const after = await svc.history()
+    expect(after).toHaveLength(1) // the revert commit isn't itself a self-mod
+    expect(after[0]).toMatchObject({ subject: 'edit c', reverted: true })
+  })
 })

@@ -72,6 +72,20 @@ export interface SelfModLogEntry {
   hash: string
   subject: string
   conversationId: string | null
+  /** True if a later `git revert` commit already undid this one. */
+  reverted: boolean
+}
+
+/**
+ * Full hashes that an existing revert commit points at. `git revert` writes
+ * "This reverts commit <40-hex>." into the body; we scan for those so the UI can
+ * show which self-mods have already been undone.
+ */
+async function revertedHashes(repoRoot: string, limit: number): Promise<Set<string>> {
+  const out = await git(repoRoot, ['log', `-n${limit}`, '--grep=This reverts commit', '--pretty=%b'])
+  const set = new Set<string>()
+  for (const m of out.matchAll(/This reverts commit ([0-9a-f]{7,40})/g)) set.add(m[1])
+  return set
 }
 
 /** Recent self-mod commits, newest first. */
@@ -82,11 +96,14 @@ export async function recentSelfMods(repoRoot: string, limit = 50): Promise<Self
     '--grep=Hearth-SelfMod: true',
     '--pretty=%H%x1f%s%x1f%(trailers:key=Hearth-Conversation,valueonly)',
   ])
+  // Look back further for reverts than for the self-mods themselves — an old
+  // self-mod can be reverted by a very recent commit and vice versa.
+  const reverted = await revertedHashes(repoRoot, Math.max(limit * 4, 200))
   return out
     .split('\n')
     .filter(Boolean)
     .map((line) => {
       const [hash, subject, conversationId] = line.split('\x1f')
-      return { hash, subject, conversationId: conversationId?.trim() || null }
+      return { hash, subject, conversationId: conversationId?.trim() || null, reverted: reverted.has(hash) }
     })
 }
