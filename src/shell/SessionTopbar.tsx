@@ -24,8 +24,6 @@ export function SessionTopbar() {
     )
   }
 
-  const wsName = active.self ? 'Hearth' : active.cwd.split('/').filter(Boolean).pop() || active.cwd
-
   const startRename = () => {
     setMenuOpen(false)
     setDraft(active.title)
@@ -79,12 +77,6 @@ export function SessionTopbar() {
 
   return (
     <Topbar right={menu}>
-      <span className="crumb-ws" title={active.cwd}>
-        <Icon name={active.self ? 'flame' : 'folder'} fill={active.self} /> {wsName}
-      </span>
-      <span className="sep">
-        <Icon name="caret-right" className="ico-12" />
-      </span>
       {editing ? (
         <input
           ref={inputRef}
