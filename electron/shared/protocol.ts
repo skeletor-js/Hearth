@@ -34,12 +34,17 @@ export interface PlanEntry {
   priority: 'high' | 'medium' | 'low'
 }
 
-/** A single streamed update from a turn — mirrors ACP `session/update`. */
+/** A single streamed update from a turn — mirrors ACP `session/update`.
+ *
+ * `parentToolCallId` (on `tool-call` and `diff`) is the id of the parent Task
+ * tool-call when the update originates inside a subagent — sourced from the
+ * adapter's `_meta.claudeCode.parentToolUseId`. Absent for the main thread. The
+ * self-mod run tracker uses it to attribute writes to the subagent that made them. */
 export type SessionUpdate =
   | { type: 'message'; role: 'assistant'; text: string }
   | { type: 'thought'; text: string }
-  | { type: 'tool-call'; id: string; title: string; status: 'pending' | 'running' | 'done' | 'error' }
-  | { type: 'diff'; path: string; oldText: string | null; newText: string }
+  | { type: 'tool-call'; id: string; title: string; status: 'pending' | 'running' | 'done' | 'error'; parentToolCallId?: string }
+  | { type: 'diff'; path: string; oldText: string | null; newText: string; parentToolCallId?: string }
   | { type: 'plan'; entries: PlanEntry[] }
   | { type: 'end'; stopReason: string }
 
@@ -55,6 +60,9 @@ export interface PermissionRequest {
   id: string
   title: string
   options: PermissionOption[]
+  /** Raw shell command when this is an execute ask — used to auto-reject
+   * source-mutating shell so writes are forced onto the mediated path (W0b). */
+  command?: string
 }
 
 /** Payload shape for the `agent:update` channel (main → renderer). */

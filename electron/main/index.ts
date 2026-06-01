@@ -11,6 +11,9 @@ import { AgentHost } from './agents/agent-host.js'
 import type { Agent, AgentAuth, AgentKind } from './agents/agent.js'
 import { SelfModService } from './self-mod/self-mod-service.js'
 import { HmrController } from './self-mod/hmr.js'
+import { BootWatchdog } from './self-mod/boot-watchdog.js'
+import { runTypecheck } from './self-mod/validate.js'
+import { revertCommit } from './self-mod/git.js'
 import { WorkspaceRegistry } from './workspaces/registry.js'
 import { SessionStore } from './sessions/store.js'
 import { BrowserManager } from './browser/browser-view.js'
@@ -51,6 +54,26 @@ function createAgent(kind: AgentKind): Agent {
 }
 
 async function bootstrap(): Promise<void> {
+  // Boot watchdog (W6): if the previous self-mod restart never reached ready, it
+  // bricked boot — auto-revert that commit and relaunch before anything else runs.
+  const watchdog = new BootWatchdog(join(app.getPath('userData'), 'pending-self-mod-restart.json'))
+  const decision = watchdog.inspectBoot()
+  if (decision.action === 'revert') {
+    try {
+      await revertCommit(REPO_ROOT, decision.commit)
+    } catch {
+      // If the revert itself fails, fall through — the attempt was recorded, so a
+      // repeat will hit the cap and drop to safe-mode rather than loop forever.
+    }
+    if (app.isPackaged) {
+      app.relaunch()
+      app.exit(0)
+      return
+    }
+  } else if (decision.action === 'safe-mode') {
+    console.error(`[hearth] self-mod restart bricked boot repeatedly (commit ${decision.commit}); booting current state without further auto-revert`)
+  }
+
   const window = createMainWindow()
 
   // The host owns the current backend and swaps it at runtime; IPC talks to it,
@@ -73,7 +96,32 @@ async function bootstrap(): Promise<void> {
       }
     },
   })
-  const selfMod = new SelfModService(REPO_ROOT, hmr)
+  const selfMod = new SelfModService(
+    REPO_ROOT,
+    hmr,
+    // W6 blocking gate: typecheck before a restart-tier edit takes the app down.
+    () => runTypecheck(REPO_ROOT),
+    // W6: arm the watchdog with the commit about to trigger a restart.
+    (commit) => watchdog.arm(commit, new Date().toISOString()),
+  )
+
+  // A successful renderer load means boot reached a healthy state — clear the
+  // watchdog marker. A bricked main edit never loads, so the marker survives and
+  // the next boot auto-reverts it.
+  window.webContents.on('did-finish-load', () => watchdog.confirmReady())
+
+  // Main-anchored recovery net (W3): if the renderer process dies outright (its own
+  // ErrorBoundary couldn't catch it), main brings it back. Bounded so a reload loop
+  // doesn't spin — after a couple of crashes, leave it for the user to act.
+  let rendererCrashes = 0
+  window.webContents.on('render-process-gone', (_e, details) => {
+    rendererCrashes++
+    console.error(`[hearth] renderer gone (${details.reason}); recovery attempt ${rendererCrashes}`)
+    if (rendererCrashes <= 2 && !window.isDestroyed()) window.webContents.reload()
+  })
+  window.webContents.on('did-finish-load', () => {
+    rendererCrashes = 0
+  })
 
   // Workspaces + sessions persist under userData so they survive restarts and
   // never pollute the repo. Hearth itself is the built-in workspace at REPO_ROOT.

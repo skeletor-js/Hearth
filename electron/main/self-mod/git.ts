@@ -8,6 +8,8 @@
 // dugite API name.
 
 import { exec } from 'dugite'
+import { rmSync } from 'node:fs'
+import { join } from 'node:path'
 
 const runGit = exec
 
@@ -23,7 +25,10 @@ export async function listDirty(repoRoot: string): Promise<string[]> {
   // -z gives NUL-separated, *unquoted* paths. Without it, porcelain C-quotes any
   // path containing spaces or special chars (e.g. `"a file.txt"`), which would
   // leak literal quotes into the returned path.
-  const out = await git(repoRoot, ['status', '--porcelain', '-z'])
+  // --untracked-files=all lists every untracked FILE individually; without it git
+  // collapses a wholly-new directory into a single `?? dir/` entry, which would
+  // break per-path self-mod grouping when a subagent creates a new folder.
+  const out = await git(repoRoot, ['status', '--porcelain', '-z', '--untracked-files=all'])
   // Each record is `XY <path>\0`. A rename/copy (R/C) is followed by an extra
   // `<oldpath>\0` field, which we skip — we want the current path only.
   const records = out.split('\0').filter(Boolean)
@@ -62,11 +67,25 @@ export interface SelfModCommit {
   conversationId: string
   /** Surface category; defaults to derive-from-paths. */
   kind?: SelfModKind
+  /** Run id grouping the per-subagent commits of one turn (W2). */
+  runId?: string
+  /** Subagent label this commit's files were attributed to (W2). */
+  subagent?: string
+  /** Marks a commit that recovered an incomplete (crashed mid-turn) run. */
+  recovered?: boolean
 }
 
 export async function commitSelfMod(repoRoot: string, c: SelfModCommit): Promise<string> {
   const kind = c.kind ?? categorizeKind(c.paths ?? [])
-  const message = `${c.subject}\n\nHearth-Conversation: ${c.conversationId}\nHearth-Kind: ${kind}\nHearth-SelfMod: true`
+  const trailers = [
+    `Hearth-Conversation: ${c.conversationId}`,
+    `Hearth-Kind: ${kind}`,
+    ...(c.runId ? [`Hearth-Run: ${c.runId}`] : []),
+    ...(c.subagent ? [`Hearth-Subagent: ${c.subagent}`] : []),
+    ...(c.recovered ? ['Hearth-Recovered: true'] : []),
+    'Hearth-SelfMod: true',
+  ]
+  const message = `${c.subject}\n\n${trailers.join('\n')}`
   if (c.paths?.length) {
     // Stage AND commit only these paths (pathspec on commit) so any other dirty
     // or already-staged files in the tree are left untouched — the self-mod
@@ -79,6 +98,21 @@ export async function commitSelfMod(repoRoot: string, c: SelfModCommit): Promise
     await git(repoRoot, ['commit', '-m', message])
   }
   return (await git(repoRoot, ['rev-parse', 'HEAD'])).trim()
+}
+
+/**
+ * Undo the working-tree changes to specific paths (W7 commit-time enforcement):
+ * restore a tracked path from HEAD, or delete a path that's new (absent from HEAD).
+ * Used to reject an agent write to a blocked/protected path so it never commits.
+ */
+export async function restorePaths(repoRoot: string, paths: string[]): Promise<void> {
+  for (const p of paths) {
+    const r = await runGit(['checkout', 'HEAD', '--', p], repoRoot)
+    if (r.exitCode !== 0) {
+      // Not in HEAD → it's a newly-created file; remove it from the working tree.
+      rmSync(join(repoRoot, p), { force: true })
+    }
+  }
 }
 
 /** Revert a specific self-mod commit (does not touch later unrelated commits). */
@@ -118,6 +152,10 @@ export interface SelfModLogEntry {
   subject: string
   conversationId: string | null
   kind: SelfModKind
+  /** Run id this commit belongs to (W2 grouping), or null for ungrouped/legacy. */
+  runId: string | null
+  /** Subagent label, or null for orchestrator/legacy commits. */
+  subagent: string | null
   /** True if a later `git revert` commit already undid this one. */
   reverted: boolean
 }
@@ -190,7 +228,7 @@ export async function recentSelfMods(repoRoot: string, limit = 50): Promise<Self
     `-n${limit}`,
     '-z', // NUL-separate commits so trailer values (which carry newlines) don't split records
     '--grep=Hearth-SelfMod: true',
-    '--pretty=%H%x1f%s%x1f%(trailers:key=Hearth-Conversation,valueonly)%x1f%(trailers:key=Hearth-Kind,valueonly)',
+    '--pretty=%H%x1f%s%x1f%(trailers:key=Hearth-Conversation,valueonly)%x1f%(trailers:key=Hearth-Kind,valueonly)%x1f%(trailers:key=Hearth-Run,valueonly)%x1f%(trailers:key=Hearth-Subagent,valueonly)',
   ])
   // Look back further for reverts than for the self-mods themselves — an old
   // self-mod can be reverted by a very recent commit and vice versa.
@@ -200,13 +238,15 @@ export async function recentSelfMods(repoRoot: string, limit = 50): Promise<Self
     .split('\0')
     .filter(Boolean)
     .map((line) => {
-      const [hash, subject, conversationId, kind] = line.split('\x1f')
+      const [hash, subject, conversationId, kind, runId, subagent] = line.split('\x1f')
       const k = kind?.trim()
       return {
         hash,
         subject,
         conversationId: conversationId?.trim() || null,
         kind: (k === 'soul' || k === 'memory' ? k : 'code') as SelfModKind,
+        runId: runId?.trim() || null,
+        subagent: subagent?.trim() || null,
         reverted: !isApplied(hash, reverts, memo),
       }
     })

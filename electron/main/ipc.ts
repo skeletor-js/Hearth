@@ -26,8 +26,16 @@ import {
 } from './self-mod/git-ops.js'
 import { HEARTH_CHANNELS } from '../shared/channels.js'
 import type { SelfModService } from './self-mod/self-mod-service.js'
+import { RunTracker } from './self-mod/run-tracker.js'
+import { createOverlayClient } from './self-mod/overlay-client.js'
+import { isViteTrackablePath } from './self-mod/path-relevance.js'
+import { runTypecheck } from './self-mod/validate.js'
+import { isSourceMutatingShell } from './self-mod/shell-guard.js'
+import { relative, isAbsolute } from 'node:path'
 import type { AgentHost } from './agents/agent-host.js'
-import type { AgentKind, BackendStatus } from '../shared/protocol.js'
+import type { AgentKind, BackendStatus, PermissionRequest } from '../shared/protocol.js'
+
+let runSeq = 0
 
 export { HEARTH_CHANNELS }
 
@@ -45,9 +53,46 @@ export interface MainServices {
 export function registerIpc(services: MainServices): void {
   const { repoRoot, host, selfMod, workspaces, sessions, browser, window } = services
 
-  // Stream agent updates to the renderer (forwarded from whichever backend is live).
+  // Self-mod run tracking (W0): attribute streamed writes to subagents, drive the
+  // concurrency gate, and pin the overlay during parallel-subagent phases.
+  const runTracker = new RunTracker()
+  const overlay = createOverlayClient(() => process.env.ELECTRON_RENDERER_URL ?? null)
+  const repoRel = (p: string): string => {
+    const rel = isAbsolute(p) ? relative(repoRoot, p) : p
+    return rel.replace(/\\/g, '/')
+  }
+  const broadcastActivity = (runId: string): void => {
+    const a = runTracker.activity(runId)
+    if (a) window.webContents.send(HEARTH_CHANNELS.selfModActivity, a)
+  }
+
+  // Stream agent updates to the renderer (forwarded from whichever backend is live),
+  // and tap them for self-mod attribution + concurrency-gated overlay pinning.
   host.onUpdate((sessionId, update) => {
     window.webContents.send(HEARTH_CHANNELS.agentUpdate, { sessionId, update })
+    const runId = runTracker.runForSession(sessionId)
+    if (!runId) return
+    if (update.type === 'tool-call') {
+      // A tool-call that carries a parent is a subagent's own call; the lane is the
+      // parent Task id. A top-level Task tool-call's own status updates close its lane.
+      if (update.parentToolCallId) {
+        runTracker.recordLane(runId, update.parentToolCallId, '', 'running')
+      }
+      runTracker.recordLane(runId, update.id, update.title, update.status)
+      broadcastActivity(runId)
+    } else if (update.type === 'diff') {
+      const rel = repoRel(update.path)
+      runTracker.recordWrite(runId, rel, {
+        parentToolCallId: update.parentToolCallId ?? null,
+        baseline: update.oldText,
+      })
+      // During a parallel-subagent phase, pin the pre-edit baseline so the live UI
+      // stays coherent until the batch applies atomically at endRun.
+      if (runTracker.isConcurrent(runId) && isViteTrackablePath(rel) && update.oldText != null) {
+        void overlay.pin(rel, update.oldText)
+      }
+      broadcastActivity(runId)
+    }
   })
 
   // Permission round-trip. A mid-turn ask blocks the agent until the renderer
@@ -57,6 +102,13 @@ export function registerIpc(services: MainServices): void {
   host.onPermission(
     (sessionId, req) =>
       new Promise<string>((resolve) => {
+        // Source-write enforcement (W0b): auto-reject shell that mutates repo
+        // source so writes are forced onto the mediated Edit/Write path. Pick the
+        // request's reject option without bothering the user.
+        if (req.command && isSourceMutatingShell(req.command)) {
+          const reject = req.options.find((o: PermissionRequest['options'][number]) => o.kind === 'reject')
+          if (reject) return resolve(reject.id)
+        }
         pendingPermissions.set(req.id, resolve)
         window.webContents.send(HEARTH_CHANNELS.permissionRequest, { sessionId, req })
       }),
@@ -72,15 +124,47 @@ export function registerIpc(services: MainServices): void {
   ipcMain.handle(
     HEARTH_CHANNELS.agentPrompt,
     async (_e, payload: { sessionId: string; cwd?: string; text: string }) => {
+      const key = payload.sessionId || 'default'
+      // Recover an interrupted prior turn (crashed before captureTurn) before we
+      // baseline — commits its orphaned changes as a `recovered` run, never lost.
+      await selfMod.recoverIfIncomplete(key)
       // Snapshot what's already dirty BEFORE the turn so captureTurn commits only
       // what this turn changes — never the developer's pre-existing uncommitted work.
-      // captureTurn ALWAYS targets REPO_ROOT: editing another workspace's cwd never
-      // produces a self-mod commit (no HMR), but a Hearth-source edit from ANY
-      // session does. The per-session cwd only sets where the agent writes.
       const before = await selfMod.dirtyPaths()
-      const key = payload.sessionId || 'default'
-      await host.prompt(payload.text, { key, cwd: payload.cwd || repoRoot })
-      return selfMod.captureTurn(key, payload.text.slice(0, 72), before)
+      // Mint a run + write the in-progress marker, then prompt.
+      const runId = `run-${++runSeq}-${Date.now()}`
+      runTracker.beginRun(runId, key)
+      selfMod.beginTurn()
+      let result
+      try {
+        await host.prompt(payload.text, { key, cwd: payload.cwd || repoRoot })
+      } finally {
+        const ended = runTracker.endRun(runId)
+        // Apply the overlay batch (no-op for unpinned paths / single-writer turns).
+        void overlay.apply((ended?.groups ?? []).flatMap((g) => g.paths).filter(isViteTrackablePath))
+        window.webContents.send(HEARTH_CHANNELS.selfModActivity, { runId, sessionId: key, lanes: [], collisions: [] })
+        result = await selfMod.captureTurn(key, payload.text.slice(0, 72), before, ended ? { runId, groups: ended.groups } : undefined)
+      }
+      // W7: surface any writes the scope guard rejected (protected island / secrets)
+      // so the user knows the agent's edit there was undone, not silently dropped.
+      if (result?.rejectedPaths?.length) {
+        window.webContents.send(HEARTH_CHANNELS.selfModValidation, {
+          ok: false,
+          output: `Blocked edits to protected/secret paths (restored, not committed):\n${result.rejectedPaths.join('\n')}`,
+        })
+      }
+      // A restart-tier edit that failed the blocking typecheck (W6): surface it so
+      // the crash surface offers Undo/Repair instead of bricking on restart.
+      if (result?.blockedRestart) {
+        window.webContents.send(HEARTH_CHANNELS.selfModValidation, { ok: false, output: result.blockedRestart.output })
+      } else if (result && result.changedPaths.some((p) => isViteTrackablePath(p))) {
+        // Async validation gate (W5): typecheck renderer edits without blocking the
+        // turn; surface a failure for the crash surface / repair.
+        void runTypecheck(repoRoot).then((tc) => {
+          if (!tc.ok) window.webContents.send(HEARTH_CHANNELS.selfModValidation, tc)
+        })
+      }
+      return result
     },
   )
   ipcMain.handle(HEARTH_CHANNELS.agentCancel, () => host.cancel())

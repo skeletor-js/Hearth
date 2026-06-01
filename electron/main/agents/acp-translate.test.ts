@@ -141,6 +141,33 @@ describe('translateUpdate', () => {
     ])
   })
 
+  test('subagent attribution: _meta.claudeCode.parentToolUseId threads onto tool-call + diff', () => {
+    const out = translateUpdate(
+      u({
+        sessionUpdate: 'tool_call',
+        toolCallId: 'edit1',
+        title: 'Edit',
+        status: 'completed',
+        content: [{ type: 'diff', path: 'src/x.ts', oldText: 'a', newText: 'b' }],
+        _meta: { claudeCode: { parentToolUseId: 'taskA' } },
+      }),
+      titles(),
+    )
+    expect(out).toEqual([
+      { type: 'tool-call', id: 'edit1', title: 'Edit', status: 'done', parentToolCallId: 'taskA' },
+      { type: 'diff', path: 'src/x.ts', oldText: 'a', newText: 'b', parentToolCallId: 'taskA' },
+    ])
+  })
+
+  test('no _meta (main thread / Codex) → no parentToolCallId key', () => {
+    const out = translateUpdate(
+      u({ sessionUpdate: 'tool_call', toolCallId: 't9', title: 'Edit', status: 'pending' }),
+      titles(),
+    )
+    expect(out).toEqual([{ type: 'tool-call', id: 't9', title: 'Edit', status: 'pending' }])
+    expect('parentToolCallId' in out[0]).toBe(false)
+  })
+
   test('a diff for a new file (no oldText) maps oldText to null', () => {
     const out = translateUpdate(
       u({

@@ -8,6 +8,8 @@ import type { DiffSummary } from '../main/self-mod/git-diff.js'
 import type { BranchInfo, GitStatus, PrResult } from '../main/self-mod/git-ops.js'
 import type { SelfModResult, StepResult } from '../main/self-mod/self-mod-service.js'
 import type { SelfModLogEntry } from '../main/self-mod/git.js'
+import type { RunActivity } from '../main/self-mod/run-tracker.js'
+import type { TypecheckResult } from '../main/self-mod/validate.js'
 import type { Workspace } from '../main/workspaces/registry.js'
 import type { FileContent, FileEntry } from '../main/fs/files.js'
 import type { BrowserState } from '../main/browser/browser-view.js'
@@ -73,6 +75,18 @@ const api = {
     history: (): Promise<SelfModLogEntry[]> => ipcRenderer.invoke(CH.selfModHistory),
     undo: (hash: string): Promise<StepResult> => ipcRenderer.invoke(CH.selfModUndo, hash),
     redo: (hash: string): Promise<StepResult> => ipcRenderer.invoke(CH.selfModRedo, hash),
+    // Live subagent activity for the Agents panel (W4).
+    onActivity: (cb: (activity: RunActivity) => void) => {
+      const h = (_e: unknown, a: RunActivity) => cb(a)
+      ipcRenderer.on(CH.selfModActivity, h)
+      return () => void ipcRenderer.off(CH.selfModActivity, h)
+    },
+    // Post-edit typecheck failures (W5/W6) — drives the crash/repair surface.
+    onValidation: (cb: (result: TypecheckResult) => void) => {
+      const h = (_e: unknown, r: TypecheckResult) => cb(r)
+      ipcRenderer.on(CH.selfModValidation, h)
+      return () => void ipcRenderer.off(CH.selfModValidation, h)
+    },
   },
   git: {
     diff: (cwd?: string, rev?: string): Promise<DiffSummary> => ipcRenderer.invoke(CH.gitDiff, cwd, rev),
