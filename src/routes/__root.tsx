@@ -29,13 +29,6 @@ function RootLayout() {
     applyTheme(s.theme, s.accent, s.reduceMotion)
   }, [s.theme, s.accent, s.reduceMotion])
 
-  const panelBtns = isSession ? (
-    <div className="pbtn-group">
-      <PanelBtn side="bottom" on={s.bottomOpen} title="Toggle bottom panel" onClick={() => s.setBottomOpen(!s.bottomOpen)} />
-      <PanelBtn side="right" on={s.rightOpen} title="Toggle right panel" onClick={() => s.setRightOpen(!s.rightOpen)} />
-    </div>
-  ) : null
-
   const showRight = isSession && (s.layout === 'focus' || s.rightOpen)
   const cmdk = useCommandPalette()
 
@@ -50,15 +43,15 @@ function RootLayout() {
   }
 
   return (
-    <div className="app" data-rail-collapsed={s.railCollapsed ? 'true' : 'false'} data-layout={isSession ? s.layout : undefined}>
+    <div className="app" data-layout={isSession ? s.layout : undefined}>
       <Titlebar />
       {cmdk.open && <CommandPalette onClose={() => cmdk.setOpen(false)} />}
       <Toaster />
-      <Rail />
+      {!s.railHidden && <Rail />}
       <div className="stage">
         <div className="stage-row">
           <main className="main main-chat">
-            <Topbar right={panelBtns}>
+            <Topbar>
               <span className="head">{CRUMB[pathname] ?? 'Hearth'}</span>
             </Topbar>
             <Outlet />
@@ -83,7 +76,34 @@ function RootLayout() {
 }
 
 // The macOS title-bar safe strip: reserves room for the traffic lights, lets the
-// user drag the window, and zooms (fill ⟷ restore) on double-click.
+// user drag the window, zooms (fill ⟷ restore) on double-click, and hosts the
+// panel-toggle buttons. The left toggle (right of the traffic lights) fully
+// shows/hides the sidebar; the right-aligned pair toggle the bottom + right panels
+// (session only). Buttons opt out of the drag region so they stay clickable.
 function Titlebar() {
-  return <div className="titlebar" onDoubleClick={() => window.hearth.win.zoomToggle()} />
+  const s = useShell()
+  const pathname = useRouterState({ select: (st) => st.location.pathname })
+  const isSession = pathname === '/chat'
+  return (
+    <div className="titlebar" onDoubleClick={() => window.hearth.win.zoomToggle()}>
+      {s.onboarded && (
+        <>
+          <div className="tb-left">
+            <PanelBtn
+              side="left"
+              on={!s.railHidden}
+              title={s.railHidden ? 'Show sidebar' : 'Hide sidebar'}
+              onClick={s.toggleRailHidden}
+            />
+          </div>
+          {isSession && (
+            <div className="tb-right">
+              <PanelBtn side="bottom" on={s.bottomOpen} title="Toggle bottom panel" onClick={() => s.setBottomOpen(!s.bottomOpen)} />
+              <PanelBtn side="right" on={s.rightOpen} title="Toggle right panel" onClick={() => s.setRightOpen(!s.rightOpen)} />
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
 }

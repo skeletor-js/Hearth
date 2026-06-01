@@ -23,7 +23,7 @@ interface ShellState {
   reduceMotion: boolean
   // layout
   layout: Layout
-  railCollapsed: boolean
+  railHidden: boolean
   railW: number
   wbW: number
   panelH: number
@@ -47,7 +47,7 @@ interface ShellState {
   setAccent: (a: Accent) => void
   setReduceMotion: (v: boolean) => void
   setLayout: (l: Layout) => void
-  toggleRail: () => void
+  toggleRailHidden: () => void
   resizeRail: (delta: number) => void
   resizeWb: (delta: number) => void
   resizePanel: (delta: number) => void
@@ -64,7 +64,7 @@ export const useShell = create<ShellState>()(
       accent: '#C8542B',
       reduceMotion: false,
       layout: 'companion',
-      railCollapsed: false,
+      railHidden: false,
       railW: 244,
       wbW: 620,
       panelH: 260,
@@ -84,7 +84,7 @@ export const useShell = create<ShellState>()(
       setAccent: (accent) => set({ accent }),
       setReduceMotion: (reduceMotion) => set({ reduceMotion }),
       setLayout: (layout) => set({ layout, rightOpen: layout !== 'focus' ? true : false }),
-      toggleRail: () => set((s) => ({ railCollapsed: !s.railCollapsed })),
+      toggleRailHidden: () => set((s) => ({ railHidden: !s.railHidden })),
       resizeRail: (d) => set((s) => ({ railW: clamp(s.railW + d, 190, 380) })),
       resizeWb: (d) => set((s) => ({ wbW: clamp(s.wbW - d, 360, Math.round(window.innerWidth * 0.7)) })),
       resizePanel: (d) => set((s) => ({ panelH: clamp(s.panelH - d, 130, Math.round(window.innerHeight * 0.7)) })),
