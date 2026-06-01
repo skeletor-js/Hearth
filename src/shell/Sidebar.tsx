@@ -14,7 +14,7 @@ const LINK_CLASS =
 export function Sidebar() {
   return (
     <nav className="flex w-56 flex-col gap-1 border-r border-white/8 bg-black/20 p-3 pt-10">
-      <div className="px-2 pb-3 text-xs font-medium tracking-wide text-white/40">HEARTH ⚡</div>
+      <div className="px-2 pb-3 text-xs font-medium tracking-wide text-white/40">HEARTH</div>
       {APPS.map((app) => (
         <Link key={app.to} to={app.to} className={LINK_CLASS}>
           {app.label}
