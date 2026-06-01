@@ -9,29 +9,40 @@ renderer to the handoff and adds the backends the new UI implies.
 
 ## The founding principle (read this first)
 
-**Hearth is ONE app, ONE repo, and it is self-modifiable.** That never changes —
-the self-evolution loop (HMR, `Hearth-SelfMod` commits, History/undo, the "Self"
-view) is the heart of the product and is scoped to *Hearth's own repo*.
+**Hearth is ONE app, ONE repo, and it is self-modifiable.** That never changes.
 
-**"Workspaces" are other local folders** the user opens to work in. The agent
-operates with that folder as its `cwd` and behaves like a normal coding agent
-there — diffs, files, terminal, sessions — **with no self-mod / no HMR** (those
-folders aren't the running app).
+**Self-evolution is a GLOBAL capability, available from every session** — not a
+property of a particular workspace. From any session, whatever folder it's working
+in, the user can ask Hearth to change itself; that edits Hearth's own repo,
+commits a `Hearth-SelfMod`, and HMR-reloads the running app. So the "Self-edit"
+chip, the **Self** workbench tab, and **History** are always present.
 
-Mechanically a session is just `{ workspace, cwd, transcript }`. ACP's
-`newSession({ cwd })` already takes a cwd; today we hardcode it to the Hearth
-repo. Multi-workspace = let the user open folders and start sessions whose cwd is
-that folder. Two kinds of workspace:
+**"Workspaces" are other local folders** the user opens. A workspace only sets the
+**task cwd** for a session — the folder the agent reads/edits for the *task*. The
+agent there behaves like a normal coding agent (diffs, files, terminal). It is NOT
+a separate "place" where self-evolution does or doesn't happen.
 
-| | **Self workspace** (Hearth itself) | **Folder workspace** (any local repo) |
+Two distinct file scopes per turn, tracked independently:
+
+| Scope | What it is | What happens to edits |
 |---|---|---|
-| cwd | the Hearth repo | the opened folder |
-| edits | self-mod commit → **HMR reloads the app** | normal git edits, no HMR |
-| History/undo | yes (self-evolution timeline) | n/a (or plain git later) |
-| "Self" workbench tab | yes — the self-edit view | hidden |
-| Review/Files/Terminal/Browser | yes | yes |
+| **Hearth repo** (`REPO_ROOT`) | the running app's own source | self-mod commit → **HMR reload**, lands in History. Watched after *every* turn, any session. |
+| **Session workspace** (`cwd`) | the folder the task is in (may equal `REPO_ROOT`) | normal git working-tree edits, shown in Review. No auto-commit, no HMR. |
 
-There is exactly one Self workspace; there are N folder workspaces.
+A turn usually touches one scope; occasionally both (e.g. "fix this bug in
+project X *and* add a button to yourself"). Mechanism:
+
+- A session is `{ workspace, cwd, transcript }`. ACP's `newSession({ cwd })` already
+  takes a cwd; today we hardcode `REPO_ROOT`. Multi-workspace = sessions whose cwd
+  is the opened folder.
+- The agent is always told **where Hearth's own source lives** (an absolute path +
+  the self-edit instructions), injected into every session's context — so it can
+  self-edit regardless of its cwd.
+- `captureTurn` runs against `REPO_ROOT` after every turn: if Hearth's source
+  changed → self-mod commit + HMR; if not → no-op. Independent of the session cwd.
+
+If a session's own cwd *is* `REPO_ROOT`, the two scopes coincide — that's just
+"working on Hearth directly," a normal case, not a special mode.
 
 ---
 
@@ -51,11 +62,14 @@ There is exactly one Self workspace; there are N folder workspaces.
    active workspace/session). This preserves the "drop a route file = new view"
    self-mod seam AND delivers the design.
 3. **Agent cwd becomes per-session.** `AcpClient`/`AgentHost` stop hardcoding
-   `REPO_ROOT`; the active session carries its workspace cwd. The Hearth-self
-   workspace cwd is `REPO_ROOT`; folder workspaces carry their own path.
-4. **Self-mod stays Hearth-scoped.** `captureTurn`/HMR/History only run for the
-   Self workspace. Folder-workspace turns don't auto-commit or HMR (they just
-   edit files; git diff is shown in Review).
+   `REPO_ROOT` as the task cwd; the active session carries its workspace cwd. The
+   agent is also told `REPO_ROOT` (Hearth's own source) so it can self-edit from
+   any session.
+4. **Self-mod is global and `REPO_ROOT`-scoped.** `captureTurn` watches `REPO_ROOT`
+   after *every* turn, in every session → self-mod commit + HMR if Hearth's source
+   changed, no-op otherwise. The session's own-cwd edits (when cwd ≠ REPO_ROOT) are
+   the task's normal output — shown in Review, not auto-committed. (We already snapshot
+   dirty-before/after; extend it to watch REPO_ROOT independent of the session cwd.)
 5. **The agent can still see/drive this UI** via the existing `view_app` /
    `read_ui` / `click` / `fill` / `eval_js` MCP tools — they get richer here.
 6. **It's all in `src/`** → still hot-reloadable and self-editable. The new UI is
@@ -76,7 +90,7 @@ Legend: ✅ wired today · 🟡 partial / needs IPC · 🆕 net-new subsystem
 | Backend picker popover + Agents screen (models, connect ACP) | `agent.getBackend/setBackend` (claude/codex) | Popover ✅; per-model select + arbitrary ACP connect 🆕 |
 | History: timeline, undo, **redo**, undone state, current-build boundary | `selfMod.history/undo` (+ reverted flag) | Undo ✅; **redo** (revert-the-revert) 🆕; boundary UI 🟡 |
 | Workbench · **Review** (diff) | `diffPaths` only | `getDiff(cwd, rev?)` → structured hunks IPC. 🟡 |
-| Workbench · **Self** (self-edit files + apply) | self-mod + control | Wire to self-mod; Self-workspace only. 🟡 (open Q: keep?) |
+| Workbench · **Self** (self-edit files + apply) | self-mod + control | Wire to self-mod; always available (global self-evolution). 🟡 |
 | Workbench · **Files** (tree) | none | `fs` IPC: read dir tree + file under workspace cwd. 🆕 |
 | Workbench · **Terminal** | none | PTY in main (node-pty) streamed to xterm.js. 🆕 (largest) |
 | Workbench · **Browser** (url bar + preview) | none | Electron `WebContentsView` pointed at a URL; nav controls. 🆕 |
@@ -103,11 +117,14 @@ Legend: ✅ wired today · 🟡 partial / needs IPC · 🆕 net-new subsystem
   duplicate/archive/delete/export`. The renderer's chat reads/writes here, so
   switching sessions restores the transcript. Agent turns route to the session's
   workspace cwd.
-- **Agent cwd per session:** thread `cwd` from session → `AgentHost.prompt` →
-  `AcpClient.newSession({cwd})`. Keep a connected adapter; create/reuse ACP
-  sessions per (workspace,session). Revisit `pinProjectPermissionMode` /
-  `CLAUDE_CONFIG_DIR` so folder workspaces don't get Hearth's pins written into
-  them (likely: isolate config for non-Self workspaces, or respect their own).
+- **Agent cwd per session + self-edit reach:** thread `cwd` from session →
+  `AgentHost.prompt` → `AcpClient.newSession({cwd})`. Keep a connected adapter;
+  create/reuse ACP sessions per (workspace,session). Inject Hearth's own repo path
+  + self-edit instructions into every session's context so the agent can modify
+  Hearth from anywhere. `captureTurn` always targets `REPO_ROOT`. Revisit
+  `pinProjectPermissionMode`/`CLAUDE_CONFIG_DIR` so folder workspaces don't get
+  Hearth's pins written into them (isolate config for non-Hearth cwds, or respect
+  their own).
 - **Diff/Review** (`getDiff`): structured hunks for a workspace's working tree (or a
   commit), built on dugite. Feeds the Review tab + History "Diff".
 - **Files** (`fs` IPC): sandboxed dir-tree + file read rooted at the active
@@ -152,8 +169,8 @@ Each phase ends green (typecheck/lint/build/tests) with a checkpoint commit.
 ### P2 — Workbench: Review + Plan + Self  ∥
 - ∥ **Review/diff:** `getDiff` IPC + DiffView (per-file hunks), Review subhead.
 - ∥ **Plan:** capture ACP `plan` updates + Plan tab + chat plan-ref.
-- ∥ **Self tab:** self-edit file list + Apply, wired to self-mod (Self workspace
-  only). *(Open Q: confirm we keep Self as a distinct tab vs folding into Review.)*
+- ∥ **Self tab:** self-edit file list + Apply, wired to self-mod. Always available
+  (global self-evolution), in any session. *(Open Q: distinct tab vs folded into Review.)*
 - Workbench shell (right + bottom panels, tabs, add-tab menu, resizers) lands here.
 
 ### P3 — Workspaces + Sessions (the big new model)  ∥ within
@@ -164,7 +181,8 @@ Each phase ends green (typecheck/lint/build/tests) with a checkpoint commit.
   transcript.
 - ∥ Search (over the session store) once sessions exist.
 - *Accept:* open a second folder, start a session in it, agent edits there (cwd
-  correct, no HMR); switch back to Hearth and self-edit still works.
+  correct, no HMR); from that same session, ask Hearth to change itself → self-mod
+  commit + HMR fires (REPO_ROOT-scoped), proving self-evolution works from any session.
 
 ### P4 — Files / Terminal / Browser  ∥
 - ∥ Files tab (`fs` IPC + tree).
@@ -200,9 +218,9 @@ cwd," so the workspace/session model should land before those are fully wired
 
 ## Open questions (flagged by you + surfaced here)
 
-1. **"Self" workbench tab** — keep it as a distinct tab (self-evolution view), or
-   fold the self-edit/apply affordance into Review for the Self workspace? (Default:
-   keep, hidden in folder workspaces.)
+1. **"Self" workbench tab** — keep it as a distinct, always-present tab (the
+   self-evolution view), or fold the self-edit/apply affordance into Review?
+   (Default: keep, always available since self-evolution is global.)
 2. **Settings shape** — the handoff settings (account, personality→soul.md, memory,
    self-evolution toggles, command approval) are a proposal. Which sections are
    real for v1 vs later? `soul.md` / `memory.md` semantics?
