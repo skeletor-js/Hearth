@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { createRootRoute, Outlet, useRouterState } from '@tanstack/react-router'
 import { Rail } from '@/shell/Rail'
 import { Topbar } from '@/shell/Topbar'
+import { SessionTopbar } from '@/shell/SessionTopbar'
 import { Resizer } from '@/shell/Resizer'
 import { PanelBtn } from '@/shell/Icon'
 import { useShell, applyTheme } from '@/shell/store'
@@ -13,7 +14,6 @@ import { Toaster } from '@/shell/toast'
 export const Route = createRootRoute({ component: RootLayout })
 
 const CRUMB: Record<string, string> = {
-  '/chat': 'Session',
   '/new': 'New session',
   '/search': 'Search',
   '/history': 'History',
@@ -51,9 +51,13 @@ function RootLayout() {
       <div className="stage">
         <div className="stage-row">
           <main className="main main-chat">
-            <Topbar>
-              <span className="head">{CRUMB[pathname] ?? 'Hearth'}</span>
-            </Topbar>
+            {isSession ? (
+              <SessionTopbar />
+            ) : (
+              <Topbar>
+                <span className="head">{CRUMB[pathname] ?? 'Hearth'}</span>
+              </Topbar>
+            )}
             <Outlet />
           </main>
           {showRight && (
