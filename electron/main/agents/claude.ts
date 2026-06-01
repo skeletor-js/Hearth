@@ -6,22 +6,32 @@
 // their env. We never originate or store a credential. See COMPLIANCE.md.
 
 import { createRequire } from 'node:module'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { AcpClient, type AdapterSpec } from './acp-client.js'
 import type { Agent, AgentConfig, AgentSession, PermissionRequest, SessionUpdate } from './agent.js'
 
-// Hearth's private Claude config dir, seeded with a permission default the
-// bundled adapter accepts. Kept under the repo (gitignored) so it travels with
-// the working copy. Returns the dir path for CLAUDE_CONFIG_DIR.
-function ensureAgentConfigDir(cwd: string): string {
-  const dir = join(cwd, '.hearth', 'claude-config')
+// The bundled adapter rejects some newer permission modes — notably a global
+// `permissions.defaultMode: "auto"` in ~/.claude/settings.json. We can't isolate
+// CLAUDE_CONFIG_DIR to dodge it (that would lose the user's login — auth lives in
+// the Keychain / default-dir credentials the adapter reads), so instead we pin a
+// known-good mode at the PROJECT scope (cwd/.claude/settings.local.json), which
+// the adapter merges with higher precedence than the user-global setting.
+// Non-destructive: merges into any existing local settings.
+function pinProjectPermissionMode(cwd: string): void {
+  const dir = join(cwd, '.claude')
   mkdirSync(dir, { recursive: true })
-  writeFileSync(
-    join(dir, 'settings.json'),
-    JSON.stringify({ permissions: { defaultMode: 'default' } }, null, 2),
-  )
-  return dir
+  const file = join(dir, 'settings.local.json')
+  let current: { permissions?: Record<string, unknown> } = {}
+  if (existsSync(file)) {
+    try {
+      current = JSON.parse(readFileSync(file, 'utf-8'))
+    } catch {
+      current = {}
+    }
+  }
+  current.permissions = { ...current.permissions, defaultMode: 'default' }
+  writeFileSync(file, JSON.stringify(current, null, 2) + '\n')
 }
 
 function resolveAdapter(config: AgentConfig): AdapterSpec {
@@ -35,20 +45,17 @@ function resolveAdapter(config: AgentConfig): AdapterSpec {
   if (!binRel) throw new Error('@zed-industries/claude-agent-acp exposes no bin to launch')
   const bin = join(dirname(pkgJsonPath), binRel)
 
+  // Pin a valid permission mode for this project so the adapter doesn't choke on
+  // a global `defaultMode` it doesn't understand. Uses the user's normal
+  // ~/.claude config dir for everything else, so their login resolves exactly as
+  // it does for the `claude` CLI. See COMPLIANCE.md: we never store the credential.
+  pinProjectPermissionMode(config.cwd)
+
   // process.execPath is the Electron binary in the packaged/dev app. To run the
   // adapter's Node entry with it we must set ELECTRON_RUN_AS_NODE, or Electron
   // would try to boot a second app instead of executing the script. (Under a
   // plain Node/Bun runtime this var is simply ignored.)
-  const env: Record<string, string> = {
-    ELECTRON_RUN_AS_NODE: '1',
-    // Isolate the agent from the user's interactive Claude Code config: point it
-    // at a Hearth-owned config dir with sane defaults. Auth still resolves — it
-    // lives in the macOS Keychain, not under this dir — so we inherit the user's
-    // login without inheriting their settings (e.g. a `defaultMode` the bundled
-    // adapter version doesn't understand). See COMPLIANCE.md: we never store the
-    // credential, only let the adapter read the one the user already has.
-    CLAUDE_CONFIG_DIR: ensureAgentConfigDir(config.cwd),
-  }
+  const env: Record<string, string> = { ELECTRON_RUN_AS_NODE: '1' }
   if (config.auth.mode === 'api-key') {
     const key = process.env[config.auth.envVar]
     if (!key) throw new Error(`API key env var ${config.auth.envVar} is not set`)

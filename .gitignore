@@ -15,3 +15,6 @@ micro-apps/*/dist/
 
 # Hearth runtime state (agent config dir, etc.)
 .hearth/
+
+# Hearth pins a project permission mode here at runtime
+.claude/settings.local.json
