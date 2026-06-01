@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="rail-left" viewBox="0 0 18 18">
+    <rect x="3.25" y="4.25" width="11.5" height="9.5" rx="2.1" fill="none" stroke="currentColor" stroke-width="1.35" vector-effect="non-scaling-stroke"></rect>
+    <path d="M6.55 6.45V11.55" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"></path>
+  </symbol>
+  <symbol id="rail-right" viewBox="0 0 18 18">
+    <rect x="3.25" y="4.25" width="11.5" height="9.5" rx="2.1" fill="none" stroke="currentColor" stroke-width="1.35" vector-effect="non-scaling-stroke"></rect>
+    <path d="M11.45 6.45V11.55" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"></path>
+  </symbol>
+  <symbol id="rail-bottom" viewBox="0 0 18 18">
+    <rect x="3.25" y="4.25" width="11.5" height="9.5" rx="2.1" fill="none" stroke="currentColor" stroke-width="1.35" vector-effect="non-scaling-stroke"></rect>
+    <path d="M6.25 11.35H11.75" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"></path>
+  </symbol>
+</svg>
