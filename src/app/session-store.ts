@@ -49,11 +49,24 @@ interface SessionState {
   /** A prompt queued from elsewhere (e.g. History conflict) for the chat to send. */
   pendingPrompt: string | null
   setPendingPrompt: (p: string | null) => void
+
+  /**
+   * A "send now" request from outside the chat (e.g. the Scratchpad's Send button).
+   * Unlike `pendingPrompt` (consumed only on session load), the chat watches the
+   * bumping `nonce` and sends immediately through its normal send path.
+   */
+  promptRequest: { text: string; nonce: number } | null
+  requestPrompt: (text: string) => void
+
+  /** Whether the active workspace's scratchpad has content — drives the composer chip. */
+  scratchpadNonEmpty: boolean
+  setScratchpadNonEmpty: (v: boolean) => void
 }
 
 export const useSession = create<SessionState>((set, get) => ({
   active: null,
-  setActive: (active) => set({ active, plan: [], reviewCount: 0, lastSelfEdit: null, diffNonce: get().diffNonce + 1 }),
+  setActive: (active) =>
+    set({ active, plan: [], reviewCount: 0, lastSelfEdit: null, scratchpadNonEmpty: false, diffNonce: get().diffNonce + 1 }),
 
   plan: [],
   setPlan: (plan) => set({ plan }),
@@ -72,4 +85,10 @@ export const useSession = create<SessionState>((set, get) => ({
 
   pendingPrompt: null,
   setPendingPrompt: (pendingPrompt) => set({ pendingPrompt }),
+
+  promptRequest: null,
+  requestPrompt: (text) => set((s) => ({ promptRequest: { text, nonce: (s.promptRequest?.nonce ?? 0) + 1 } })),
+
+  scratchpadNonEmpty: false,
+  setScratchpadNonEmpty: (scratchpadNonEmpty) => set({ scratchpadNonEmpty }),
 }))

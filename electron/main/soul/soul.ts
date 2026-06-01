@@ -48,6 +48,9 @@ const OPERATING = [
   '(view_app/read_ui/click/fill/eval_js, browser_*). When asked to change Hearth',
   'itself, edit its repo (REPO_ROOT) — those edits hot-reload and are versioned.',
   'A session may run in any workspace folder; edit files relative to the task cwd.',
+  '',
+  'The user may keep a scratchpad at `.hearth/scratchpad.md` in the workspace — read',
+  'it for context when helpful, but treat it as read-only: never write to it.',
 ].join('\n')
 
 export type Backend = 'claude' | 'codex'

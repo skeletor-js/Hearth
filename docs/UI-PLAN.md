@@ -143,8 +143,11 @@ Every phase must end green and be checkpoint-committed. A task is "done" only wh
 The workbench is one `WorkPanel` rendered in BOTH a right panel and a bottom panel,
 each with its own active tab. Panel content is scoped to the **active session +
 workspace cwd**. Chat `wb-ref`/`plan-ref` chips open the right panel to a tab
-(`openTab`). Full tab set: Review · Self · Files · Terminal · Browser · Plan (Files/
-Terminal/Browser land in P4).
+(`openTab`). Full tab set: Review · Self · Scratchpad · Files · Terminal · Browser · Plan (Files/
+Terminal/Browser land in P4). The **Scratchpad** is a per-workspace markdown note
+backed by `.hearth/scratchpad.md` (gitignored, hidden from the Files tree): jot
+notes, "Send to agent" on demand (also ⌘K), or per-workspace Auto-attach to prefix
+the pad onto every turn. The agent may read it but treats it as read-only.
 - [x] **P2-0.** Workbench shell: right + bottom panels (shared `WorkPanel`), tab bar
       (badges), add-tab menu, env/git button, close. Wire chat chips → `openTab`.
 - [x] **P2-1.** ∥ **Review/diff:** `getDiff(cwd, rev?)` IPC (dugite) → structured

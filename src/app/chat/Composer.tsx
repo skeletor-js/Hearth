@@ -83,11 +83,15 @@ export function Composer({
   onSend,
   onStop,
   branch = 'hearth',
+  scratchpadAttached = false,
+  onDetachScratchpad,
 }: {
   busy: boolean
   onSend: (text: string) => void
   onStop: () => void
   branch?: string
+  scratchpadAttached?: boolean
+  onDetachScratchpad?: () => void
 }) {
   const [input, setInput] = useState('')
   const [mode, setMode] = useState<Mode>('auto')
@@ -152,6 +156,11 @@ export function Composer({
           <button ref={beRef} className="chip" title="Switch agent backend" onClick={openPop}>
             <Icon name={be.icon} /> {be.name}
           </button>
+          {scratchpadAttached && (
+            <button className="chip" title="Scratchpad is attached to each message — click to turn off" onClick={onDetachScratchpad}>
+              <Icon name="note-pencil" /> Scratchpad attached <Icon name="x" />
+            </button>
+          )}
         </div>
         <textarea
           className="composer-input"

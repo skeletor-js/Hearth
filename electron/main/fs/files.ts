@@ -6,8 +6,8 @@
 // it is NOT committed — History is the agent's self-mods, not the user's manual
 // editor edits (see UI-PLAN P4-1).
 
-import { readdir, readFile as fsReadFile, writeFile as fsWriteFile, stat } from 'node:fs/promises'
-import { resolve, relative, isAbsolute, sep } from 'node:path'
+import { readdir, readFile as fsReadFile, writeFile as fsWriteFile, mkdir, stat } from 'node:fs/promises'
+import { resolve, relative, isAbsolute, dirname, sep } from 'node:path'
 
 export interface FileEntry {
   name: string
@@ -15,7 +15,9 @@ export interface FileEntry {
   dir: boolean
 }
 
-const IGNORED = new Set(['.git', 'node_modules', 'out', 'dist', '.DS_Store'])
+// `.hearth/` is Hearth's own runtime state (gitignored). The scratchpad lives there;
+// keep the whole dir out of the user-facing file tree.
+const IGNORED = new Set(['.git', 'node_modules', 'out', 'dist', '.DS_Store', '.hearth'])
 
 /** Resolve `rel` under `root`, throwing if it escapes the root. */
 function safeJoin(root: string, rel: string): string {
@@ -57,5 +59,6 @@ export async function readFile(root: string, rel: string): Promise<FileContent> 
 
 export async function writeFile(root: string, rel: string, content: string): Promise<void> {
   const abs = safeJoin(root, rel)
+  await mkdir(dirname(abs), { recursive: true }) // create parent dirs (e.g. a missing .hearth/)
   await fsWriteFile(abs, content, 'utf8')
 }

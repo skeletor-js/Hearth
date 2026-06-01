@@ -824,6 +824,21 @@ select.field{ cursor:default; }
 .md-preview table{ border-collapse:collapse;margin:10px 0; }
 .md-preview th,.md-preview td{ border:1px solid var(--border);padding:5px 9px;text-align:left; }
 
+/* Live markdown rendering inside the Scratchpad editor (see markdown-live.ts). */
+.cm-md-h1{ font-size:1.55em;font-weight:700;line-height:1.4; }
+.cm-md-h2{ font-size:1.32em;font-weight:700;line-height:1.4; }
+.cm-md-h3{ font-size:1.16em;font-weight:600;line-height:1.4; }
+.cm-md-h4,.cm-md-h5,.cm-md-h6{ font-weight:600; }
+/* drop the default markdown heading underline (reads like a link) */
+.cm-md-h1 *,.cm-md-h2 *,.cm-md-h3 *,.cm-md-h4 *,.cm-md-h5 *,.cm-md-h6 *{ text-decoration:none; }
+.cm-md-strong{ font-weight:700;color:var(--strong); }
+.cm-md-em{ font-style:italic; }
+.cm-md-strike{ text-decoration:line-through;opacity:.6; }
+.cm-md-code{ font-family:var(--mono);font-size:.92em;background:var(--code-bg);padding:1px 4px;border-radius:4px; }
+.cm-md-bullet{ color:var(--accent);font-weight:700; }
+.cm-md-task{ vertical-align:-1px;margin-right:5px;accent-color:var(--accent);cursor:pointer; }
+.cm-md-quote{ border-left:2px solid var(--border-strong);padding-left:10px;color:var(--subtle);font-style:italic; }
+
 /* Browser URL-bar input (embedded browser chrome). */
 .bview-url .bar input{ flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--strong);
   font:inherit;font-size:var(--t-13); }

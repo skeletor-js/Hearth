@@ -5,6 +5,7 @@ import { Icon } from '@/shell/Icon'
 import { useShell } from '@/shell/store'
 import { useSession } from '../session-store'
 import { ensureActiveSession } from '../sessions'
+import { readScratchpad, wrapForPrompt } from '../scratchpad'
 import { Composer } from './Composer'
 import { LiveTrace, inferKind, type DiffRow, type TraceResult, type TraceStep } from './trace'
 import type { TranscriptEntry } from '../../../electron/main/sessions/store'
@@ -53,6 +54,11 @@ export function ChatView() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const openRightTab = useShell((s) => s.openRightTab)
   const active = useSession((s) => s.active)
+  const attach = useShell((s) => (active ? s.scratchpadAttach[active.cwd] ?? false : false))
+  const setScratchpadAttach = useShell((s) => s.setScratchpadAttach)
+  const padNonEmpty = useSession((s) => s.scratchpadNonEmpty)
+  const promptReq = useSession((s) => s.promptRequest)
+  const lastReqNonce = useRef(0)
   // Buffer of stream entries for the in-flight turn, flushed to the transcript
   // on end so we persist per-turn (not per-token).
   const turnBuffer = useRef<TranscriptEntry[]>([])
@@ -239,6 +245,18 @@ export function ChatView() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
   }, [msgs, permission, busy])
 
+  // Seed the scratchpad-has-content flag for the chip, even if the tab was never
+  // opened this session. The tab keeps it fresh while open.
+  useEffect(() => {
+    const cwd = active?.cwd
+    if (!cwd) return useSession.getState().setScratchpadNonEmpty(false)
+    let live = true
+    void readScratchpad(cwd).then((p) => live && useSession.getState().setScratchpadNonEmpty(p.trim().length > 0))
+    return () => {
+      live = false
+    }
+  }, [active?.cwd])
+
   const answer = (optionId: string) => {
     if (!permission) return
     window.hearth.permission.respond(permission.id, optionId)
@@ -252,7 +270,13 @@ export function ChatView() {
     setBusy(true)
     void window.hearth.sessions.append(a.id, [{ kind: 'user', text }])
     try {
-      const result = await window.hearth.agent.prompt(a.id, a.cwd, text)
+      // Auto-attach: when on for this workspace, the agent sees the pad fenced in
+      // front of the typed text, but the bubble + transcript keep only `text`.
+      let outbound = text
+      if (useShell.getState().scratchpadAttach[a.cwd]) {
+        outbound = wrapForPrompt(text, await readScratchpad(a.cwd))
+      }
+      const result = await window.hearth.agent.prompt(a.id, a.cwd, outbound)
       if (result) {
         useSession.getState().setLastSelfEdit({ commit: result.commit, subject: text, changedPaths: result.changedPaths })
       }
@@ -263,6 +287,16 @@ export function ChatView() {
   }
 
   const stop = () => void window.hearth.agent.cancel()
+
+  // A "send now" request from the Scratchpad, routed through the normal send path.
+  // No-op while a turn is in flight (the nonce still advances, so it's dropped, not
+  // queued — matches the disabled Send button).
+  useEffect(() => {
+    if (!promptReq || promptReq.nonce === lastReqNonce.current) return
+    lastReqNonce.current = promptReq.nonce
+    if (busy) return
+    void send(promptReq.text)
+  }, [promptReq, busy])
 
   return (
     <div className="chat-col" data-screen-label="Chat">
@@ -282,7 +316,13 @@ export function ChatView() {
           {permission && <ApproveCard req={permission} onAnswer={answer} />}
         </div>
       </div>
-      <Composer busy={busy} onSend={send} onStop={stop} />
+      <Composer
+        busy={busy}
+        onSend={send}
+        onStop={stop}
+        scratchpadAttached={attach && padNonEmpty}
+        onDetachScratchpad={() => active && setScratchpadAttach(active.cwd, false)}
+      />
     </div>
   )
 }

@@ -3,6 +3,8 @@ import { useNavigate } from '@tanstack/react-router'
 import { Icon } from './Icon'
 import { useShell } from './store'
 import { startSession } from '@/app/sessions'
+import { useSession } from '@/app/session-store'
+import { readScratchpad } from '@/app/scratchpad'
 import type { Workspace } from '../../electron/main/workspaces/registry'
 
 interface Command {
@@ -32,6 +34,9 @@ export function useCommandPalette(): { open: boolean; setOpen: (v: boolean) => v
 export function CommandPalette({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate()
   const { toggleTheme, setAccent } = useShell()
+  const active = useSession((s) => s.active)
+  const padNonEmpty = useSession((s) => s.scratchpadNonEmpty)
+  const requestPrompt = useSession((s) => s.requestPrompt)
   const [q, setQ] = useState('')
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [sel, setSel] = useState(0)
@@ -64,8 +69,23 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         void navigate({ to: '/chat' })
       },
     }))
-    return [...nav, ...actions, ...ws]
-  }, [navigate, toggleTheme, setAccent, workspaces])
+    const scratch: Command[] =
+      active && padNonEmpty
+        ? [
+            {
+              id: 'send-scratchpad',
+              label: 'Send scratchpad to agent',
+              ic: 'note-pencil',
+              grp: 'Scratchpad',
+              run: async () => {
+                const pad = (await readScratchpad(active.cwd)).trim()
+                if (pad) requestPrompt(pad)
+              },
+            },
+          ]
+        : []
+    return [...nav, ...actions, ...scratch, ...ws]
+  }, [navigate, toggleTheme, setAccent, workspaces, active, padNonEmpty, requestPrompt])
 
   const hits = q.trim() ? commands.filter((c) => c.label.toLowerCase().includes(q.toLowerCase())) : commands
   const run = (c: Command | undefined) => {

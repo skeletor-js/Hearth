@@ -32,6 +32,9 @@ interface ShellState {
   bottomOpen: boolean
   rightTab: string
   bottomTab: string
+  // scratchpad: auto-attach toggle, per-workspace (keyed by cwd) so it doesn't bleed between repos
+  scratchpadAttach: Record<string, boolean>
+  setScratchpadAttach: (cwd: string, on: boolean) => void
   // agent
   approval: 'auto' | 'commands' | 'always'
   setApproval: (v: 'auto' | 'commands' | 'always') => void
@@ -69,6 +72,8 @@ export const useShell = create<ShellState>()(
       bottomOpen: false,
       rightTab: 'review',
       bottomTab: 'terminal',
+      scratchpadAttach: {},
+      setScratchpadAttach: (cwd, on) => set((s) => ({ scratchpadAttach: { ...s.scratchpadAttach, [cwd]: on } })),
       approval: 'commands',
       setApproval: (approval) => set({ approval }),
       onboarded: false,

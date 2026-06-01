@@ -4,6 +4,7 @@ import { useSession } from '../session-store'
 import { ReviewTab } from './ReviewTab'
 import { PlanTab } from './PlanTab'
 import { SelfTab } from './SelfTab'
+import { ScratchpadTab } from './ScratchpadTab'
 import { FilesTab } from './FilesTab'
 import { TerminalTab } from './TerminalTab'
 import { BrowserTab } from './BrowserTab'
@@ -12,6 +13,7 @@ import { GitPanel } from './GitPanel'
 const WB_TABS = [
   { id: 'review', icon: 'git-diff', label: 'Review' },
   { id: 'self', icon: 'flame', label: 'Self', flame: true },
+  { id: 'scratchpad', icon: 'note-pencil', label: 'Scratchpad' },
   { id: 'files', icon: 'folder', label: 'Files' },
   { id: 'terminal', icon: 'terminal-window', label: 'Terminal' },
   { id: 'browser', icon: 'globe', label: 'Browser' },
@@ -20,6 +22,7 @@ const WB_TABS = [
 
 const ADD_ITEMS = [
   ['review', 'git-diff', 'Review', 'Code changes'],
+  ['scratchpad', 'note-pencil', 'Scratchpad', 'Quick notes for the agent'],
   ['files', 'folder', 'Files', 'Browse project files'],
   ['terminal', 'terminal-window', 'Terminal', 'Interactive shell'],
   ['browser', 'globe', 'Browser', 'Open a website'],
@@ -59,6 +62,8 @@ function TabBody({ tab, onOpenTab }: { tab: string; onOpenTab: (id: string) => v
   switch (tab) {
     case 'self':
       return <SelfTab />
+    case 'scratchpad':
+      return <ScratchpadTab />
     case 'files':
       return <FilesTab />
     case 'terminal':
