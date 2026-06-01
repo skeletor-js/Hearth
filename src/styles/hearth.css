@@ -132,7 +132,7 @@ a{color:inherit;text-decoration:none;cursor:default}
 .tb-left,.tb-right{ display:inline-flex; align-items:center; gap:2px; -webkit-app-region:no-drag; }
 /* Nudge the toggles down so their icon centers line up with the macOS traffic
    lights (which sit a touch lower than the title-bar's geometric center). */
-.titlebar .pbtn{ width:24px; height:24px; -webkit-app-region:no-drag; position:relative; top:3px; }
+.titlebar .pbtn{ width:24px; height:24px; -webkit-app-region:no-drag; position:relative; top:4px; }
 
 /* ─────────────────────────  Left rail (card)  ───────────────────────── */
 .rail{ width:var(--rail-w);flex-shrink:0;position:relative;
