@@ -9,7 +9,7 @@ import { readScratchpad, wrapForPrompt } from '../scratchpad'
 import { Composer } from './Composer'
 import { LiveTrace, inferKind, type DiffRow, type TraceResult, type TraceStep } from './trace'
 import type { TranscriptEntry } from '../../../electron/main/sessions/store'
-import { renderMd } from './markdown'
+import { renderMd, handleCodeCopyClick } from './markdown'
 
 type Block =
   | { kind: 'text'; text: string }
@@ -395,7 +395,7 @@ function MessageView({
         </div>
       )}
       {m.blocks.map((b, i) => {
-        if (b.kind === 'text') return <div key={i} className="msg-body" dangerouslySetInnerHTML={{ __html: renderMd(b.text) }} />
+        if (b.kind === 'text') return <div key={i} className="msg-body" onClick={handleCodeCopyClick} dangerouslySetInnerHTML={{ __html: renderMd(b.text) }} />
         if (b.kind === 'planref')
           return (
             <div key={i} className="wb-ref" onClick={onOpenPlan}>

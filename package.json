@@ -33,6 +33,7 @@
     "@zed-industries/claude-agent-acp": "^0.23.1",
     "dompurify": "^3.4.7",
     "dugite": "^3.2.2",
+    "highlight.js": "^11.11.1",
     "marked": "^18.0.4",
     "node-pty": "^1.1.0"
   },

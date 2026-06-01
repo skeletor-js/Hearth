@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Icon } from '@/shell/Icon'
-import { renderMd } from './markdown'
+import { renderMd, handleCodeCopyClick } from './markdown'
 import type { AgentKind } from '../../../electron/shared/protocol'
 
 export type StepKind = 'think' | 'search' | 'read' | 'edit' | 'run'
@@ -64,7 +64,7 @@ function Step({ step, running, isLast }: { step: TraceStep; running: boolean; is
             <span className="tverb plain">{isRunning ? 'Thinking…' : 'Thought' + fmtSecs(step.thinkMs)}</span>
             <Icon name="caret-right" className={'tchev ico-12' + (open ? ' open' : '')} />
           </div>
-          {open && <div className="tstep-detail think-detail" dangerouslySetInnerHTML={{ __html: renderMd(step.title) }} />}
+          {open && <div className="tstep-detail think-detail" onClick={handleCodeCopyClick} dangerouslySetInnerHTML={{ __html: renderMd(step.title) }} />}
         </div>
       </div>
     )
