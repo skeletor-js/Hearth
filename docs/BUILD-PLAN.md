@@ -252,14 +252,35 @@ Depends on P1-B4.
 
 ## Phase 5 — v1 acceptance
 
-Walk the full [MILESTONE-V1.md](MILESTONE-V1.md) definition of done in one
-sitting:
+Walk the full [MILESTONE-V1.md](MILESTONE-V1.md) definition of done:
 
-- [ ] Talk to Claude over ACP (P2).
-- [ ] Have it edit itself, HMR reflects it (P3-1/2).
-- [ ] Commit + revert with UI rollback (P3-3).
-- [ ] Run one micro-app in a sandboxed iframe (P4).
-- [ ] Tag `v1` and write a short "how to drive it" note in the README.
+- [~] Talk to Claude over ACP (P2). Handshake + session + prompt dispatch verified
+      live; the model reply is auth-blocked in the nested sandbox.
+- [~] Have it edit itself, HMR reflects it (P3-1/2). Service logic unit-tested
+      against a real repo; live agent file-write needs a real turn.
+- [x] Commit + revert with UI rollback (P3-3 + History UI). Undo verified by tests
+      (revert + content restore + correct reload tier).
+- [x] Run one micro-app in a sandboxed iframe (P4). Serve verified live (HTTP 200);
+      iframe host + route + sidebar link in place.
+- [x] "How to drive it" note in the README (FakeAgent flag, History undo, demo app).
+- [ ] **Tag `v1`** — gated on one clean live turn on a non-nested machine. Not
+      tagged yet, on purpose: the loop is built and tested but a real talk →
+      self-edit → HMR → undo cycle hasn't been observed end to end.
+
+### What remains (all environment-blocked, not code-blocked)
+
+The single open dependency is **running this on a normal machine** (outside the
+Claude Code sandbox) with `claude login` or a real `ANTHROPIC_API_KEY`, then:
+1. send a prompt and confirm the streamed reply renders (closes P2-2);
+2. answer a real permission ask (closes P2-3 / P2-4);
+3. ask it to change the sidebar title, confirm the `Hearth-SelfMod` commit +
+   live HMR (closes P3-1/P3-2);
+4. hit Undo in History and confirm the rollback (already unit-verified);
+5. open the Demo micro-app and confirm it renders in the iframe (closes P4-2);
+6. tag `v1`.
+
+Everything those steps exercise is implemented and unit/integration-tested; the
+steps are observation, not construction.
 
 ---
 

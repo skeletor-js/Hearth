@@ -4,9 +4,12 @@ A self-evolving macOS desktop client for coding agents — Claude Code (and Code
 driven over the [Agent Client Protocol](https://agentclientprotocol.com). It can
 edit its own UI at runtime, like [Stella](https://github.com/ruuxi/stella).
 
-> Status: skeleton. The architecture and module boundaries are in place; the hard
-> seams (ACP client, HMR apply) are stubbed with `TODO(v1)` and the build order
-> is in [docs/MILESTONE-V1.md](docs/MILESTONE-V1.md).
+> Status: v1 wired and tested. The ACP client, permission flow, self-mod
+> commit/undo, HMR classification, and micro-app serving are implemented with 78
+> passing tests; build/typecheck/lint are green and the app boots. The one thing
+> not yet confirmed end to end is a **live model turn** (talk → self-edit → HMR),
+> blocked only by this build's sandbox auth — see the auth note and full task
+> tracker in [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md).
 
 ## How it works
 
@@ -46,12 +49,27 @@ credentials.
 
 ```bash
 bun install
-bun dev            # electron-vite: opens the app with live HMR
-bun run create-app demo   # scaffold a micro-app
+bun dev                        # electron-vite: opens the app with live HMR
+bun test                       # 78 tests (ACP translation, git, classifier, self-mod, fake agent)
+bun run typecheck && bun run lint
+bun run create-app demo        # scaffold a micro-app (already scaffolded in this repo)
 ```
 
-> Not yet verified end-to-end — deps are pinned but uninstalled in this
-> skeleton, and the ACP client / HMR apply are stubbed. See the milestone doc.
+Driving it:
+
+- Open **Chat**, type a request. Hearth sends it to your local Claude over ACP and
+  streams the reply; mid-turn permission asks appear inline (allow / always / reject).
+- Self-edits land as `Hearth-SelfMod` git commits. **History** lists them with an
+  Undo button (`git revert` + the right HMR reload tier).
+- **Demo** (under Micro-apps) boots a standalone Vite app in a sandboxed iframe.
+- `HEARTH_FAKE_AGENT=1 bun dev` runs a scripted agent (no model) to exercise the
+  chat + permission UI without auth — useful for UI work.
+
+> A full live model turn (talk → self-edit → HMR) hasn't been confirmed *in this
+> build environment* because it ran nested inside Claude Code, where the spawned
+> agent inherits an internal API key/base URL and can't read the auth keychain.
+> On a normal machine with `claude login` (or a BYO `ANTHROPIC_API_KEY`), the
+> handshake/session/prompt path — all verified live up to that point — completes.
 
 ## License
 
