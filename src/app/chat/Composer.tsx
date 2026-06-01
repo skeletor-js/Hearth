@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AgentKind, ModelState } from '../../../electron/shared/protocol'
 import { Icon } from '@/shell/Icon'
+import { GitPanel } from '@/app/workbench/GitPanel'
 
 const MODES = [
   ['plan', 'Plan', 'list-bullets'],
@@ -98,7 +99,9 @@ export function Composer({
   const [backend, setBackend] = useState<AgentKind>('claude')
   const [models, setModels] = useState<ModelState>({ available: [], current: null })
   const [popAnchor, setPopAnchor] = useState<{ left: number; bottom: number } | null>(null)
+  const [gitAnchor, setGitAnchor] = useState<{ left: number; bottom: number } | null>(null)
   const beRef = useRef<HTMLButtonElement>(null)
+  const branchRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     void window.hearth.agent.getBackend().then(setBackend)
@@ -128,6 +131,10 @@ export function Composer({
     const r = beRef.current?.getBoundingClientRect()
     if (r) setPopAnchor({ left: r.left, bottom: window.innerHeight - r.top + 6 })
   }
+  const openGit = () => {
+    const r = branchRef.current?.getBoundingClientRect()
+    if (r) setGitAnchor({ left: r.left, bottom: window.innerHeight - r.top + 6 })
+  }
 
   const send = () => {
     const text = input.trim()
@@ -147,9 +154,9 @@ export function Composer({
     <div className="composer-wrap">
       <div className="composer">
         <div className="ctx-chips">
-          <span className="chip">
+          <button ref={branchRef} className="chip" title="Branch, changes & environment" onClick={openGit}>
             <Icon name="git-branch" /> {branch}
-          </span>
+          </button>
           <span className="chip chip-accent">
             <Icon name="flame" fill /> Self-edit on
           </span>
@@ -199,6 +206,7 @@ export function Composer({
           onClose={() => setPopAnchor(null)}
         />
       )}
+      {gitAnchor && <GitPanel anchor={gitAnchor} onClose={() => setGitAnchor(null)} />}
     </div>
   )
 }
