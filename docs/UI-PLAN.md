@@ -46,12 +46,11 @@ self-edit regardless of cwd. `captureTurn` always targets `REPO_ROOT`.
 - **History / undo / redo:** **Model A** (append-only `git revert`), revert
   conflicts **auto-resolved by Hearth's agent**, no checkout-style "Restore" for now.
   Signed off — see [SELF-EVOLUTION-HISTORY.md](SELF-EVOLUTION-HISTORY.md).
-- **soul.md / memory.md:** `soul.md` is generated from the Personality settings
-  (response length · directness · formatting density) and injected into every
-  session's agent context; the user tunes the toggles, not the file. `memory.md` is
-  plain markdown the agent reads at session start and appends on "remember/forget".
-  Both live under Hearth's config (`.hearth/`, gitignored runtime state). Refine the
-  exact schema at P5-2; this default unblocks it.
+- **Soul (personality) + Memory:** design-first — deliver through each backend's
+  **native** instruction/memory surface (`$CLAUDE_CONFIG_DIR/CLAUDE.md` for Claude;
+  `$CODEX_HOME/AGENTS.md` for Codex), as a Hearth-managed section, applied globally
+  to every session/workspace. See [SOUL-AND-MEMORY.md](SOUL-AND-MEMORY.md). 3
+  decisions pending sign-off (blocks P5-2 only).
 - **Self tab:** keep as a distinct, always-present workbench tab.
 - **Folder-workspace config (default):** respect each folder's own `.claude`
   settings; only isolate `CLAUDE_CONFIG_DIR` where needed for auth. Don't write
@@ -169,8 +168,12 @@ Every phase must end green and be checkpoint-committed. A task is "done" only wh
 - [ ] **P5-1.** ∥ Settings screen: Account (display), Appearance (✅ wire),
       Agent (default backend/model, command-approval → `HEARTH_PERMISSION_MODE`).
       **No self-evolution toggles.**
-- [ ] **P5-2.** ∥ Personality → compile choices to `soul.md`, injected into agent
-      context; Memory → local `memory.md` (read/write via chat). Define formats; TDD compile.
+- [ ] **P5-2.** ∥ Personality + Memory per [SOUL-AND-MEMORY.md](SOUL-AND-MEMORY.md):
+      compile personality → a Hearth-managed section in each backend's native global
+      instructions; move Hearth operating instructions there too (so they apply in
+      folder workspaces); Memory section read/updated via chat. *(Pending sign-off.)*
+      Also fixes: today's repo-cwd `CLAUDE.md`/`AGENTS.md` ops guidance doesn't apply
+      when cwd is a folder workspace.
 - [ ] **P5-3.** ∥ Agents screen: per-model select; connect an arbitrary ACP server
       (generalize beyond claude/codex). 
 - [ ] **P5-4.** Gates + visual; checkpoint commit.
@@ -204,5 +207,8 @@ rather than one sweep — this build is visual and has product judgment in it.
 
 ## Open questions
 
-None blocking. All decisions are locked above; the `soul.md`/`memory.md` schema has
-a working default and is refined at P5-2. The plan is ready to execute.
+- **Soul + Memory** — 3 decisions in [SOUL-AND-MEMORY.md](SOUL-AND-MEMORY.md)
+  (Codex delivery, memory scope, soul/memory storage). Blocks **P5-2 only** — late
+  in the build, so P0–P4 and the rest of P5/P6 are fully unblocked.
+
+Everything else is locked. P0 is ready to start.
