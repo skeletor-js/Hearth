@@ -5,8 +5,9 @@ import { app, BrowserWindow } from 'electron'
 import { createMainWindow } from './window.js'
 import { registerIpc } from './ipc.js'
 import { ClaudeAgent } from './agents/claude.js'
+import { CodexAgent } from './agents/codex.js'
 import { FakeAgent } from './agents/fake.js'
-import type { Agent, AgentAuth } from './agents/agent.js'
+import type { Agent, AgentAuth, AgentKind } from './agents/agent.js'
 import { SelfModService } from './self-mod/self-mod-service.js'
 import { HmrController } from './self-mod/hmr.js'
 import { stopAllMicroApps } from './micro-apps/server.js'
@@ -16,14 +17,19 @@ import { stopAllMicroApps } from './micro-apps/server.js'
 // app's writable copy of its own source (v2).
 const REPO_ROOT = process.env.HEARTH_REPO_ROOT ?? process.cwd()
 
-// Pick the auth mode from the environment, no code edit required:
-//   - ANTHROPIC_API_KEY set  -> BYO key (the deterministic, COMPLIANCE-blessed path)
-//   - otherwise              -> subscription: the adapter reads the user's existing
-//                               Claude login (a CLAUDE_CODE_OAUTH_TOKEN in the env,
-//                               or the macOS Keychain from `claude login`).
+// Which backend to drive: HEARTH_AGENT=codex selects Codex, otherwise Claude.
+function resolveBackend(): AgentKind {
+  return process.env.HEARTH_AGENT?.toLowerCase() === 'codex' ? 'codex' : 'claude'
+}
+
+// Pick the auth mode from the environment, no code edit required. The API-key env
+// var is backend-specific; if it's set we use BYO-key (the deterministic,
+// COMPLIANCE-blessed path), otherwise subscription — the adapter reads the user's
+// existing `claude login` / `codex login` (env token or the OS Keychain).
 // We never originate or store a credential — see docs/COMPLIANCE.md.
-function resolveAuth(): AgentAuth {
-  if (process.env.ANTHROPIC_API_KEY) return { mode: 'api-key', envVar: 'ANTHROPIC_API_KEY' }
+function resolveAuth(backend: AgentKind): AgentAuth {
+  const envVar = backend === 'codex' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY'
+  if (process.env[envVar]) return { mode: 'api-key', envVar }
   return { mode: 'subscription' }
 }
 
@@ -32,11 +38,14 @@ async function bootstrap(): Promise<void> {
 
   // HEARTH_FAKE_AGENT=1 swaps in a scripted agent for UI/permission development
   // without a live model. See agents/fake.ts.
-  const auth = resolveAuth()
-  console.log(`[hearth] agent auth mode: ${auth.mode}`)
+  const backend = resolveBackend()
+  const auth = resolveAuth(backend)
+  console.log(`[hearth] backend: ${backend}, auth mode: ${auth.mode}`)
   const agent: Agent = process.env.HEARTH_FAKE_AGENT
     ? new FakeAgent()
-    : new ClaudeAgent({ kind: 'claude', cwd: REPO_ROOT, auth })
+    : backend === 'codex'
+      ? new CodexAgent({ kind: 'codex', cwd: REPO_ROOT, auth })
+      : new ClaudeAgent({ kind: 'claude', cwd: REPO_ROOT, auth })
 
   const hmr = new HmrController({
     reloadWindow: () => window.webContents.reload(),

@@ -1,28 +1,38 @@
-// Codex backend — wired in v2. Same Agent interface, different adapter.
+// Codex backend. Spawns @agentclientprotocol/codex-acp, which vendors the
+// @openai/codex CLI and exposes it over ACP — the same shape as the Claude
+// backend, just a different adapter and credential. The renderer and the rest of
+// main are unchanged: a backend is "resolve a different adapter spec".
 //
-// Codex's ACP support is community-maintained (e.g. beyond5959/acp-adapter),
-// not first-party, so expect feature gaps vs Claude. The point of this file is
-// that adding Codex is "resolve a different adapter spec" — the renderer and
-// the rest of main are unchanged.
+// Auth: we inherit the user's existing Codex auth (they ran `codex login`) by
+// spawning in their environment, OR pass through a BYO OpenAI API key from their
+// env. We never originate or store a credential. See docs/COMPLIANCE.md.
 
-import type { Agent, AgentConfig, AgentSession, PermissionRequest, SessionUpdate } from './agent.js'
+import { AcpAgent, resolveAdapterBin } from './acp-agent.js'
+import { type AdapterSpec } from './acp-client.js'
+import type { AgentConfig } from './agent.js'
 
-export class CodexAgent implements Agent {
-  readonly kind = 'codex' as const
+function resolveAdapter(config: AgentConfig): AdapterSpec {
+  // Run the vendored codex-acp bin (which drives the vendored @openai/codex),
+  // not whatever `codex` is on PATH.
+  const bin = resolveAdapterBin('@agentclientprotocol/codex-acp', 'codex-acp')
 
-  constructor(_config: AgentConfig) {}
-
-  connect(): Promise<void> {
-    throw new Error('Codex backend not implemented — v2. See docs/MILESTONE-V1.md')
+  // process.execPath is the Electron binary; ELECTRON_RUN_AS_NODE makes it run
+  // the adapter's Node entry instead of booting a second app. (Ignored under a
+  // plain Node/Bun runtime.)
+  const env: Record<string, string> = { ELECTRON_RUN_AS_NODE: '1' }
+  if (config.auth.mode === 'api-key') {
+    const key = process.env[config.auth.envVar]
+    if (!key) throw new Error(`API key env var ${config.auth.envVar} is not set`)
+    env.OPENAI_API_KEY = key
   }
-  newSession(): Promise<AgentSession> {
-    throw new Error('Codex backend not implemented — v2')
-  }
-  onUpdate(_cb: (s: string, u: SessionUpdate) => void): () => void {
-    return () => {}
-  }
-  onPermission(_cb: (s: string, r: PermissionRequest) => Promise<string>): void {}
-  dispose(): Promise<void> {
-    return Promise.resolve()
+  // subscription mode: inject nothing; the adapter uses the user's `codex login`
+  // (~/.codex), the same credential the `codex` CLI uses.
+
+  return { command: process.execPath, args: [bin], cwd: config.cwd, env }
+}
+
+export class CodexAgent extends AcpAgent {
+  constructor(config: AgentConfig) {
+    super('codex', () => resolveAdapter(config))
   }
 }

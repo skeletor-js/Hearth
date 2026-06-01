@@ -16,6 +16,7 @@
     "create-app": "node scripts/create-micro-app.mjs"
   },
   "dependencies": {
+    "@agentclientprotocol/codex-acp": "^0.0.44",
     "@agentclientprotocol/sdk": "^0.17.0",
     "@zed-industries/claude-agent-acp": "^0.23.1",
     "dugite": "^3.2.2"
