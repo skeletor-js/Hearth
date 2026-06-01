@@ -20,7 +20,7 @@ export class FakeAgent implements Agent {
     // Nothing to spawn.
   }
 
-  async newSession(): Promise<AgentSession> {
+  async newSession(_opts?: { cwd?: string }): Promise<AgentSession> {
     const id = `fake-${++this.counter}`
     return {
       id,

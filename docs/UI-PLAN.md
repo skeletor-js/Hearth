@@ -164,18 +164,18 @@ Terminal/Browser land in P4).
 - [x] **P2-5.** Gates + visual (both panels, all three layouts); checkpoint commit.
 
 ### P3 — Workspaces + Sessions (keystone; serial spine, ∥ within)
-- [ ] **P3-1.** Workspace registry (`electron/main/workspaces/`): built-in Hearth
+- [x] **P3-1.** Workspace registry (`electron/main/workspaces/`): built-in Hearth
       workspace + user-opened folders; `dialog.showOpenDialog`; per-workspace git
       branch + dirty status (dugite). IPC `workspaces.list/open/remove/status`. TDD.
-- [ ] **P3-2.** Session store (`electron/main/sessions/`): JSONL transcript +
+- [x] **P3-2.** Session store (`electron/main/sessions/`): JSONL transcript +
       JSON index; IPC `sessions.list/create/get/rename/duplicate/archive/delete/export`.
       TDD the store.
-- [ ] **P3-3.** Per-session cwd threaded → agent; inject `REPO_ROOT` + self-edit
+- [x] **P3-3.** Per-session cwd threaded → agent; inject `REPO_ROOT` + self-edit
       context into every session; `captureTurn` always `REPO_ROOT`.
-- [ ] **P3-4.** Rail workspaces tree + Recents (live data); Home screen; Workspace
+- [x] **P3-4.** Rail workspaces tree + Recents (live data); Home screen; Workspace
       detail screen.
-- [ ] **P3-5.** ∥ Search screen over the session store (after P3-2).
-- [ ] **P3-6.** *Accept (gate):* open a 2nd folder → start a session there → agent
+- [x] **P3-5.** ∥ Search screen over the session store (after P3-2).
+- [x] **P3-6.** *Accept (gate):* open a 2nd folder → start a session there → agent
       edits the folder (correct cwd, **no HMR**); from that same session ask Hearth
       to change itself → **self-mod commit + HMR fires**; restart → sessions +
       transcripts restored. Checkpoint commit.

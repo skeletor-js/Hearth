@@ -27,11 +27,16 @@ export interface AgentSession {
   dispose(): Promise<void>
 }
 
+/** Per-session options. `cwd` is the task working directory (the workspace). */
+export interface NewSessionOptions {
+  cwd?: string
+}
+
 export interface Agent {
   readonly kind: AgentKind
   /** Spawn the ACP adapter subprocess and complete the ACP handshake. */
   connect(): Promise<void>
-  newSession(): Promise<AgentSession>
+  newSession(opts?: NewSessionOptions): Promise<AgentSession>
   /** Streamed updates for a session id. */
   onUpdate(cb: (sessionId: string, update: SessionUpdate) => void): () => void
   /** Resolve a permission request by option id. */

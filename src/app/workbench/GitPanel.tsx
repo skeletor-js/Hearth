@@ -11,9 +11,10 @@ export function GitPanel({ anchor, onClose }: { anchor: { right: number; top: nu
   const [newBranch, setNewBranch] = useState('')
   const [busy, setBusy] = useState(false)
   const refreshDiff = useSession((s) => s.refreshDiff)
+  const cwd = useSession((s) => s.active?.cwd)
 
   const reload = async () => {
-    setStatus(await window.hearth.git.status())
+    setStatus(await window.hearth.git.status(cwd))
   }
   useEffect(() => {
     void reload()
@@ -62,7 +63,7 @@ export function GitPanel({ anchor, onClose }: { anchor: { right: number; top: nu
             <div className="pop-sect" style={{ display: 'flex', alignItems: 'center' }}>
               <span>Changes</span>
               <span className="spacer" style={{ flex: 1 }} />
-              <button className="btn btn-sm btn-quiet" disabled={busy} onClick={() => run(() => window.hearth.git.stage([]))}>
+              <button className="btn btn-sm btn-quiet" disabled={busy} onClick={() => run(() => window.hearth.git.stage([], cwd))}>
                 Stage all
               </button>
             </div>
@@ -74,7 +75,7 @@ export function GitPanel({ anchor, onClose }: { anchor: { right: number; top: nu
                     {f.path}
                   </div>
                 </div>
-                <button className="btn-icon" title="Stage" disabled={busy} onClick={() => run(() => window.hearth.git.stage([f.path]))}>
+                <button className="btn-icon" title="Stage" disabled={busy} onClick={() => run(() => window.hearth.git.stage([f.path], cwd))}>
                   <Icon name="plus" />
                 </button>
               </div>
@@ -93,7 +94,7 @@ export function GitPanel({ anchor, onClose }: { anchor: { right: number; top: nu
                     {f.path}
                   </div>
                 </div>
-                <button className="btn-icon" title="Unstage" disabled={busy} onClick={() => run(() => window.hearth.git.unstage([f.path]))}>
+                <button className="btn-icon" title="Unstage" disabled={busy} onClick={() => run(() => window.hearth.git.unstage([f.path], cwd))}>
                   <Icon name="minus" />
                 </button>
               </div>
@@ -112,7 +113,7 @@ export function GitPanel({ anchor, onClose }: { anchor: { right: number; top: nu
                 disabled={busy || !message.trim()}
                 onClick={() =>
                   run(async () => {
-                    await window.hearth.git.commit(message.trim())
+                    await window.hearth.git.commit(message.trim(), cwd)
                     setMessage('')
                   })
                 }
@@ -137,7 +138,7 @@ export function GitPanel({ anchor, onClose }: { anchor: { right: number; top: nu
             disabled={busy || !newBranch.trim()}
             onClick={() =>
               run(async () => {
-                await window.hearth.git.switchBranch(newBranch.trim(), true)
+                await window.hearth.git.switchBranch(newBranch.trim(), true, cwd)
                 setNewBranch('')
               })
             }

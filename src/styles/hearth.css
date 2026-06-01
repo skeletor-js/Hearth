@@ -143,6 +143,9 @@ a{color:inherit;text-decoration:none;cursor:default}
 .rail-item{ display:flex;align-items:center;gap:9px;height:var(--row-h);
   padding:0 8px 0 9px;border-radius:6px;color:var(--default);font-size:var(--t-13);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative; }
+/* Rail items can be <a>, <div>, or <button> — normalize button chrome. */
+button.rail-item{ width:100%;border:0;background:transparent;font:inherit;text-align:left;cursor:pointer; }
+.rail-group-label button.ricon{ border:0;background:transparent;cursor:pointer;padding:0;display:inline-flex; }
 .rail-item:hover{ background:var(--hover); }
 .rail-item .ph-thin{ color:var(--subtle);font-size:15px;flex-shrink:0; }
 .rail-item .ph-fill{ color:var(--accent);font-size:15px;flex-shrink:0; }

@@ -1,8 +1,13 @@
-import { Link, useRouterState } from '@tanstack/react-router'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
 import { Icon, PanelBtn, RailIcon } from './Icon'
 import { FlameMark } from './Mascot'
 import { Resizer } from './Resizer'
 import { useShell } from './store'
+import { useSession } from '@/app/session-store'
+import { openSession, startSession } from '@/app/sessions'
+import type { Workspace } from '../../electron/main/workspaces/registry'
+import type { SessionMeta } from '../../electron/main/sessions/store'
 
 const COLLAPSED_NAV = [
   { to: '/new', icon: 'plus', title: 'New session' },
@@ -16,6 +21,34 @@ const footClass = (active: boolean) => 'foot-settings' + (active ? ' is-selected
 export function Rail() {
   const { railCollapsed, railW, toggleRail, theme, toggleTheme, resizeRail } = useShell()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const navigate = useNavigate()
+  const activeId = useSession((s) => s.active?.id)
+  const sessionsNonce = useSession((s) => s.sessionsNonce)
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const [recent, setRecent] = useState<SessionMeta[]>([])
+
+  useEffect(() => {
+    void window.hearth.workspaces.list().then(setWorkspaces)
+    void window.hearth.sessions.list().then((l) => setRecent(l.slice(0, 8)))
+  }, [sessionsNonce])
+
+  const openFolder = async () => {
+    const ws = await window.hearth.workspaces.open()
+    if (!ws) return
+    setWorkspaces(await window.hearth.workspaces.list())
+    await startSession(ws)
+    void navigate({ to: '/chat' })
+  }
+
+  const newInWorkspace = async (ws: Workspace) => {
+    await startSession(ws)
+    void navigate({ to: '/chat' })
+  }
+
+  const resume = (m: SessionMeta) => {
+    openSession(m)
+    void navigate({ to: '/chat' })
+  }
 
   if (railCollapsed) {
     return (
@@ -80,25 +113,37 @@ export function Rail() {
           </Link>
         </div>
 
-        {/* Workspaces + Recent are populated with live data in P3. */}
         <div className="rail-group">
           <div className="rail-group-label">
             <span>Workspaces</span>
-            <Icon name="folder-simple-plus" />
+            <button className="ricon" title="Open a folder" onClick={openFolder}>
+              <Icon name="folder-simple-plus" />
+            </button>
           </div>
-          <Link to="/chat" className={itemClass(pathname === '/chat')}>
-            <Icon name="flame" fill />
-            <span className="ri-label">Hearth</span>
-          </Link>
+          {workspaces.map((w) => (
+            <button key={w.id} className="rail-item" onClick={() => newInWorkspace(w)} title={w.path}>
+              <Icon name={w.isHearth ? 'flame' : 'folder'} fill={w.isHearth} />
+              <span className="ri-label">{w.name}</span>
+            </button>
+          ))}
         </div>
 
         <div className="rail-group">
           <div className="rail-group-label">
             <span>Recent</span>
           </div>
-          <div className="rail-item" style={{ color: 'var(--faint)' }}>
-            <span className="ri-label">No recent sessions</span>
-          </div>
+          {recent.length === 0 ? (
+            <div className="rail-item" style={{ color: 'var(--faint)' }}>
+              <span className="ri-label">No recent sessions</span>
+            </div>
+          ) : (
+            recent.map((m) => (
+              <button key={m.id} className={itemClass(m.id === activeId && pathname === '/chat')} onClick={() => resume(m)}>
+                <Icon name={m.self ? 'flame' : 'chat-circle'} fill={m.self} />
+                <span className="ri-label">{m.title}</span>
+              </button>
+            ))
+          )}
         </div>
       </div>
 

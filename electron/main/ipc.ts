@@ -2,9 +2,12 @@
 // Channel names are shared with the preload bridge via the HEARTH_CHANNELS map
 // so the two can't drift.
 
-import { app, ipcMain, type BrowserWindow } from 'electron'
+import { app, dialog, ipcMain, type BrowserWindow } from 'electron'
 import { scaffoldMicroApp } from './micro-apps/scaffold.js'
 import { startMicroApp, stopMicroApp } from './micro-apps/server.js'
+import type { WorkspaceRegistry } from './workspaces/registry.js'
+import type { SessionStore, TranscriptEntry } from './sessions/store.js'
+import type { CreateSessionInput } from './sessions/store.js'
 import { getDiff } from './self-mod/git-diff.js'
 import {
   branches as gitBranches,
@@ -27,11 +30,13 @@ export interface MainServices {
   /** The swappable backend host (Claude/Codex), stable across switches. */
   host: AgentHost
   selfMod: SelfModService
+  workspaces: WorkspaceRegistry
+  sessions: SessionStore
   window: BrowserWindow
 }
 
 export function registerIpc(services: MainServices): void {
-  const { repoRoot, host, selfMod, window } = services
+  const { repoRoot, host, selfMod, workspaces, sessions, window } = services
 
   // Stream agent updates to the renderer (forwarded from whichever backend is live).
   host.onUpdate((sessionId, update) => {
@@ -57,13 +62,20 @@ export function registerIpc(services: MainServices): void {
     }
   })
 
-  ipcMain.handle(HEARTH_CHANNELS.agentPrompt, async (_e, text: string) => {
-    // Snapshot what's already dirty BEFORE the turn so captureTurn commits only
-    // what this turn changes — never the developer's pre-existing uncommitted work.
-    const before = await selfMod.dirtyPaths()
-    const sessionId = await host.prompt(text)
-    return selfMod.captureTurn(sessionId, text.slice(0, 72), before)
-  })
+  ipcMain.handle(
+    HEARTH_CHANNELS.agentPrompt,
+    async (_e, payload: { sessionId: string; cwd?: string; text: string }) => {
+      // Snapshot what's already dirty BEFORE the turn so captureTurn commits only
+      // what this turn changes — never the developer's pre-existing uncommitted work.
+      // captureTurn ALWAYS targets REPO_ROOT: editing another workspace's cwd never
+      // produces a self-mod commit (no HMR), but a Hearth-source edit from ANY
+      // session does. The per-session cwd only sets where the agent writes.
+      const before = await selfMod.dirtyPaths()
+      const key = payload.sessionId || 'default'
+      await host.prompt(payload.text, { key, cwd: payload.cwd || repoRoot })
+      return selfMod.captureTurn(key, payload.text.slice(0, 72), before)
+    },
+  )
   ipcMain.handle(HEARTH_CHANNELS.agentCancel, () => host.cancel())
 
   // Backend switcher.
@@ -99,6 +111,37 @@ export function registerIpc(services: MainServices): void {
   ipcMain.handle(HEARTH_CHANNELS.gitCreatePr, (_e, title: string, body: string, cwd?: string) =>
     gitCreatePr(at(cwd), title, body),
   )
+
+  // Workspaces. `open` shows the folder picker (a UI affordance the user invokes,
+  // so the dialog is appropriate here) and registers the chosen folder.
+  ipcMain.handle(HEARTH_CHANNELS.workspacesList, () => workspaces.list())
+  ipcMain.handle(HEARTH_CHANNELS.workspacesOpen, async () => {
+    const res = await dialog.showOpenDialog(window, {
+      title: 'Open a workspace folder',
+      properties: ['openDirectory', 'createDirectory'],
+    })
+    if (res.canceled || res.filePaths.length === 0) return null
+    return workspaces.add(res.filePaths[0])
+  })
+  ipcMain.handle(HEARTH_CHANNELS.workspacesRemove, (_e, id: string) => workspaces.remove(id))
+  ipcMain.handle(HEARTH_CHANNELS.workspacesStatus, async (_e, path: string) => {
+    try {
+      const s = await gitStatus(path)
+      return { branch: s.branch, dirty: s.files.length, ahead: s.ahead, behind: s.behind }
+    } catch {
+      return { branch: null, dirty: 0, ahead: 0, behind: 0 }
+    }
+  })
+
+  // Sessions.
+  ipcMain.handle(HEARTH_CHANNELS.sessionsList, () => sessions.list())
+  ipcMain.handle(HEARTH_CHANNELS.sessionsCreate, (_e, input: CreateSessionInput) => sessions.create(input))
+  ipcMain.handle(HEARTH_CHANNELS.sessionsGet, (_e, id: string) => sessions.get(id))
+  ipcMain.handle(HEARTH_CHANNELS.sessionsAppend, (_e, id: string, entries: TranscriptEntry[]) => sessions.append(id, entries))
+  ipcMain.handle(HEARTH_CHANNELS.sessionsRename, (_e, id: string, title: string) => sessions.rename(id, title))
+  ipcMain.handle(HEARTH_CHANNELS.sessionsArchive, (_e, id: string) => sessions.archive(id))
+  ipcMain.handle(HEARTH_CHANNELS.sessionsDelete, (_e, id: string) => sessions.remove(id))
+  ipcMain.handle(HEARTH_CHANNELS.sessionsDuplicate, (_e, id: string) => sessions.duplicate(id))
 
   ipcMain.handle(HEARTH_CHANNELS.microAppCreate, (_e, name: string) =>
     scaffoldMicroApp(repoRoot, name),

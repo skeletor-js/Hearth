@@ -123,11 +123,14 @@ export class AcpClient {
     ]
   }
 
-  async newSession(): Promise<AgentSession> {
+  async newSession(opts?: { cwd?: string }): Promise<AgentSession> {
     const connection = this.connection
     if (!connection) throw new Error('not connected — call connect() first')
 
-    const { sessionId } = await connection.newSession({ cwd: this.cwd, mcpServers: this.bridgeMcpServers() })
+    // The session's task cwd (the workspace) may differ from the connect-time
+    // cwd (REPO_ROOT). The MCP bridge stays anchored at REPO_ROOT (this.cwd).
+    const sessionCwd = opts?.cwd ?? this.cwd
+    const { sessionId } = await connection.newSession({ cwd: sessionCwd, mcpServers: this.bridgeMcpServers() })
 
     return {
       id: sessionId,

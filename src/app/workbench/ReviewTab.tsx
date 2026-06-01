@@ -50,11 +50,12 @@ export function ReviewTab({ onOpenTab }: { onOpenTab: (id: string) => void }) {
   const [pr, setPr] = useState<string | null>(null)
   const diffNonce = useSession((s) => s.diffNonce)
   const setReviewCount = useSession((s) => s.setReviewCount)
+  const cwd = useSession((s) => s.active?.cwd)
 
   useEffect(() => {
     let live = true
     window.hearth.git
-      .diff()
+      .diff(cwd)
       .then((d) => {
         if (!live) return
         setDiff(d)
@@ -65,11 +66,11 @@ export function ReviewTab({ onOpenTab }: { onOpenTab: (id: string) => void }) {
     return () => {
       live = false
     }
-  }, [diffNonce, setReviewCount])
+  }, [diffNonce, cwd, setReviewCount])
 
   const draftPr = async () => {
     const title = diff?.branch ? `Changes on ${diff.branch}` : 'Hearth changes'
-    const res = await window.hearth.git.createPr(title, '')
+    const res = await window.hearth.git.createPr(title, '', cwd)
     setPr(res.created ? `Opened PR: ${res.detail}` : `Run: ${res.detail}`)
   }
 

@@ -11,6 +11,9 @@ import { AgentHost } from './agents/agent-host.js'
 import type { Agent, AgentAuth, AgentKind } from './agents/agent.js'
 import { SelfModService } from './self-mod/self-mod-service.js'
 import { HmrController } from './self-mod/hmr.js'
+import { WorkspaceRegistry } from './workspaces/registry.js'
+import { SessionStore } from './sessions/store.js'
+import { join } from 'node:path'
 import { stopAllMicroApps } from './micro-apps/server.js'
 import { startAgentBridge } from './agent-bridge.js'
 
@@ -70,11 +73,17 @@ async function bootstrap(): Promise<void> {
   })
   const selfMod = new SelfModService(REPO_ROOT, hmr)
 
+  // Workspaces + sessions persist under userData so they survive restarts and
+  // never pollute the repo. Hearth itself is the built-in workspace at REPO_ROOT.
+  const dataDir = app.getPath('userData')
+  const workspaces = new WorkspaceRegistry(join(dataDir, 'workspaces.json'), REPO_ROOT)
+  const sessions = new SessionStore(join(dataDir, 'sessions'))
+
   // Loopback bridge: lets the agent see (snapshot) AND drive (eval) the live app.
   // Route captures use a hidden window so the user's view is never disturbed.
   startAgentBridge({ mainWindow: window, createSnapshotWindow }, REPO_ROOT)
 
-  registerIpc({ repoRoot: REPO_ROOT, host, selfMod, window })
+  registerIpc({ repoRoot: REPO_ROOT, host, selfMod, workspaces, sessions, window })
 
   // Connect the current backend in the background; the UI renders immediately.
   // A failed connect must surface, not crash boot.

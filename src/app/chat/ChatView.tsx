@@ -4,8 +4,10 @@ import { FlameMark, ThinkingEmber } from '@/shell/Mascot'
 import { Icon } from '@/shell/Icon'
 import { useShell } from '@/shell/store'
 import { useSession } from '../session-store'
+import { ensureActiveSession } from '../sessions'
 import { Composer } from './Composer'
 import { LiveTrace, inferKind, type DiffRow, type TraceResult, type TraceStep } from './trace'
+import type { TranscriptEntry } from '../../../electron/main/sessions/store'
 
 type Block =
   | { kind: 'text'; text: string }
@@ -50,8 +52,15 @@ export function ChatView() {
   const openText = useRef(false) // last hearth block is a coalescing text block
   const scrollRef = useRef<HTMLDivElement>(null)
   const openRightTab = useShell((s) => s.openRightTab)
+  const active = useSession((s) => s.active)
+  // Buffer of stream entries for the in-flight turn, flushed to the transcript
+  // on end so we persist per-turn (not per-token).
+  const turnBuffer = useRef<TranscriptEntry[]>([])
 
   const id = () => nextId.current++
+
+  const pushUser = (text: string) =>
+    setMsgs((p) => [...p, { id: id(), role: 'user', text }, { id: id(), role: 'hearth', blocks: [] }])
 
   // Ensure there's a hearth message at the tail to receive stream blocks.
   const withHearthTail = (prev: Msg[]): [Msg[], Extract<Msg, { role: 'hearth' }>] => {
@@ -170,9 +179,14 @@ export function ChatView() {
     const offBe = window.hearth.agent.onBackendChanged((s) => setBackend(s.kind))
     const offUpdate = window.hearth.agent.onUpdate(({ update }) => {
       apply(update)
+      turnBuffer.current.push({ kind: 'update', update })
       if (update.type === 'end') {
         setBusy(false)
         useSession.getState().refreshDiff() // working tree may have changed this turn
+        const a = useSession.getState().active
+        const batch = turnBuffer.current
+        turnBuffer.current = []
+        if (a && batch.length) void window.hearth.sessions.append(a.id, batch)
       }
     })
     const offError = window.hearth.agent.onError((message) => {
@@ -189,6 +203,29 @@ export function ChatView() {
     }
   }, [])
 
+  // Load (and replay) the active session's transcript when it changes; ensure one
+  // exists on first entry. Replaying through `apply` rebuilds the surface exactly.
+  useEffect(() => {
+    let live = true
+    setMsgs([])
+    openText.current = false
+    turnBuffer.current = []
+    if (!active) {
+      void ensureActiveSession()
+      return
+    }
+    void window.hearth.sessions.get(active.id).then((detail) => {
+      if (!live || !detail) return
+      for (const e of detail.entries) {
+        if (e.kind === 'user') pushUser(e.text)
+        else apply(e.update)
+      }
+    })
+    return () => {
+      live = false
+    }
+  }, [active?.id])
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
   }, [msgs, permission, busy])
@@ -200,11 +237,13 @@ export function ChatView() {
   }
 
   const send = async (text: string) => {
+    const a = useSession.getState().active ?? (await ensureActiveSession())
     openText.current = false
-    setMsgs((p) => [...p, { id: id(), role: 'user', text }, { id: id(), role: 'hearth', blocks: [] }])
+    pushUser(text)
     setBusy(true)
+    void window.hearth.sessions.append(a.id, [{ kind: 'user', text }])
     try {
-      const result = await window.hearth.agent.prompt(text)
+      const result = await window.hearth.agent.prompt(a.id, a.cwd, text)
       if (result) {
         useSession.getState().setLastSelfEdit({ commit: result.commit, subject: text, changedPaths: result.changedPaths })
       }

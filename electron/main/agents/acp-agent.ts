@@ -44,8 +44,8 @@ export class AcpAgent implements Agent {
   connect(): Promise<void> {
     return this.client.connect()
   }
-  newSession(): Promise<AgentSession> {
-    return this.client.newSession()
+  newSession(opts?: { cwd?: string }): Promise<AgentSession> {
+    return this.client.newSession(opts)
   }
   onUpdate(cb: (sessionId: string, update: SessionUpdate) => void): () => void {
     return this.client.onUpdate(cb)

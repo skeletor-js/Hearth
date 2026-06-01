@@ -8,10 +8,20 @@ import type { DiffSummary } from '../main/self-mod/git-diff.js'
 import type { BranchInfo, GitStatus, PrResult } from '../main/self-mod/git-ops.js'
 import type { SelfModResult } from '../main/self-mod/self-mod-service.js'
 import type { SelfModLogEntry } from '../main/self-mod/git.js'
+import type { Workspace } from '../main/workspaces/registry.js'
+import type { CreateSessionInput, SessionDetail, SessionMeta, TranscriptEntry } from '../main/sessions/store.js'
+
+interface WorkspaceStatus {
+  branch: string | null
+  dirty: number
+  ahead: number
+  behind: number
+}
 
 const api = {
   agent: {
-    prompt: (text: string): Promise<SelfModResult | null> => ipcRenderer.invoke(CH.agentPrompt, text),
+    prompt: (sessionId: string, cwd: string, text: string): Promise<SelfModResult | null> =>
+      ipcRenderer.invoke(CH.agentPrompt, { sessionId, cwd, text }),
     cancel: () => ipcRenderer.invoke(CH.agentCancel),
     getBackend: (): Promise<AgentKind> => ipcRenderer.invoke(CH.backendGet),
     setBackend: (kind: AgentKind): Promise<BackendStatus> => ipcRenderer.invoke(CH.backendSet, kind),
@@ -64,6 +74,22 @@ const api = {
       ipcRenderer.invoke(CH.gitSwitchBranch, name, create, cwd),
     createPr: (title: string, body: string, cwd?: string): Promise<PrResult> =>
       ipcRenderer.invoke(CH.gitCreatePr, title, body, cwd),
+  },
+  workspaces: {
+    list: (): Promise<Workspace[]> => ipcRenderer.invoke(CH.workspacesList),
+    open: (): Promise<Workspace | null> => ipcRenderer.invoke(CH.workspacesOpen),
+    remove: (id: string): Promise<void> => ipcRenderer.invoke(CH.workspacesRemove, id),
+    status: (path: string): Promise<WorkspaceStatus> => ipcRenderer.invoke(CH.workspacesStatus, path),
+  },
+  sessions: {
+    list: (): Promise<SessionMeta[]> => ipcRenderer.invoke(CH.sessionsList),
+    create: (input: CreateSessionInput): Promise<SessionMeta> => ipcRenderer.invoke(CH.sessionsCreate, input),
+    get: (id: string): Promise<SessionDetail | null> => ipcRenderer.invoke(CH.sessionsGet, id),
+    append: (id: string, entries: TranscriptEntry[]): Promise<void> => ipcRenderer.invoke(CH.sessionsAppend, id, entries),
+    rename: (id: string, title: string): Promise<SessionMeta | null> => ipcRenderer.invoke(CH.sessionsRename, id, title),
+    archive: (id: string): Promise<void> => ipcRenderer.invoke(CH.sessionsArchive, id),
+    delete: (id: string): Promise<void> => ipcRenderer.invoke(CH.sessionsDelete, id),
+    duplicate: (id: string): Promise<SessionMeta | null> => ipcRenderer.invoke(CH.sessionsDuplicate, id),
   },
   microApps: {
     create: (name: string) => ipcRenderer.invoke(CH.microAppCreate, name),
