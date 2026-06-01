@@ -181,7 +181,7 @@ Terminal/Browser land in P4).
       transcripts restored. Checkpoint commit.
 
 ### P4 — Files+Editor / Terminal / Browser  ∥
-- [ ] **P4-1.** ∥ **Files + editor:** `fs` IPC (dir tree + read **and write**) rooted
+- [x] **P4-1.** ∥ **Files + editor:** `fs` IPC (dir tree + read **and write**) rooted
       at the active workspace cwd. Files tab = tree → open a file in an in-app
       **CodeMirror 6** editor: syntax highlighting for code, **markdown editing with a
       preview toggle**, dirty/save state, save to disk. Add CodeMirror deps. *Accept:*

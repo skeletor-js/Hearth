@@ -8,6 +8,7 @@ import { startMicroApp, stopMicroApp } from './micro-apps/server.js'
 import type { WorkspaceRegistry } from './workspaces/registry.js'
 import type { SessionStore, TranscriptEntry } from './sessions/store.js'
 import type { CreateSessionInput } from './sessions/store.js'
+import { listDir, readFile as fsReadFile, writeFile as fsWriteFile } from './fs/files.js'
 import { getDiff } from './self-mod/git-diff.js'
 import {
   branches as gitBranches,
@@ -142,6 +143,13 @@ export function registerIpc(services: MainServices): void {
   ipcMain.handle(HEARTH_CHANNELS.sessionsArchive, (_e, id: string) => sessions.archive(id))
   ipcMain.handle(HEARTH_CHANNELS.sessionsDelete, (_e, id: string) => sessions.remove(id))
   ipcMain.handle(HEARTH_CHANNELS.sessionsDuplicate, (_e, id: string) => sessions.duplicate(id))
+
+  // Files (workspace-rooted; cwd defaults to the Hearth repo).
+  ipcMain.handle(HEARTH_CHANNELS.fsList, (_e, cwd: string | undefined, rel?: string) => listDir(cwd || repoRoot, rel))
+  ipcMain.handle(HEARTH_CHANNELS.fsRead, (_e, cwd: string | undefined, rel: string) => fsReadFile(cwd || repoRoot, rel))
+  ipcMain.handle(HEARTH_CHANNELS.fsWrite, (_e, cwd: string | undefined, rel: string, content: string) =>
+    fsWriteFile(cwd || repoRoot, rel, content),
+  )
 
   ipcMain.handle(HEARTH_CHANNELS.microAppCreate, (_e, name: string) =>
     scaffoldMicroApp(repoRoot, name),

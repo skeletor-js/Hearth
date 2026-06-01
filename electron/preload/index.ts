@@ -9,6 +9,7 @@ import type { BranchInfo, GitStatus, PrResult } from '../main/self-mod/git-ops.j
 import type { SelfModResult } from '../main/self-mod/self-mod-service.js'
 import type { SelfModLogEntry } from '../main/self-mod/git.js'
 import type { Workspace } from '../main/workspaces/registry.js'
+import type { FileContent, FileEntry } from '../main/fs/files.js'
 import type { CreateSessionInput, SessionDetail, SessionMeta, TranscriptEntry } from '../main/sessions/store.js'
 
 interface WorkspaceStatus {
@@ -90,6 +91,12 @@ const api = {
     archive: (id: string): Promise<void> => ipcRenderer.invoke(CH.sessionsArchive, id),
     delete: (id: string): Promise<void> => ipcRenderer.invoke(CH.sessionsDelete, id),
     duplicate: (id: string): Promise<SessionMeta | null> => ipcRenderer.invoke(CH.sessionsDuplicate, id),
+  },
+  files: {
+    list: (cwd: string | undefined, rel?: string): Promise<FileEntry[]> => ipcRenderer.invoke(CH.fsList, cwd, rel),
+    read: (cwd: string | undefined, rel: string): Promise<FileContent> => ipcRenderer.invoke(CH.fsRead, cwd, rel),
+    write: (cwd: string | undefined, rel: string, content: string): Promise<void> =>
+      ipcRenderer.invoke(CH.fsWrite, cwd, rel, content),
   },
   microApps: {
     create: (name: string) => ipcRenderer.invoke(CH.microAppCreate, name),

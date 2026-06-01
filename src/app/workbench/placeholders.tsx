@@ -1,18 +1,7 @@
 import { Icon } from '@/shell/Icon'
 
-// Files / Terminal / Browser become real in P4 (CodeMirror editor, node-pty +
-// xterm, WebContentsView). Until then they show faithful empty states so the tab
-// set is complete and the shell reads correctly.
-
-export function FilesTab() {
-  return (
-    <div className="wb-empty">
-      <Icon name="folder-open" />
-      <h3>Files</h3>
-      <p>An in-app editor for code and markdown lands here.</p>
-    </div>
-  )
-}
+// Terminal / Browser become real later in P4 (node-pty + xterm, WebContentsView).
+// Until then they show faithful empty states so the tab set is complete.
 
 export function TerminalTab() {
   return (

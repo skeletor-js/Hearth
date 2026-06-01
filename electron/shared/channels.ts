@@ -35,6 +35,10 @@ export const HEARTH_CHANNELS = {
   sessionsArchive: 'sessions:archive',
   sessionsDelete: 'sessions:delete',
   sessionsDuplicate: 'sessions:duplicate',
+  // files: workspace-rooted filesystem for the Files tab + editor.
+  fsList: 'fs:list',
+  fsRead: 'fs:read',
+  fsWrite: 'fs:write',
   microAppCreate: 'micro-app:create',
   microAppStart: 'micro-app:start',
   microAppStop: 'micro-app:stop',

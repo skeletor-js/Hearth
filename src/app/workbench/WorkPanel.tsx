@@ -4,7 +4,8 @@ import { useSession } from '../session-store'
 import { ReviewTab } from './ReviewTab'
 import { PlanTab } from './PlanTab'
 import { SelfTab } from './SelfTab'
-import { BrowserTab, FilesTab, TerminalTab } from './placeholders'
+import { FilesTab } from './FilesTab'
+import { BrowserTab, TerminalTab } from './placeholders'
 import { GitPanel } from './GitPanel'
 
 const WB_TABS = [
