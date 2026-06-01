@@ -332,18 +332,28 @@ export function ChatView() {
     <div className="chat-col" data-screen-label="Chat">
       <div className="chat-scroll scroll" ref={scrollRef}>
         <div className="chat-wrap">
-          {msgs.map((m, i) => (
-            <MessageView
-              key={m.id}
-              m={m}
-              backend={backend}
-              busy={busy}
-              isLast={i === msgs.length - 1}
-              onRetry={!busy && i === msgs.length - 1 && m.role === 'hearth' && lastUserText ? () => void send(lastUserText) : undefined}
-              onOpenReview={() => openRightTab('review')}
-              onOpenPlan={() => openRightTab('plan')}
-            />
-          ))}
+          {msgs.length === 0 && !busy ? (
+            <div className="chat-empty">
+              <span className="flame">
+                <FlameMark size={26} />
+              </span>
+              <h3>Ready when you are</h3>
+              <p>Ask Hearth to build, explain, or change something — including itself.</p>
+            </div>
+          ) : (
+            msgs.map((m, i) => (
+              <MessageView
+                key={m.id}
+                m={m}
+                backend={backend}
+                busy={busy}
+                isLast={i === msgs.length - 1}
+                onRetry={!busy && i === msgs.length - 1 && m.role === 'hearth' && lastUserText ? () => void send(lastUserText) : undefined}
+                onOpenReview={() => openRightTab('review')}
+                onOpenPlan={() => openRightTab('plan')}
+              />
+            ))
+          )}
           {permission && <ApproveCard req={permission} onAnswer={answer} />}
         </div>
       </div>

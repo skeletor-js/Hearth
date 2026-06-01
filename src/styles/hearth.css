@@ -375,7 +375,16 @@ button.rail-item{ width:100%;border:0;background:transparent;font:inherit;text-a
 .msg-body table{ border-collapse:collapse;margin:11px 0;font-size:var(--t-12); }
 .msg-body th,.msg-body td{ border:1px solid var(--border);padding:5px 9px;text-align:left; }
 .msg-body th{ background:var(--bg-inset);font-weight:600; }
-.msg.user .msg-body{ color:var(--default); }
+/* User prompts sit in a subtle inset frame — distinct from the assistant's flat prose. */
+.msg.user .msg-body{ color:var(--default);background:var(--bg-inset);border:1px solid var(--border);
+  border-radius:var(--r-md);padding:9px 13px;white-space:pre-wrap; }
+
+/* Fresh-session empty state */
+.chat-empty{ min-height:58vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;gap:7px;color:var(--subtle); }
+.chat-empty .flame{ color:var(--accent);margin-bottom:4px;display:inline-flex; }
+.chat-empty h3{ font:500 var(--t-16)/1.3 var(--font);color:var(--strong);margin:0; }
+.chat-empty p{ margin:0;font-size:var(--t-13);max-width:330px;line-height:1.55; }
 
 /* Tool / source strip */
 .tool-strip{ margin-top:9px;border:1px solid var(--border);border-radius:var(--r-md);
