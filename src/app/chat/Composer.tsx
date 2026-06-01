@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { AgentKind, ModelState } from '../../../electron/shared/protocol'
 import { Icon } from '@/shell/Icon'
 import { Seg } from '@/app/settings/controls'
@@ -103,6 +103,15 @@ export function Composer({
   const [gitAnchor, setGitAnchor] = useState<{ left: number; bottom: number } | null>(null)
   const beRef = useRef<HTMLButtonElement>(null)
   const branchRef = useRef<HTMLButtonElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // Auto-grow the composer with its content, capped before it scrolls internally.
+  useLayoutEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = Math.min(el.scrollHeight, 200) + 'px'
+  }, [input])
 
   useEffect(() => {
     void window.hearth.agent.getBackend().then(setBackend)
@@ -158,8 +167,8 @@ export function Composer({
           <button ref={branchRef} className="chip" title="Branch, changes & environment" onClick={openGit}>
             <Icon name="git-branch" /> {branch}
           </button>
-          <span className="chip chip-accent">
-            <Icon name="flame" fill /> Self-edit on
+          <span className="chip" title="Hearth can edit its own code">
+            <Icon name="flame" fill style={{ color: 'var(--accent)' }} /> Self-edit
           </span>
           <button ref={beRef} className="chip" title="Switch agent backend" onClick={openPop}>
             <Icon name={be.icon} /> {be.name}
@@ -171,12 +180,14 @@ export function Composer({
           )}
         </div>
         <textarea
+          ref={inputRef}
           className="composer-input"
           rows={1}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
           placeholder="Reply to Hearth, or ask it to change itself…"
+          style={{ overflowY: 'auto' }}
         />
         <div className="composer-bar">
           <Seg value={mode} options={MODES} onChange={setMode} />
