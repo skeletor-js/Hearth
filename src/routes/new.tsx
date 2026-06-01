@@ -12,6 +12,7 @@ const STARTERS: [string, string, string][] = [
   ['flame', 'Evolve Hearth', 'Ask Hearth to change its own UI, prompts, or skills.'],
   ['folder-open', 'Work in a folder', 'Point a session at a project and start building.'],
   ['lightbulb', 'Explore an idea', 'Think something through with your agent.'],
+  ['list-bullets', 'Plan a build', 'Sketch a plan with Hearth, then build it step by step.'],
 ]
 
 function HomeScreen() {
@@ -45,27 +46,20 @@ function HomeScreen() {
   return (
     <div className="screen scroll" data-screen-label="Home">
       <div className="screen-inner">
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', marginBottom: 10 }}>
-          <div style={{ marginBottom: 14 }}>
-            <AsciiEmber fontSize={16} />
-          </div>
-          <h1 className="screen-title" style={{ fontSize: 'var(--t-28)' }}>
-            What are we building?
-          </h1>
-          <p className="screen-sub" style={{ textAlign: 'center' }}>
-            One ongoing relationship with your coding agent — it keeps the repo, the plan, and how you like to work.
-          </p>
-        </div>
-
-        <div className="tile-grid">
-          {STARTERS.map((c, i) => (
-            <div className="hero-card" key={i} onClick={i === 1 ? openFolder : () => start()}>
-              <div className="hc-t">
-                <Icon name={c[0]} fill={c[0] === 'flame'} /> {c[1]}
+        <div className="hero">
+          <AsciiEmber fontSize={16} />
+          <h1>What are we building?</h1>
+          <p>One ongoing relationship with your coding agent — it keeps the repo, the plan, and how you like to work.</p>
+          <div className="hero-grid">
+            {STARTERS.map((c, i) => (
+              <div className="hero-card" key={i} onClick={i === 1 ? openFolder : () => start()}>
+                <div className="hc-t">
+                  <Icon name={c[0]} fill={c[0] === 'flame'} /> {c[1]}
+                </div>
+                <div className="hc-s">{c[2]}</div>
               </div>
-              <div className="hc-s">{c[2]}</div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
         {recent.length > 0 && (
