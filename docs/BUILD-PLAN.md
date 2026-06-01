@@ -300,8 +300,11 @@ fan-out should fully overlap it so that when A lands, P2 is a thin join.
 
 Carried from MILESTONE-V1's out-of-scope list — do not let these creep in:
 
-- Codex backend ([codex.ts](../electron/main/agents/codex.ts) stays a stub;
-  interface already defined).
+- ~~Codex backend~~ — DONE (post-v1). [codex.ts](../electron/main/agents/codex.ts)
+  is a real backend at parity with Claude via the shared
+  [AcpAgent](../electron/main/agents/acp-agent.ts) base + `@agentclientprotocol/codex-acp`.
+  Select with `HEARTH_AGENT=codex`. Verified live (connect → session → prompt →
+  message + tool-call + end).
 - Packaged/notarized self-evolving build that ships its own Vite server
   ([dev-server.ts](../electron/main/dev-server.ts) `TODO(v2)`).
 - Auto-update, an app store, multi-window, voice, mobile bridge.

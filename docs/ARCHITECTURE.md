@@ -77,12 +77,15 @@ it is talking to — it sends prompts and renders a stream of ACP updates.
 - `acp-client.ts` — wraps `@agentclientprotocol/sdk` `ClientSideConnection`:
   spawn the adapter subprocess, speak JSON-RPC over its stdio, surface
   `session/update` notifications, and answer permission requests.
-- `claude.ts` — spawns `@zed-industries/claude-agent-acp` (vendors the Claude
-  Code CLI). **v1 ships this only.**
-- `codex.ts` — Codex over a community ACP adapter. Same interface, wired second.
+- `acp-agent.ts` — the shared `AcpAgent` base + `resolveAdapterBin`. A backend is
+  just "which adapter bin + which credential"; everything else is identical.
+- `claude.ts` — spawns `@zed-industries/claude-agent-acp` (vendors Claude Code).
+- `codex.ts` — spawns `@agentclientprotocol/codex-acp` (vendors `@openai/codex`).
+  At full parity with Claude — same client, same translation. Select with
+  `HEARTH_AGENT=codex`.
 
 **Auth stays the user's.** Hearth spawns the agent the user already
-authenticated (`claude login` in their own environment). We never render the
+authenticated (`claude login` / `codex login` in their own environment). We never render the
 Claude OAuth screen and never store a token. This is what keeps us in the
 "editor driving Claude Code" lane rather than the prohibited "third-party app
 routing requests through a subscription" lane. See docs/COMPLIANCE.md.

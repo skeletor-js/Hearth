@@ -43,21 +43,27 @@ scripts/            create-micro-app CLI
 
 ## Develop
 
-Requires [Bun](https://bun.sh) and a locally-authenticated Claude Code
-(`claude login`) — Hearth drives *your* agent, it never handles your
-credentials.
+Requires [Bun](https://bun.sh) and a locally-authenticated agent — Claude Code
+(`claude login`) or Codex (`codex login`). Hearth drives *your* agent, it never
+handles your credentials.
 
 ```bash
 bun install
-bun dev                        # electron-vite: opens the app with live HMR
-bun test                       # 78 tests (ACP translation, git, classifier, self-mod, fake agent)
+bun dev                        # electron-vite: opens the app with live HMR (Claude)
+HEARTH_AGENT=codex bun dev     # same app, Codex backend
+bun test                       # tests: ACP translation, git, classifier, self-mod, adapters, fake agent
 bun run typecheck && bun run lint
 bun run create-app demo        # scaffold a micro-app (already scaffolded in this repo)
 ```
 
+Backends: Claude (default) and Codex are interchangeable — both ride the same ACP
+client, so streaming, tool-calls, diffs, and the permission flow behave
+identically. Select with `HEARTH_AGENT`. Auth is the user's own: `claude login` /
+`ANTHROPIC_API_KEY` for Claude, `codex login` / `OPENAI_API_KEY` for Codex.
+
 Driving it:
 
-- Open **Chat**, type a request. Hearth sends it to your local Claude over ACP and
+- Open **Chat**, type a request. Hearth sends it to your local agent over ACP and
   streams the reply; mid-turn permission asks appear inline (allow / always / reject).
 - Self-edits land as `Hearth-SelfMod` git commits. **History** lists them with an
   Undo button (`git revert` + the right HMR reload tier).
