@@ -5,7 +5,7 @@ import type { GitStatus } from '../../../electron/main/self-mod/git-ops'
 
 const TAG_LETTER: Record<string, string> = { new: 'A', modified: 'M', deleted: 'D', renamed: 'R', untracked: '?' }
 
-export function GitPanel({ anchor, onClose }: { anchor: { right: number; top: number }; onClose: () => void }) {
+export function GitPanel({ anchor, onClose }: { anchor: { left: number; bottom: number }; onClose: () => void }) {
   const [status, setStatus] = useState<GitStatus | null>(null)
   const [message, setMessage] = useState('')
   const [newBranch, setNewBranch] = useState('')
@@ -37,7 +37,7 @@ export function GitPanel({ anchor, onClose }: { anchor: { right: number; top: nu
   return (
     <>
       <div className="pop-mask" onClick={onClose} />
-      <div className="pop" style={{ right: anchor.right, top: anchor.top, minWidth: 320, maxHeight: '70vh', overflow: 'auto' }}>
+      <div className="pop" style={{ left: anchor.left, bottom: anchor.bottom, minWidth: 320, maxHeight: '70vh', overflow: 'auto' }}>
         <div className="pop-sect" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
           <Icon name="git-branch" className="ico-13" /> {status?.branch ?? '…'}
           {status && (status.ahead > 0 || status.behind > 0) && (
