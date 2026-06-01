@@ -195,14 +195,14 @@ Replace FakeAgent with the real `ClaudeAgent` and wire the live loop.
 
 - [x] **P2-1. Session reuse.** `ipc.ts` holds one lazily-created `AgentSession`
       per window and routes prompts + cancel to it. (Landed during B1.)
-- [~] **P2-2. Real updates → UI.** Wired end to end (Track A stream → ipc →
-      typed `AgentUpdatePayload` → B5 renderer). Verified live up to a correctly
-      dispatched `session/prompt`; the streamed deltas themselves can't be
-      observed here because model inference is auth-blocked in the nested sandbox.
-      **Confirm in a non-nested run.**
-- [~] **P2-3. Real permission asks → UI.** Bridge verified at the agent level
-      (FakeAgent gates the turn on the answer) and the ACP `requestPermission`
-      handler is wired in acp-client. Live model-driven ask pending the non-nested run.
+- [x] **P2-2. Real updates → UI.** VERIFIED LIVE on a real machine: a prompt
+      streamed an assistant message, a thought, and a sequence of real tool-calls
+      (ToolSearch/grep/Read/Edit) rendered with live status + a diff chip, ending
+      "Done."
+- [x] **P2-3. Permission flow.** Bridge wired + agent-level tested. (In practice
+      the adapter's "default" mode allowed in-workspace edits without a separate
+      ask on this turn; the inline PermissionPrompt path remains wired for asks
+      that do surface.)
 - [ ] **P2-4. Auth smoke test.** BLOCKED in this environment (see the Track A auth
       note): the nested Claude Code shell leaks an internal API key/base URL and
       the Keychain item is ACL-bound to the signed Claude binary. **Must be run on
@@ -218,20 +218,17 @@ everything up to model auth is verified.)
 
 ## Phase 3 — The self-mod loop (the whole point)
 
-- [~] **P3-1 / P3-2. Capture-after-turn + HMR.** The service logic is implemented
-      and **fully unit-tested against a real git repo** (self-mod-service.test.ts,
-      6 tests): a renderer edit → `Hearth-SelfMod` commit with the conversation
-      trailer → `hmr` tier (no window reload); a route edit → `full-reload`
-      (driver.reloadWindow called). The one unverified link is a *live* agent
-      writing files during a turn (FakeAgent doesn't touch disk, and the real
-      model is auth-blocked here) — **confirm in a non-nested run.**
-- [x] **P3-3. Fixed the `undo` changed-paths bug.** `undo` now reads
-      `diffPaths(repoRoot, revertCommit)` instead of a post-revert `listDirty`
-      (which was always empty), so the reload tier is correct. Verified: undo
-      restores file content AND a reverted route edit escalates to `full-reload`.
+- [x] **P3-1 / P3-2. Capture-after-turn + HMR.** VERIFIED LIVE: the agent edited
+      `src/shell/Sidebar.tsx` (HEARTH → HEARTH 🔥), the change hot-reloaded into
+      the running sidebar with no manual refresh, and `captureTurn` committed it as
+      a `Hearth-SelfMod` commit (visible in History). Backed by 6 service unit tests.
+- [x] **P3-3. Fixed the `undo` changed-paths bug.** `undo` reads
+      `diffPaths(repoRoot, revertCommit)` not a post-revert `listDirty`. VERIFIED
+      LIVE: clicking Undo reverted the file and the sidebar rolled back to HEARTH.
 - [x] **P3-4. History UI.** [HistoryApp](../src/app/history/HistoryApp.tsx) +
-      `/history` route + sidebar link: lists self-mods newest-first with per-entry
-      Undo wired to `selfMod.undo`.
+      `/history` route + sidebar link, per-entry Undo. Also surfaces **reverted**
+      state (strike-through + REVERTED badge + "Undone") so an undo has visible
+      confirmation — `recentSelfMods` flags self-mods that a later revert undid.
 
 ---
 
@@ -254,33 +251,29 @@ Depends on P1-B4.
 
 Walk the full [MILESTONE-V1.md](MILESTONE-V1.md) definition of done:
 
-- [~] Talk to Claude over ACP (P2). Handshake + session + prompt dispatch verified
-      live; the model reply is auth-blocked in the nested sandbox.
-- [~] Have it edit itself, HMR reflects it (P3-1/2). Service logic unit-tested
-      against a real repo; live agent file-write needs a real turn.
-- [x] Commit + revert with UI rollback (P3-3 + History UI). Undo verified by tests
-      (revert + content restore + correct reload tier).
+- [x] Talk to Claude over ACP (P2). VERIFIED LIVE — streamed message + thought +
+      real tool-calls.
+- [x] Have it edit itself, HMR reflects it (P3-1/2). VERIFIED LIVE — sidebar
+      HEARTH → HEARTH 🔥 with no reload.
+- [x] Commit + revert with UI rollback (P3-3 + History UI). VERIFIED LIVE — Undo
+      reverted the file, sidebar rolled back, History shows REVERTED.
 - [x] Run one micro-app in a sandboxed iframe (P4). Serve verified live (HTTP 200);
       iframe host + route + sidebar link in place.
 - [x] "How to drive it" note in the README (FakeAgent flag, History undo, demo app).
-- [ ] **Tag `v1`** — gated on one clean live turn on a non-nested machine. Not
-      tagged yet, on purpose: the loop is built and tested but a real talk →
-      self-edit → HMR → undo cycle hasn't been observed end to end.
+- [ ] **Tag `v1`** — now justified (one clean live talk → self-edit → HMR → undo
+      cycle observed end to end). Awaiting the go-ahead to tag.
 
-### What remains (all environment-blocked, not code-blocked)
+### Bugs caught only by running the real app (post-headless)
 
-The single open dependency is **running this on a normal machine** (outside the
-Claude Code sandbox) with `claude login` or a real `ANTHROPIC_API_KEY`, then:
-1. send a prompt and confirm the streamed reply renders (closes P2-2);
-2. answer a real permission ask (closes P2-3 / P2-4);
-3. ask it to change the sidebar title, confirm the `Hearth-SelfMod` commit +
-   live HMR (closes P3-1/P3-2);
-4. hit Undo in History and confirm the rollback (already unit-verified);
-5. open the Demo micro-app and confirm it renders in the iframe (closes P4-2);
-6. tag `v1`.
-
-Everything those steps exercise is implemented and unit/integration-tested; the
-steps are observation, not construction.
+The headless suite was green, but driving the actual Electron window surfaced
+four runtime-only bugs — a reminder that GUI/integration needs real eyes:
+1. preload referenced `index.js`; electron-vite emits `index.mjs` → `window.hearth`
+   undefined → renderer crash. (Fixed: point at `.mjs`.)
+2. electron-vite bundled `dugite` → its embedded git was ENOENT at runtime.
+   (Fixed: `externalizeDepsPlugin`.)
+3. `CLAUDE_CONFIG_DIR` isolation broke subscription auth. (Fixed: use the real
+   config dir, pin `defaultMode` at project scope instead.)
+4. Undo worked but gave no UI feedback. (Fixed: reverted-state badge.)
 
 ---
 
