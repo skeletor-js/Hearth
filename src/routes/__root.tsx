@@ -59,7 +59,7 @@ function RootLayout() {
           {showRight && (
             <div className={'wb-col' + (s.layout === 'focus' && !s.rightOpen ? ' is-hidden' : '')} style={s.layout === 'split' ? undefined : { width: s.wbW }}>
               {s.layout !== 'focus' && <Resizer axis="x" className="resizer-wb" onResize={s.resizeWb} />}
-              <WorkPanel orientation="right" tab={s.rightTab} setTab={s.openRightTab} onClose={() => s.setRightOpen(false)} />
+              <WorkPanel orientation="right" tab={s.rightTab} setTab={s.openRightTab} />
             </div>
           )}
           {isSession && s.layout === 'focus' && s.rightOpen && <div className="focus-scrim" onClick={() => s.setRightOpen(false)} />}
@@ -67,7 +67,7 @@ function RootLayout() {
         {isSession && s.bottomOpen && (
           <div className="wb-panel" style={{ height: s.panelH }}>
             <Resizer axis="y" className="resizer-panel" onResize={s.resizePanel} />
-            <WorkPanel orientation="bottom" tab={s.bottomTab} setTab={s.setBottomTab} onClose={() => s.setBottomOpen(false)} />
+            <WorkPanel orientation="bottom" tab={s.bottomTab} setTab={s.setBottomTab} />
           </div>
         )}
       </div>
