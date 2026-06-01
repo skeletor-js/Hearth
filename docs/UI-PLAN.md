@@ -113,19 +113,19 @@ Every phase must end green and be checkpoint-committed. A task is "done" only wh
 `∥` = task can run as a parallel subagent (file-disjoint).
 
 ### P0 — Design system + shell (foundation; serial)
-- [ ] **P0-1.** Port tokens + component CSS from `Hearth.html` into `src/styles/`;
+- [x] **P0-1.** Port tokens + component CSS from `Hearth.html` into `src/styles/`;
       wire light/dark + the 4 accents (Ember/Amber/Sage/Clay). Add Phosphor.
       *Accept:* tokens resolve; theme + accent switch live.
-- [ ] **P0-2.** Brand primitives: `FlameMark`, `AsciiEmber`, `ThinkingEmber`,
+- [x] **P0-2.** Brand primitives: `FlameMark`, `AsciiEmber`, `ThinkingEmber`,
       `Icon`, custom rail/panel SVG icons. *Accept:* render in both themes.
-- [ ] **P0-3.** Shell `__root`: floating-cards frame, **rail** (brand, nav,
+- [x] **P0-3.** Shell `__root`: floating-cards frame, **rail** (brand, nav,
       workspaces tree, recent, footer, collapse), **topbar** (crumbs, ⋯ menu, panel
       toggles), **resizers**. Zustand store: theme/accent/layout/rail+panel sizes.
       *Accept:* shell renders pixel-close (light+dark) vs handoff; rail collapses;
       resizers work.
-- [ ] **P0-4.** Layout modes: companion / split / focus (overlay + scrim).
+- [x] **P0-4.** Layout modes: companion / split / focus (overlay + scrim).
       *Accept:* all three match handoff behavior.
-- [ ] **P0-5.** Logic gates + boot + visual gate green; checkpoint commit.
+- [x] **P0-5.** Logic gates + boot + visual gate green; checkpoint commit.
 
 ### P1 — Chat, wired (core loop, re-skinned; serial)
 - [ ] **P1-1.** Chat surface: messages, role headers, tool-strips, `wb-ref` /

@@ -20,6 +20,7 @@
     "@agentclientprotocol/codex-acp": "^0.0.44",
     "@agentclientprotocol/sdk": "^0.17.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@phosphor-icons/web": "^2.1.1",
     "@zed-industries/claude-agent-acp": "^0.23.1",
     "dugite": "^3.2.2"
   },

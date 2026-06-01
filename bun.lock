@@ -8,6 +8,7 @@
         "@agentclientprotocol/codex-acp": "^0.0.44",
         "@agentclientprotocol/sdk": "^0.17.0",
         "@modelcontextprotocol/sdk": "^1.29.0",
+        "@phosphor-icons/web": "^2.1.1",
         "@zed-industries/claude-agent-acp": "^0.23.1",
         "dugite": "^3.2.2",
       },
@@ -252,6 +253,8 @@
     "@openai/codex-win32-arm64": ["@openai/codex@0.128.0-win32-arm64", "", { "os": "win32", "cpu": "arm64" }, "sha512-ECJvsqmYFdA9pn42xxK3Odp/G16AjmBW0BglX8L0PwPjqbstbmlew9bfHf7xvL+SNfNl4NmyotW0+RNo1phgaA=="],
 
     "@openai/codex-win32-x64": ["@openai/codex@0.128.0-win32-x64", "", { "os": "win32", "cpu": "x64" }, "sha512-k3jmUAFrzkUtvjGTXvSKjQqJLLlzjxp/VoHJDYedgmXUn6j70HxK38IwapzmnYfiBiTuzETvGwjXHzZgzKjhoQ=="],
+
+    "@phosphor-icons/web": ["@phosphor-icons/web@2.1.2", "", {}, "sha512-rPAR9o/bEcp4Cw4DEeZHXf+nlGCMNGkNDRizYHM47NLxz9vvEHp/Tt6FMK1NcWadzw/pFDPnRBGi/ofRya958A=="],
 
     "@pkgjs/parseargs": ["@pkgjs/parseargs@0.11.0", "", {}, "sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg=="],
 
