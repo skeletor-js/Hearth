@@ -133,16 +133,37 @@ Every phase must end green and be checkpoint-committed. A task is "done" only wh
 - [ ] **P1-5.** Replace the v1 `ChatApp`. Gates + visual + a live turn (non-nested)
       render as the trace timeline; checkpoint commit.
 
-### P2 — Workbench: Review + Plan + Self  ∥
-- [ ] **P2-0.** Workbench shell: right + bottom panels (shared `WorkPanel`), tab bar,
-      add-tab menu, env/close, resizers.
+### P2 — Workbench: shell + Review + Plan + Self + Git  ∥
+The workbench is one `WorkPanel` rendered in BOTH a right panel and a bottom panel,
+each with its own active tab. Panel content is scoped to the **active session +
+workspace cwd**. Chat `wb-ref`/`plan-ref` chips open the right panel to a tab
+(`openTab`). Full tab set: Review · Self · Files · Terminal · Browser · Plan (Files/
+Terminal/Browser land in P4).
+- [ ] **P2-0.** Workbench shell: right + bottom panels (shared `WorkPanel`), tab bar
+      (badges), add-tab menu, env/git button, close. Wire chat chips → `openTab`.
 - [ ] **P2-1.** ∥ **Review/diff:** `getDiff(cwd, rev?)` IPC (dugite) → structured
-      hunks; `DiffView` + Review subhead (branch, +/- , Draft PR). TDD the diff parse.
+      hunks; `DiffView` + Review subhead (branch, +/-, "Open in Self"). TDD the diff parse.
 - [ ] **P2-2.** ∥ **Plan:** capture ACP `plan` session updates (currently dropped in
       `acp-translate`) → per-session plan store → Plan tab + chat plan-ref.
 - [ ] **P2-3.** ∥ **Self tab:** self-edit file list + Apply, wired to self-mod;
-      always available. *Accept:* shows the current self-edit set; Apply triggers it.
-- [ ] **P2-4.** Gates + visual; checkpoint commit.
+      always available. **Decide the apply model first** (see flag below): auto-apply
+      (current: permission-gate → write → captureTurn commits + HMR) vs stage-then-apply
+      (review the self-edit diff, then Apply). *Accept:* reflects the latest self-edit;
+      action matches the chosen model.
+- [ ] **P2-4.** ∥ **Environment & git** (the panel's git button + Review's **Draft
+      PR**): working-tree status, stage/commit, branch switch/create, create PR
+      (via `gh` if present, else surface the command). Operates on the active
+      workspace cwd; built on dugite. TDD the git ops. *(Net-new subsystem the panel
+      bars imply — was previously only a toast in the mock.)*
+- [ ] **P2-5.** Gates + visual (both panels, all three layouts); checkpoint commit.
+
+> **Flag — Self-edit apply model (decide before P2-3):** the mock shows a manual
+> "Apply & hot-reload" button; Hearth today gates *before* the write (permission)
+> and auto-commits + HMRs *after*. Either keep auto-apply (the Self tab becomes
+> "what just changed + Undo") or move to stage-then-apply for self-edits (agent
+> writes to a holding area / branch, you review, then Apply). Auto-apply is simpler
+> and matches the live self-mod we already built; stage-then-apply is closer to the
+> mock and safer but heavier (no native "staging" in ACP file tools).
 
 ### P3 — Workspaces + Sessions (keystone; serial spine, ∥ within)
 - [ ] **P3-1.** Workspace registry (`electron/main/workspaces/`): built-in Hearth
@@ -166,8 +187,11 @@ Every phase must end green and be checkpoint-committed. A task is "done" only wh
       workspace cwd; Files tab.
 - [ ] **P4-2.** ∥ **Terminal:** `node-pty` PTY per panel (cwd = workspace) streamed
       to `xterm.js`. Add deps. *Accept:* a real shell runs in the panel.
-- [ ] **P4-3.** ∥ **Browser:** `WebContentsView` + back/reload/url/open-external;
-      points at a workspace dev server or URL.
+- [ ] **P4-3.** ∥ **Browser:** `WebContentsView` + back/reload/editable URL bar/
+      open-external. **URL source:** manual entry always; plus auto-detect a dev-server
+      URL from the workspace's terminal output (the `Local: http://localhost:NNNN`
+      line — we already parse this for micro-apps in `extractDevUrl`), and default the
+      Hearth workspace to its own renderer URL. Per-workspace last-URL remembered.
 - [ ] **P4-4.** Gates + visual; checkpoint commit.
 
 ### P5 — Settings + Personality/Memory + Agents  ∥
@@ -219,7 +243,10 @@ rather than one sweep — this build is visual and has product judgment in it.
 
 ## Open questions
 
-None blocking — every design decision (sessions, settings, onboarding, History
-model, Soul + Memory, the History/Personality/Memory split) is signed off. The
-`soul`/`memory` managed-block schema is finalized at P5-2 against
-[SOUL-AND-MEMORY.md](SOUL-AND-MEMORY.md). **P0 is ready to start.**
+- **Self-edit apply model** (flag under P2-3): auto-apply (permission-gate → write →
+  auto-commit + HMR, what we built) vs stage-then-apply (review the self-edit diff,
+  then Apply). Blocks **P2-3 only**; P0/P1 unaffected.
+
+Everything else is signed off (sessions, settings, onboarding, History model,
+Soul + Memory + the three-surface split, workbench scope incl. the git-ops
+subsystem and Browser URL discovery). **P0 is ready to start.**
