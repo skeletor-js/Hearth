@@ -12,7 +12,10 @@ export function createMainWindow(): BrowserWindow {
     backgroundColor: '#0b0b0e',
     show: false,
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      // electron-vite emits the preload as .mjs (package.json is "type":"module").
+      // Electron 28+ loads ESM preloads by extension; pointing at .js loads nothing
+      // and window.hearth ends up undefined.
+      preload: join(__dirname, '../preload/index.mjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false, // preload needs Node to bridge; renderer stays isolated
