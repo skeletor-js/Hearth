@@ -496,7 +496,14 @@ kbd{ display:inline-flex;align-items:center;justify-content:center;min-width:17p
 :root[data-theme="dark"] .workbench{ background:var(--bg-inset); }
 .wb-tabbar{ display:flex;align-items:center;gap:2px;height:42px;padding:0 8px;
   border-bottom:1px solid var(--border);flex-shrink:0; }
-.wb-tab{ height:29px;padding:0 10px;border-radius:8px;display:inline-flex;align-items:center;gap:7px;
+/* The tab strip scrolls horizontally when it can't fit, so it never clips the
+   action buttons; the scrollbar is hidden for a clean look. A right-edge fade
+   hints there's more to scroll. */
+.wb-tabs{ display:flex;align-items:center;gap:2px;flex:1;min-width:0;
+  overflow-x:auto;scrollbar-width:none;
+  -webkit-mask-image:linear-gradient(to right,#000 calc(100% - 14px),transparent); }
+.wb-tabs::-webkit-scrollbar{ display:none; }
+.wb-tab{ flex-shrink:0;height:29px;padding:0 10px;border-radius:8px;display:inline-flex;align-items:center;gap:7px;
   font-size:var(--t-12);color:var(--subtle);white-space:nowrap; }
 .wb-tab:hover{ background:var(--hover);color:var(--default); }
 .wb-tab.is-active{ background:var(--selected);color:var(--strong);font-weight:500; }
@@ -505,7 +512,7 @@ kbd{ display:inline-flex;align-items:center;justify-content:center;min-width:17p
 .wb-tab .wb-badge{ font-size:10px;background:var(--accent-soft);color:var(--accent);
   border-radius:9px;padding:0 5px;height:15px;display:inline-flex;align-items:center;font-weight:600; }
 .wb-tabbar .spacer{ flex:1; }
-.wb-actions{ display:flex;align-items:center;gap:2px;margin-left:4px;padding-left:6px;
+.wb-actions{ display:flex;align-items:center;gap:2px;margin-left:4px;padding-left:6px;flex-shrink:0;
   border-left:1px solid var(--border); }
 .wb-actions .btn-icon{ width:27px;height:27px; }
 .wb-body{ flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column; }
