@@ -13,7 +13,8 @@
     "lint": "eslint .",
     "test": "bun test",
     "dist": "electron-vite build && electron-builder --mac",
-    "create-app": "node scripts/create-micro-app.mjs"
+    "create-app": "node scripts/create-micro-app.mjs",
+    "view": "node scripts/view-app.mjs"
   },
   "dependencies": {
     "@agentclientprotocol/codex-acp": "^0.0.44",

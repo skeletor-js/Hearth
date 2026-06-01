@@ -19,6 +19,10 @@ export function createMainWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false, // preload needs Node to bridge; renderer stays isolated
+      // Keep painting when backgrounded so the agent's snapshot capture
+      // (electron/main/snapshot.ts) stays accurate even when the user is in
+      // another app while the agent works.
+      backgroundThrottling: false,
     },
   })
 

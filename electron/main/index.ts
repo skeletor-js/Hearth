@@ -12,6 +12,7 @@ import type { Agent, AgentAuth, AgentKind } from './agents/agent.js'
 import { SelfModService } from './self-mod/self-mod-service.js'
 import { HmrController } from './self-mod/hmr.js'
 import { stopAllMicroApps } from './micro-apps/server.js'
+import { startSnapshotServer } from './snapshot.js'
 
 // The repo is the agent's working directory — editing it IS self-modification.
 // In dev that's the project root; in a packaged self-evolving build it's the
@@ -68,6 +69,9 @@ async function bootstrap(): Promise<void> {
     },
   })
   const selfMod = new SelfModService(REPO_ROOT, hmr)
+
+  // Loopback endpoint so the agent can capture the live window (its own work).
+  startSnapshotServer(window, REPO_ROOT)
 
   registerIpc({ repoRoot: REPO_ROOT, host, selfMod, window })
 
