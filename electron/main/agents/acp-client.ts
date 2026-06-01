@@ -7,13 +7,22 @@
 //   - route permission requests up to a handler the renderer answers
 //
 // This is the only file that imports the ACP SDK. Everything else uses `Agent`.
-//
-// TODO(v1): implement against the real SDK surface. The SDK names below follow
-// @agentclientprotocol/sdk ^0.21 (ClientSideConnection); pin and verify the
-// exact method signatures when wiring — they move between minor versions.
+// The protocol-mapping logic lives in (and is tested in) ./acp-translate.ts;
+// this file owns the live connection and process lifecycle.
 
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { Readable, Writable } from 'node:stream'
+import {
+  ClientSideConnection,
+  ndJsonStream,
+  PROTOCOL_VERSION,
+  type Client,
+  type RequestPermissionRequest,
+  type RequestPermissionResponse,
+  type SessionNotification,
+} from '@agentclientprotocol/sdk'
 import type { AgentSession, PermissionRequest, SessionUpdate } from './agent.js'
+import { translatePermission, translateUpdate } from './acp-translate.js'
 
 export interface AdapterSpec {
   /** Executable + args that launch the ACP adapter, e.g. the claude-agent-acp bin. */
@@ -29,8 +38,13 @@ export type PermissionHandler = (sessionId: string, req: PermissionRequest) => P
 
 export class AcpClient {
   private child: ChildProcessWithoutNullStreams | null = null
+  private connection: ClientSideConnection | null = null
+  private cwd = process.cwd()
   private updateHandlers = new Set<UpdateHandler>()
   private permissionHandler: PermissionHandler | null = null
+  // tool-call id -> title, so tool_call_update notifications (which omit the
+  // title) can be displayed with a name. See acp-translate.translateUpdate.
+  private toolTitles = new Map<string, string>()
 
   // A factory, not a resolved spec: resolution (which can throw — missing bin,
   // missing API key) is deferred to connect() so it fails through the connect
@@ -39,20 +53,73 @@ export class AcpClient {
 
   async connect(): Promise<void> {
     const spec = this.resolveSpec()
-    this.child = spawn(spec.command, spec.args, {
+    this.cwd = spec.cwd
+    const child = spawn(spec.command, spec.args, {
       cwd: spec.cwd,
       env: { ...process.env, ...spec.env },
       stdio: ['pipe', 'pipe', 'pipe'],
     })
-    // TODO(v1): wire ClientSideConnection to child.stdout/stdin, register the
-    // session/update + requestPermission callbacks, and await `initialize`.
-    throw new Error('AcpClient.connect not implemented — see TODO(v1)')
+    this.child = child
+
+    // Surface adapter stderr to our log; it's where the agent reports its own
+    // startup/auth failures.
+    child.stderr.on('data', (b: Buffer) => process.stderr.write(`[acp adapter] ${b}`))
+
+    // ndJsonStream(output, input): output is the writable we send to (the
+    // adapter's stdin), input is the readable we receive on (its stdout).
+    const toAgent = Writable.toWeb(child.stdin) as WritableStream<Uint8Array>
+    const fromAgent = Readable.toWeb(child.stdout) as ReadableStream<Uint8Array>
+    const stream = ndJsonStream(toAgent, fromAgent)
+
+    const client: Client = {
+      sessionUpdate: async (params: SessionNotification) => {
+        for (const update of translateUpdate(params.update, this.toolTitles)) {
+          this.emit(params.sessionId, update)
+        }
+      },
+      requestPermission: async (params: RequestPermissionRequest): Promise<RequestPermissionResponse> => {
+        try {
+          const optionId = await this.askPermission(params.sessionId, translatePermission(params))
+          return { outcome: { outcome: 'selected', optionId } }
+        } catch {
+          // No handler, or the user dismissed/cancelled — tell the agent to stop
+          // waiting rather than hang the turn.
+          return { outcome: { outcome: 'cancelled' } }
+        }
+      },
+    }
+
+    this.connection = new ClientSideConnection(() => client, stream)
+    await this.connection.initialize({
+      protocolVersion: PROTOCOL_VERSION,
+      // No fs capability: the agent writes edits directly to disk in cwd, which
+      // is exactly what the self-mod git layer needs to observe. See ARCHITECTURE.md.
+      clientCapabilities: { fs: { readTextFile: false, writeTextFile: false } },
+    })
   }
 
   async newSession(): Promise<AgentSession> {
-    // TODO(v1): connection.newSession({ cwd }), return a session that maps
-    // prompt()/cancel() onto ACP prompt/cancel calls.
-    throw new Error('AcpClient.newSession not implemented — see TODO(v1)')
+    const connection = this.connection
+    if (!connection) throw new Error('not connected — call connect() first')
+
+    const { sessionId } = await connection.newSession({ cwd: this.cwd, mcpServers: [] })
+
+    return {
+      id: sessionId,
+      prompt: async (text: string) => {
+        const { stopReason } = await connection.prompt({
+          sessionId,
+          prompt: [{ type: 'text', text }],
+        })
+        this.emit(sessionId, { type: 'end', stopReason })
+      },
+      cancel: async () => {
+        await connection.cancel({ sessionId })
+      },
+      dispose: async () => {
+        this.toolTitles.clear()
+      },
+    }
   }
 
   onUpdate(cb: UpdateHandler): () => void {
@@ -76,6 +143,8 @@ export class AcpClient {
   async dispose(): Promise<void> {
     this.child?.kill()
     this.child = null
+    this.connection = null
     this.updateHandlers.clear()
+    this.toolTitles.clear()
   }
 }

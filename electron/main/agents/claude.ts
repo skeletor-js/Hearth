@@ -6,10 +6,23 @@
 // their env. We never originate or store a credential. See COMPLIANCE.md.
 
 import { createRequire } from 'node:module'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { AcpClient, type AdapterSpec } from './acp-client.js'
 import type { Agent, AgentConfig, AgentSession, PermissionRequest, SessionUpdate } from './agent.js'
+
+// Hearth's private Claude config dir, seeded with a permission default the
+// bundled adapter accepts. Kept under the repo (gitignored) so it travels with
+// the working copy. Returns the dir path for CLAUDE_CONFIG_DIR.
+function ensureAgentConfigDir(cwd: string): string {
+  const dir = join(cwd, '.hearth', 'claude-config')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(
+    join(dir, 'settings.json'),
+    JSON.stringify({ permissions: { defaultMode: 'default' } }, null, 2),
+  )
+  return dir
+}
 
 function resolveAdapter(config: AgentConfig): AdapterSpec {
   const require = createRequire(import.meta.url)
@@ -22,7 +35,20 @@ function resolveAdapter(config: AgentConfig): AdapterSpec {
   if (!binRel) throw new Error('@zed-industries/claude-agent-acp exposes no bin to launch')
   const bin = join(dirname(pkgJsonPath), binRel)
 
-  const env: Record<string, string> = {}
+  // process.execPath is the Electron binary in the packaged/dev app. To run the
+  // adapter's Node entry with it we must set ELECTRON_RUN_AS_NODE, or Electron
+  // would try to boot a second app instead of executing the script. (Under a
+  // plain Node/Bun runtime this var is simply ignored.)
+  const env: Record<string, string> = {
+    ELECTRON_RUN_AS_NODE: '1',
+    // Isolate the agent from the user's interactive Claude Code config: point it
+    // at a Hearth-owned config dir with sane defaults. Auth still resolves — it
+    // lives in the macOS Keychain, not under this dir — so we inherit the user's
+    // login without inheriting their settings (e.g. a `defaultMode` the bundled
+    // adapter version doesn't understand). See COMPLIANCE.md: we never store the
+    // credential, only let the adapter read the one the user already has.
+    CLAUDE_CONFIG_DIR: ensureAgentConfigDir(config.cwd),
+  }
   if (config.auth.mode === 'api-key') {
     const key = process.env[config.auth.envVar]
     if (!key) throw new Error(`API key env var ${config.auth.envVar} is not set`)

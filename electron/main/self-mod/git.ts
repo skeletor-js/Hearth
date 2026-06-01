@@ -20,11 +20,21 @@ async function git(repoRoot: string, args: string[]): Promise<string> {
 }
 
 export async function listDirty(repoRoot: string): Promise<string[]> {
-  const out = await git(repoRoot, ['status', '--porcelain'])
-  return out
-    .split('\n')
-    .map((l) => l.slice(3).trim())
-    .filter(Boolean)
+  // -z gives NUL-separated, *unquoted* paths. Without it, porcelain C-quotes any
+  // path containing spaces or special chars (e.g. `"a file.txt"`), which would
+  // leak literal quotes into the returned path.
+  const out = await git(repoRoot, ['status', '--porcelain', '-z'])
+  // Each record is `XY <path>\0`. A rename/copy (R/C) is followed by an extra
+  // `<oldpath>\0` field, which we skip — we want the current path only.
+  const records = out.split('\0').filter(Boolean)
+  const paths: string[] = []
+  for (let i = 0; i < records.length; i++) {
+    const rec = records[i]
+    const status = rec.slice(0, 2)
+    paths.push(rec.slice(3))
+    if (status[0] === 'R' || status[0] === 'C') i++ // consume the old-path field
+  }
+  return paths
 }
 
 export interface SelfModCommit {
@@ -46,6 +56,16 @@ export async function commitSelfMod(repoRoot: string, c: SelfModCommit): Promise
 export async function revertCommit(repoRoot: string, hash: string): Promise<string> {
   await git(repoRoot, ['revert', '--no-edit', hash])
   return (await git(repoRoot, ['rev-parse', 'HEAD'])).trim()
+}
+
+/** Repo-relative paths a given commit changed. Used to pick the HMR reload tier after a revert. */
+export async function diffPaths(repoRoot: string, hash: string): Promise<string[]> {
+  // --root so a root (parentless) commit still reports its files.
+  const out = await git(repoRoot, ['diff-tree', '--root', '--no-commit-id', '--name-only', '-r', hash])
+  return out
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
 }
 
 export interface SelfModLogEntry {

@@ -11,5 +11,6 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["electron/main", "electron/shared", "electron.vite.config.ts", "scripts"]
+  "include": ["electron/main", "electron/shared", "electron.vite.config.ts", "scripts"],
+  "exclude": ["**/*.test.ts", "**/*.test.tsx"]
 }

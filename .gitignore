@@ -12,3 +12,6 @@ micro-apps/*/node_modules/
 micro-apps/*/dist/
 
 .DS_Store
+
+# Hearth runtime state (agent config dir, etc.)
+.hearth/

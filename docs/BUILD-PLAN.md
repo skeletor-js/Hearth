@@ -26,7 +26,8 @@ uninstalled, there are **no git commits**, and the ACP client throws
 - micro-app scaffolder CLI — [create-micro-app.mjs](../scripts/create-micro-app.mjs)
 
 **Known gaps & bugs to fix (tracked as tasks below):**
-1. `AcpClient.connect()` / `newSession()` throw — the core stub. (P1-A)
+1. ~~`AcpClient.connect()` / `newSession()` throw — the core stub.~~ — DONE in
+   Track A (handshake + session verified live; translation unit-tested).
 2. Permission flow is **entirely unwired** end to end: `agent.onPermission` is
    never registered in `ipc.ts`, no IPC channel, no preload API, no UI. (P1-B1)
 3. ~~IPC/preload **channel drift**~~ — FIXED in P0-3 (single shared `channels.ts`).
@@ -88,23 +89,53 @@ developed and unit-tested against a **mock agent** before A lands.
 This is the highest-risk work. Do not parallelize *within* it; the pieces are
 tightly coupled to one `ClientSideConnection`. File: [acp-client.ts](../electron/main/agents/acp-client.ts).
 
-- [ ] **P1-A0. SDK surface spike.** Pin `@agentclientprotocol/sdk@0.21` and
-      `@zed-industries/claude-agent-acp@0.6`; read their actual exports. Confirm
-      `ClientSideConnection` constructor shape, the initialize handshake, the
-      `session/update` notification names, and the `requestPermission` callback
-      signature. Write findings into a short note (these move between minors).
-- [ ] **P1-A1. connect().** Wire `ClientSideConnection` to `child.stdout/stdin`,
-      register update + permission callbacks, await `initialize`. *Accept:*
-      `connect()` resolves against a live `claude-agent-acp` subprocess.
-- [ ] **P1-A2. newSession() + prompt/cancel.** `connection.newSession({ cwd })`;
-      return an `AgentSession` mapping `prompt()`/`cancel()` onto ACP calls.
-      *Accept:* a prompt produces streamed updates; cancel stops the turn.
-- [ ] **P1-A3. Update translation.** Map ACP `session/update` payloads →
-      `SessionUpdate` union (message / thought / tool-call / diff / end).
-      *Accept:* each variant round-trips to the renderer with correct shape.
-- [ ] **P1-A4. Permission callback.** Route the SDK `requestPermission` to
-      `this.askPermission(...)` → `PermissionHandler`. *Accept:* a mid-turn
-      permission ask reaches the handler and the agent waits for the answer.
+- [x] **P1-A0. SDK surface spike.** Actual SDK is `@agentclientprotocol/sdk@0.17`
+      (the adapter pins it). The client side is `ClientSideConnection((agent) =>
+      Client, stream)` where `stream = ndJsonStream(toAgentWritable, fromAgentReadable)`
+      built from `Writable.toWeb(child.stdin)` / `Readable.toWeb(child.stdout)`.
+      We implement the `Client` interface (`sessionUpdate`, `requestPermission`).
+      `PROTOCOL_VERSION === 1`. Update discriminant is `update.sessionUpdate`
+      (`agent_message_chunk`, `agent_thought_chunk`, `tool_call`, `tool_call_update`,
+      …); diffs ride inside tool-call `content[]` as `{type:'diff',path,oldText,newText}`;
+      tool status is `pending|in_progress|completed|failed`; permission kinds are
+      `allow_once|allow_always|reject_once|reject_always`. Turn end = the
+      `connection.prompt()` promise resolving with `stopReason` (no end notification).
+- [x] **P1-A1. connect().** Spawns the adapter, builds the ndJson web stream,
+      registers the `Client`, awaits `initialize`. **Verified live**: handshake
+      completes against the real `claude-agent-acp` subprocess (CONNECT OK).
+- [x] **P1-A2. newSession() + prompt/cancel.** `newSession({cwd, mcpServers:[]})`;
+      returns an `AgentSession` mapping `prompt()`→`connection.prompt` (emits a
+      synthetic `end` on resolve) and `cancel()`→`connection.cancel`. **Verified
+      live**: session creation succeeds (NEWSESSION OK) and a prompt dispatches a
+      correct `session/prompt` message. (Model inference itself can't be verified
+      from inside the nested Claude Code sandbox — see auth note below.)
+- [x] **P1-A3. Update translation.** Extracted to a pure, unit-tested module
+      [acp-translate.ts](../electron/main/agents/acp-translate.ts) (15 tests):
+      message/thought/tool-call/diff mapping, status + permission-kind mapping,
+      tool-title backfill for `tool_call_update`, drop of unhandled update kinds.
+- [x] **P1-A4. Permission callback.** `Client.requestPermission` → `translatePermission`
+      → `askPermission` handler → `{outcome:{outcome:'selected',optionId}}`, or
+      `cancelled` if no handler / dismissed (so the turn never hangs).
+
+**Bugs fixed in Track A:** (1) adapter launched via `process.execPath` needs
+`ELECTRON_RUN_AS_NODE=1` or Electron boots a second app instead of running the
+script. (2) The bundled adapter rejects the user's global `permissions.defaultMode:
+"auto"` — Hearth now points the agent at an isolated `CLAUDE_CONFIG_DIR`
+(`.hearth/claude-config`, gitignored) with a valid default, so the user's
+interactive Claude config is untouched and keychain auth (config-dir-independent)
+still works.
+
+**Auth note (for P2-4):** subscription auth resolves via the macOS Keychain,
+which is independent of `CLAUDE_CONFIG_DIR` (so the isolation above is safe for
+the macOS-default `claude login` case). Live model inference could NOT be
+end-to-end verified here because this build was run *inside* Claude Code, whose
+inherited internal `ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL` get used by the
+spawned agent-sdk and rejected, and the Keychain item is ACL-bound to the signed
+Claude binary (a `bun`/`node` child can't read it non-interactively). On a normal
+user machine, `claude login` (keychain) or a real `ANTHROPIC_API_KEY` (BYO, the
+COMPLIANCE-blessed deterministic path) resolves this. **Validate a full turn in a
+non-nested run during P2.** Known risk: a node/electron child reading the keychain
+may prompt the user once on first run.
 
 ### Track B — independent tracks (subagent fan-out, run concurrently)
 
@@ -123,13 +154,14 @@ end to end before Track A is done.
       *Files:* ipc.ts, preload/index.ts, a renderer `PermissionPrompt` component.
       *Accept:* against FakeAgent, a permission ask renders, the chosen option id
       flows back, and the agent's promise resolves.
-- [ ] **P1-B2. git service tests + harden.** Unit-test commit/revert/log against
-      a temp repo; verify the `Hearth-SelfMod` trailer grep and conversation
-      trailer parsing. *Files:* git.ts (+ test). *Accept:* tests green; trailer
-      round-trips.
-- [ ] **P1-B3. Classifier tests.** `path-relevance.ts` is pure — exhaustively
-      test the three tiers and `classifyBatch` (strongest-wins). *Files:* test
-      only. *Accept:* table-driven tests cover renderer/route/main/config paths.
+- [x] **P1-B2. git service tests + harden.** 18 tests against throwaway temp
+      repos. **Two real bugs found+fixed**: `listDirty` mangled paths with spaces
+      (plain `--porcelain` C-quotes them; switched to `-z` NUL-separated); and
+      added `diffPaths(repoRoot, hash)` (needed by the P3-3 undo fix) with
+      `--root` so it also works on the initial parentless commit.
+- [x] **P1-B3. Classifier tests.** 26 table-driven tests covering all three tiers,
+      `classifyBatch` strongest-wins, Windows-backslash normalization, and edge
+      cases (`src/routes` vs `src/routes/`). No impl bugs — the classifier was correct.
 - [ ] **P1-B4. Micro-app server harden.** Resolve `vite` from the micro-app's own
       `node_modules` (run `bun install` on first start, or use Vite's
       programmatic `createServer`); handle the no-URL-printed timeout; expose
