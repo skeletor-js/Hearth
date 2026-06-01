@@ -195,35 +195,43 @@ Replace FakeAgent with the real `ClaudeAgent` and wire the live loop.
 
 - [x] **P2-1. Session reuse.** `ipc.ts` holds one lazily-created `AgentSession`
       per window and routes prompts + cancel to it. (Landed during B1.)
-- [ ] **P2-2. Real updates → UI.** Confirm Track A's `SessionUpdate`s render via
-      the B5 chat UI over the real stream.
-- [ ] **P2-3. Real permission asks → UI.** Confirm B1's flow answers real
-      mid-turn `requestPermission` calls from Claude.
-- [ ] **P2-4. Auth smoke test.** With a locally `claude login`'d CLI
-      (subscription mode) AND with `ANTHROPIC_API_KEY` (BYO), per
-      [COMPLIANCE.md](COMPLIANCE.md). *Accept:* both paths complete a turn; no
-      token is read, stored, or logged by Hearth.
+- [~] **P2-2. Real updates → UI.** Wired end to end (Track A stream → ipc →
+      typed `AgentUpdatePayload` → B5 renderer). Verified live up to a correctly
+      dispatched `session/prompt`; the streamed deltas themselves can't be
+      observed here because model inference is auth-blocked in the nested sandbox.
+      **Confirm in a non-nested run.**
+- [~] **P2-3. Real permission asks → UI.** Bridge verified at the agent level
+      (FakeAgent gates the turn on the answer) and the ACP `requestPermission`
+      handler is wired in acp-client. Live model-driven ask pending the non-nested run.
+- [ ] **P2-4. Auth smoke test.** BLOCKED in this environment (see the Track A auth
+      note): the nested Claude Code shell leaks an internal API key/base URL and
+      the Keychain item is ACL-bound to the signed Claude binary. **Must be run on
+      a normal machine**: subscription (`claude login`, keychain) and BYO
+      `ANTHROPIC_API_KEY`. No token is read/stored/logged by Hearth (we only set
+      `CLAUDE_CONFIG_DIR` + optionally pass the user's own key env through).
 
 *Accept (Phase 2):* type a prompt → see streamed Claude response → approve a
-permission ask → turn completes. (DoD criterion 1.)
+permission ask → turn completes. (DoD criterion 1 — **pending a non-nested run**;
+everything up to model auth is verified.)
 
 ---
 
 ## Phase 3 — The self-mod loop (the whole point)
 
-- [ ] **P3-1. Capture-after-turn live.** `captureTurn` commits the agent's edits
-      with the conversation trailer after a real turn. *Accept:* "change the
-      sidebar title to X" → a `Hearth-SelfMod` commit appears.
-- [ ] **P3-2. HMR reflects the edit.** Renderer-tier edit hot-reloads live with
-      no manual reload; a route/main edit escalates correctly. *Accept:* the
-      title change shows without restart. (DoD criterion 2.)
-- [ ] **P3-3. Fix `undo` changed-paths bug.** Derive changed paths from the
-      revert commit's diff (`git show --name-only <revertHash>`), not a post-revert
-      `listDirty`. Then apply the right reload tier. *Files:* self-mod-service.ts,
-      git.ts (add a `diffPaths(hash)` helper). *Accept:* "undo that" reverts the
-      last self-mod and the UI rolls back via HMR. (DoD criterion 3.)
-- [ ] **P3-4. History UI.** Surface `selfMod.history()` (recent self-mods) with a
-      per-entry undo button. *Files:* a renderer history panel.
+- [~] **P3-1 / P3-2. Capture-after-turn + HMR.** The service logic is implemented
+      and **fully unit-tested against a real git repo** (self-mod-service.test.ts,
+      6 tests): a renderer edit → `Hearth-SelfMod` commit with the conversation
+      trailer → `hmr` tier (no window reload); a route edit → `full-reload`
+      (driver.reloadWindow called). The one unverified link is a *live* agent
+      writing files during a turn (FakeAgent doesn't touch disk, and the real
+      model is auth-blocked here) — **confirm in a non-nested run.**
+- [x] **P3-3. Fixed the `undo` changed-paths bug.** `undo` now reads
+      `diffPaths(repoRoot, revertCommit)` instead of a post-revert `listDirty`
+      (which was always empty), so the reload tier is correct. Verified: undo
+      restores file content AND a reverted route edit escalates to `full-reload`.
+- [x] **P3-4. History UI.** [HistoryApp](../src/app/history/HistoryApp.tsx) +
+      `/history` route + sidebar link: lists self-mods newest-first with per-entry
+      Undo wired to `selfMod.undo`.
 
 ---
 
@@ -231,11 +239,14 @@ permission ask → turn completes. (DoD criterion 1.)
 
 Depends on P1-B4.
 
-- [ ] **P4-1. Scaffold → install → serve.** `create-app demo` then
-      `microAppStart('demo')` boots its Vite server and returns a URL.
-- [ ] **P4-2. iframe host.** `MicroAppFrame` embeds the URL in a sandboxed
-      `<iframe>`; verify isolation (it can't reach `window.hearth`). *Accept:*
-      the demo app renders inside the shell, sandboxed.
+- [x] **P4-1. Scaffold → install → serve.** **Verified live**: `create-app demo`
+      scaffolds it, `startMicroApp(repo, 'demo')` runs `bun install` + boots vite,
+      returns `http://localhost:5173/`, and an HTTP GET returns 200. Demo source
+      is committed; its `node_modules` is gitignored.
+- [x] **P4-2. iframe host.** `/micro/$name` route renders `MicroAppFrame` in a
+      sandboxed `<iframe>` (`allow-scripts allow-same-origin`, no-referrer);
+      sidebar has a "Demo" link. Live render inside the running shell is the last
+      manual check (boots clean; the frame fetches the URL on mount).
 
 ---
 

@@ -6,7 +6,7 @@
 // versions it, and reloads. Keeping the write authority with the agent and the
 // safety/versioning here is the separation that makes the loop debuggable.
 
-import { commitSelfMod, listDirty, recentSelfMods, revertCommit, type SelfModLogEntry } from './git.js'
+import { commitSelfMod, diffPaths, listDirty, recentSelfMods, revertCommit, type SelfModLogEntry } from './git.js'
 import { HmrController } from './hmr.js'
 import type { ReloadKind } from './path-relevance.js'
 
@@ -34,7 +34,10 @@ export class SelfModService {
 
   async undo(hash: string): Promise<SelfModResult> {
     const commit = await revertCommit(this.repoRoot, hash)
-    const changedPaths = await listDirty(this.repoRoot) // revert already committed; recompute from diff in real impl
+    // `git revert` already commits, so the tree is clean — listDirty would see
+    // nothing. Read the files the revert commit itself touched to pick the right
+    // reload tier (a reverted route edit still needs a full reload, etc.).
+    const changedPaths = await diffPaths(this.repoRoot, commit)
     const reload = this.hmr.apply(changedPaths)
     return { commit, changedPaths, reload }
   }
