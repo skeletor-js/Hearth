@@ -101,22 +101,23 @@ export class AcpClient {
     })
   }
 
-  // Give the agent the Hearth `view_app` MCP tool so it can screenshot the live
-  // app. Bridges to main's loopback snapshot endpoint (written to .hearth/snapshot-url
-  // at boot). Empty if Hearth isn't serving snapshots (e.g. running headless).
-  private viewMcpServers(): McpServerStdio[] {
-    const urlFile = join(this.cwd, '.hearth', 'snapshot-url')
+  // Give the agent the Hearth MCP tools (view_app / read_ui / click / fill /
+  // eval_js) so it can see AND drive the live app. Bridges to main's loopback
+  // server (URL written to .hearth/bridge-url at boot). Empty if Hearth isn't
+  // serving the bridge (e.g. running headless).
+  private bridgeMcpServers(): McpServerStdio[] {
+    const urlFile = join(this.cwd, '.hearth', 'bridge-url')
     if (!existsSync(urlFile)) return []
-    const snapshotUrl = readFileSync(urlFile, 'utf-8').trim()
-    if (!snapshotUrl) return []
+    const bridgeUrl = readFileSync(urlFile, 'utf-8').trim()
+    if (!bridgeUrl) return []
     return [
       {
-        name: 'hearth-view',
+        name: 'hearth',
         command: process.execPath, // electron-as-node (see env below)
-        args: [join(this.cwd, 'electron', 'main', 'agent-tools', 'view-mcp-server.mjs')],
+        args: [join(this.cwd, 'electron', 'main', 'agent-tools', 'hearth-mcp-server.mjs')],
         env: [
           { name: 'ELECTRON_RUN_AS_NODE', value: '1' },
-          { name: 'HEARTH_SNAPSHOT_URL', value: snapshotUrl },
+          { name: 'HEARTH_BRIDGE_URL', value: bridgeUrl },
         ],
       },
     ]
@@ -126,7 +127,7 @@ export class AcpClient {
     const connection = this.connection
     if (!connection) throw new Error('not connected — call connect() first')
 
-    const { sessionId } = await connection.newSession({ cwd: this.cwd, mcpServers: this.viewMcpServers() })
+    const { sessionId } = await connection.newSession({ cwd: this.cwd, mcpServers: this.bridgeMcpServers() })
 
     return {
       id: sessionId,

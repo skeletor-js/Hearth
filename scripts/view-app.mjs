@@ -14,17 +14,17 @@ import { resolve, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const urlFile = join(repoRoot, '.hearth', 'snapshot-url')
+const urlFile = join(repoRoot, '.hearth', 'bridge-url')
 
 if (!existsSync(urlFile)) {
-  console.error('Hearth does not appear to be running (no .hearth/snapshot-url). Start it with `bun dev`.')
+  console.error('Hearth does not appear to be running (no .hearth/bridge-url). Start it with `bun dev`.')
   process.exit(1)
 }
 
 const args = process.argv.slice(2)
 const path = args[0]?.startsWith('/') ? args.shift() : undefined
 const base = readFileSync(urlFile, 'utf-8').trim()
-const url = path ? `${base}?path=${encodeURIComponent(path)}` : base
+const url = path ? `${base}/snapshot?path=${encodeURIComponent(path)}` : `${base}/snapshot`
 const out = resolve(args[0] ?? join(repoRoot, '.hearth', 'snapshot.png'))
 
 try {
