@@ -11,14 +11,22 @@ import { dirname, join } from 'node:path'
 import { AcpClient, type AdapterSpec } from './acp-client.js'
 import type { Agent, AgentConfig, AgentSession, PermissionRequest, SessionUpdate } from './agent.js'
 
-// The bundled adapter rejects some newer permission modes — notably a global
-// `permissions.defaultMode: "auto"` in ~/.claude/settings.json. We can't isolate
-// CLAUDE_CONFIG_DIR to dodge it (that would lose the user's login — auth lives in
-// the Keychain / default-dir credentials the adapter reads), so instead we pin a
-// known-good mode at the PROJECT scope (cwd/.claude/settings.local.json), which
-// the adapter merges with higher precedence than the user-global setting.
-// Non-destructive: merges into any existing local settings.
-function pinProjectPermissionMode(cwd: string): void {
+// Permission modes the bundled adapter understands directly (its alias table).
+const ADAPTER_MODES = new Set(['default', 'acceptedits', 'dontask', 'plan', 'bypasspermissions', 'bypass'])
+// Newer Claude Code modes the (older) adapter doesn't know yet → closest equivalent.
+// "auto" (auto-accept) maps to acceptEdits, NOT bypassPermissions: we keep the
+// safe reading rather than letting the agent run commands unprompted.
+const MODE_TRANSLATION: Record<string, string> = { auto: 'acceptEdits' }
+
+// Resolve the permission mode for Hearth's agent. Defaults to "auto" (matching a
+// common Claude Code setup); override with HEARTH_PERMISSION_MODE. The bundled
+// adapter crashes on modes it can't parse (e.g. "auto"), so we translate to a
+// value it accepts and pin it at PROJECT scope — keeping the user on their normal
+// ~/.claude config dir (so their login resolves exactly as it does for `claude`).
+function ensureProjectPermissionMode(cwd: string): string {
+  const requested = (process.env.HEARTH_PERMISSION_MODE ?? 'auto').trim().toLowerCase()
+  const mode = MODE_TRANSLATION[requested] ?? (ADAPTER_MODES.has(requested) ? requested : 'acceptEdits')
+
   const dir = join(cwd, '.claude')
   mkdirSync(dir, { recursive: true })
   const file = join(dir, 'settings.local.json')
@@ -30,8 +38,9 @@ function pinProjectPermissionMode(cwd: string): void {
       current = {}
     }
   }
-  current.permissions = { ...current.permissions, defaultMode: 'default' }
+  current.permissions = { ...current.permissions, defaultMode: mode }
   writeFileSync(file, JSON.stringify(current, null, 2) + '\n')
+  return mode
 }
 
 function resolveAdapter(config: AgentConfig): AdapterSpec {
@@ -45,11 +54,12 @@ function resolveAdapter(config: AgentConfig): AdapterSpec {
   if (!binRel) throw new Error('@zed-industries/claude-agent-acp exposes no bin to launch')
   const bin = join(dirname(pkgJsonPath), binRel)
 
-  // Pin a valid permission mode for this project so the adapter doesn't choke on
-  // a global `defaultMode` it doesn't understand. Uses the user's normal
-  // ~/.claude config dir for everything else, so their login resolves exactly as
-  // it does for the `claude` CLI. See COMPLIANCE.md: we never store the credential.
-  pinProjectPermissionMode(config.cwd)
+  // Resolve + pin the agent's permission mode (default "auto"; HEARTH_PERMISSION_MODE
+  // to change). Uses the user's normal ~/.claude config dir for everything else, so
+  // their login resolves exactly as it does for `claude`. See COMPLIANCE.md: we
+  // never store the credential.
+  const mode = ensureProjectPermissionMode(config.cwd)
+  console.log(`[hearth] agent permission mode: ${mode}`)
 
   // process.execPath is the Electron binary in the packaged/dev app. To run the
   // adapter's Node entry with it we must set ELECTRON_RUN_AS_NODE, or Electron

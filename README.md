@@ -65,11 +65,15 @@ Driving it:
 - `HEARTH_FAKE_AGENT=1 bun dev` runs a scripted agent (no model) to exercise the
   chat + permission UI without auth — useful for UI work.
 
-> A full live model turn (talk → self-edit → HMR) hasn't been confirmed *in this
-> build environment* because it ran nested inside Claude Code, where the spawned
-> agent inherits an internal API key/base URL and can't read the auth keychain.
-> On a normal machine with `claude login` (or a BYO `ANTHROPIC_API_KEY`), the
-> handshake/session/prompt path — all verified live up to that point — completes.
+Permission mode: the agent defaults to **auto** (auto-accept edits). Override with
+`HEARTH_PERMISSION_MODE` — e.g. `HEARTH_PERMISSION_MODE=default bun dev` to be
+prompted for every edit, or `plan`/`acceptEdits`/`bypassPermissions`. Hearth pins
+the resolved mode at project scope (`.claude/settings.local.json`, gitignored)
+because the bundled adapter can't parse newer modes like `auto` directly.
+
+> Verified live on macOS with `claude login`: talk → self-edit → HMR → undo works
+> end to end. Auth uses your existing Claude login (keychain) or a BYO
+> `ANTHROPIC_API_KEY` — Hearth never stores a credential.
 
 ## License
 
