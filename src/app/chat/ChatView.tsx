@@ -9,6 +9,8 @@ import { readScratchpad, wrapForPrompt } from '../scratchpad'
 import { Composer } from './Composer'
 import { LiveTrace, inferKind, type DiffRow, type TraceResult, type TraceStep } from './trace'
 import type { TranscriptEntry } from '../../../electron/main/sessions/store'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 type Block =
   | { kind: 'text'; text: string }
@@ -23,6 +25,12 @@ const MAX_DIFF_ROWS = 60
 
 function basename(p: string): string {
   return p.split('/').pop() || p
+}
+
+// Render assistant text as sanitized markdown (same path as the Files preview).
+marked.setOptions({ gfm: true, breaks: true })
+function renderMd(text: string): string {
+  return DOMPurify.sanitize(marked.parse(text, { async: false }) as string)
 }
 
 function diffRows(oldText: string | null, newText: string): { add: number; del: number; rows: DiffRow[] } {
@@ -51,6 +59,7 @@ export function ChatView() {
   const [backend, setBackend] = useState<AgentKind>('claude')
   const nextId = useRef(0)
   const openText = useRef(false) // last hearth block is a coalescing text block
+  const openThought = useRef(false) // streaming a single reasoning block (coalesce deltas)
   const scrollRef = useRef<HTMLDivElement>(null)
   const openRightTab = useShell((s) => s.openRightTab)
   const active = useSession((s) => s.active)
@@ -81,6 +90,8 @@ export function ChatView() {
       const [prev, tail] = withHearthTail(prev0)
       const blocks = tail.blocks
       const lastBlock = blocks[blocks.length - 1]
+      // Any non-thought update ends the current reasoning run.
+      if (u.type !== 'thought') openThought.current = false
 
       const replaceTail = (newBlocks: Block[]): Msg[] => {
         const next = [...prev]
@@ -125,6 +136,15 @@ export function ChatView() {
         case 'thought': {
           openText.current = false
           const { steps, rebuild } = ensureTrace()
+          const last = steps[steps.length - 1]
+          // Coalesce streaming deltas of one reasoning block into a single step
+          // instead of spawning a node per chunk.
+          if (openThought.current && last?.kind === 'think') {
+            const next = [...steps]
+            next[next.length - 1] = { ...last, title: last.title + u.text }
+            return rebuild(next)
+          }
+          openThought.current = true
           return rebuild([...steps, { kind: 'think', status: 'done', title: u.text }])
         }
         case 'tool-call': {
@@ -376,7 +396,7 @@ function MessageView({
         </div>
       )}
       {m.blocks.map((b, i) => {
-        if (b.kind === 'text') return <div key={i} className="msg-body" style={{ whiteSpace: 'pre-wrap' }}>{b.text}</div>
+        if (b.kind === 'text') return <div key={i} className="msg-body" dangerouslySetInnerHTML={{ __html: renderMd(b.text) }} />
         if (b.kind === 'planref')
           return (
             <div key={i} className="wb-ref" onClick={onOpenPlan}>
