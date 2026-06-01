@@ -79,13 +79,13 @@ committed** in the Hearth repo, so changes are versioned. But they are conceptua
 distinct from code self-edits, so each self-mod commit is **categorized**
 (`Hearth-Kind: code | soul | memory`, derived from which managed files changed) and
 routed to a distinct surface:
-- **Evolve** — the timeline of *code/UI/skill* self-modifications (the renamed
-  "History"; undo/redo per [SELF-EVOLUTION-HISTORY.md](SELF-EVOLUTION-HISTORY.md)).
+- **History** — the timeline of *code/UI/skill* self-modifications (undo/redo per
+  [SELF-EVOLUTION-HISTORY.md](SELF-EVOLUTION-HISTORY.md)).
 - **Personality** — soul changes (their own versioned history).
 - **Memory** — memory changes (their own versioned history).
 
 So "Hearth changed its own personality/memory" shows up under Personality/Memory,
-not mixed into the code Evolve timeline. (Per-workspace memory for folder workspaces
+not mixed into the code History timeline. (Per-workspace memory for folder workspaces
 lives with that folder, not in the Hearth repo's history.)
 
 ## Decisions (signed off)
@@ -98,5 +98,5 @@ lives with that folder, not in the Hearth repo's history.)
    managed blocks; do NOT also drive Claude's native `MEMORY.md`. ✓
 3. **Versioned + split IA:** global soul + global memory are **committed** in the
    Hearth repo. Self-mod commits are **categorized** (`Hearth-Kind: code|soul|memory`)
-   and shown under three distinct surfaces — **Evolve** (code), **Personality**
+   and shown under three distinct surfaces — **History** (code), **Personality**
    (soul), **Memory** (memory) — never mixed. ✓
