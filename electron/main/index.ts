@@ -6,7 +6,7 @@ import { createMainWindow } from './window.js'
 import { registerIpc } from './ipc.js'
 import { ClaudeAgent } from './agents/claude.js'
 import { FakeAgent } from './agents/fake.js'
-import type { Agent } from './agents/agent.js'
+import type { Agent, AgentAuth } from './agents/agent.js'
 import { SelfModService } from './self-mod/self-mod-service.js'
 import { HmrController } from './self-mod/hmr.js'
 import { stopAllMicroApps } from './micro-apps/server.js'
@@ -16,20 +16,27 @@ import { stopAllMicroApps } from './micro-apps/server.js'
 // app's writable copy of its own source (v2).
 const REPO_ROOT = process.env.HEARTH_REPO_ROOT ?? process.cwd()
 
+// Pick the auth mode from the environment, no code edit required:
+//   - ANTHROPIC_API_KEY set  -> BYO key (the deterministic, COMPLIANCE-blessed path)
+//   - otherwise              -> subscription: the adapter reads the user's existing
+//                               Claude login (a CLAUDE_CODE_OAUTH_TOKEN in the env,
+//                               or the macOS Keychain from `claude login`).
+// We never originate or store a credential — see docs/COMPLIANCE.md.
+function resolveAuth(): AgentAuth {
+  if (process.env.ANTHROPIC_API_KEY) return { mode: 'api-key', envVar: 'ANTHROPIC_API_KEY' }
+  return { mode: 'subscription' }
+}
+
 async function bootstrap(): Promise<void> {
   const window = createMainWindow()
 
   // HEARTH_FAKE_AGENT=1 swaps in a scripted agent for UI/permission development
   // without a live model. See agents/fake.ts.
+  const auth = resolveAuth()
+  console.log(`[hearth] agent auth mode: ${auth.mode}`)
   const agent: Agent = process.env.HEARTH_FAKE_AGENT
     ? new FakeAgent()
-    : new ClaudeAgent({
-        kind: 'claude',
-        cwd: REPO_ROOT,
-        // Default to the user's existing Claude Code login. Flip to
-        // { mode: 'api-key', envVar: 'ANTHROPIC_API_KEY' } for BYO-key. See COMPLIANCE.md.
-        auth: { mode: 'subscription' },
-      })
+    : new ClaudeAgent({ kind: 'claude', cwd: REPO_ROOT, auth })
 
   const hmr = new HmrController({
     reloadWindow: () => window.webContents.reload(),
