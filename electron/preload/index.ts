@@ -138,6 +138,10 @@ const api = {
   memory: {
     get: (): Promise<string> => ipcRenderer.invoke(CH.memoryGet),
   },
+  win: {
+    /** Toggle the window between filling the screen and its previous frame. */
+    zoomToggle: () => ipcRenderer.send(CH.windowZoomToggle),
+  },
   microApps: {
     create: (name: string) => ipcRenderer.invoke(CH.microAppCreate, name),
     start: (name: string): Promise<string> => ipcRenderer.invoke(CH.microAppStart, name),

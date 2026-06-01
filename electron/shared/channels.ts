@@ -59,6 +59,8 @@ export const HEARTH_CHANNELS = {
   personalityGet: 'personality:get',
   personalitySet: 'personality:set',
   memoryGet: 'memory:get',
+  // window chrome: double-click the title-bar strip to zoom (fill) / restore.
+  windowZoomToggle: 'window:zoom-toggle',
   microAppCreate: 'micro-app:create',
   microAppStart: 'micro-app:start',
   microAppStop: 'micro-app:stop',

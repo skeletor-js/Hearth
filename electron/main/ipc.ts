@@ -204,6 +204,14 @@ export function registerIpc(services: MainServices): void {
   })
   ipcMain.handle(HEARTH_CHANNELS.memoryGet, () => soul.getMemory())
 
+  // Double-clicking the title-bar strip zooms the window to fill the screen, and
+  // again restores the previous frame (macOS "zoom"). maximize/unmaximize remembers
+  // the prior bounds for us.
+  ipcMain.on(HEARTH_CHANNELS.windowZoomToggle, () => {
+    if (window.isMaximized()) window.unmaximize()
+    else window.maximize()
+  })
+
   ipcMain.handle(HEARTH_CHANNELS.microAppCreate, (_e, name: string) =>
     scaffoldMicroApp(repoRoot, name),
   )

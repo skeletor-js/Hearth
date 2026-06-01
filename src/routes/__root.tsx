@@ -42,6 +42,7 @@ function RootLayout() {
   if (!s.onboarded) {
     return (
       <div className="app">
+        <Titlebar />
         <Onboarding />
         <Toaster />
       </div>
@@ -50,6 +51,7 @@ function RootLayout() {
 
   return (
     <div className="app" data-rail-collapsed={s.railCollapsed ? 'true' : 'false'} data-layout={isSession ? s.layout : undefined}>
+      <Titlebar />
       {cmdk.open && <CommandPalette onClose={() => cmdk.setOpen(false)} />}
       <Toaster />
       <Rail />
@@ -78,4 +80,10 @@ function RootLayout() {
       </div>
     </div>
   )
+}
+
+// The macOS title-bar safe strip: reserves room for the traffic lights, lets the
+// user drag the window, and zooms (fill ⟷ restore) on double-click.
+function Titlebar() {
+  return <div className="titlebar" onDoubleClick={() => window.hearth.win.zoomToggle()} />
 }

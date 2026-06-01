@@ -16,6 +16,8 @@
   --rail-w-collapsed: 56px;
   --topbar-h: 46px;
   --row-h: 30px;
+  /* Safe strip at the top for the macOS traffic lights (also the drag region). */
+  --titlebar-h: 30px;
 
   --accent:      #C8542B;
   --accent-soft: rgba(200,84,43,0.10);
@@ -107,10 +109,20 @@ a{color:inherit;text-decoration:none;cursor:default}
 .app{
   display:flex;
   gap:9px;
-  padding:9px;
+  /* Top padding reserves a safe strip for the macOS traffic lights so they never
+     overlap the rail/brand. Sides/bottom stay tight. */
+  padding:var(--titlebar-h) 9px 9px;
   height:100vh;width:100vw;overflow:hidden;
   background:var(--bg-window);
   position:relative;
+}
+
+/* Draggable title-bar strip across the top safe area (where the traffic lights
+   live). Drag to move the window; double-click to zoom (fill) / restore. It sits
+   in the top padding above the cards, so it never covers interactive content. */
+.titlebar{
+  position:absolute; top:0; left:0; right:0; height:var(--titlebar-h);
+  -webkit-app-region: drag; z-index:120;
 }
 
 /* ─────────────────────────  Left rail (card)  ───────────────────────── */
