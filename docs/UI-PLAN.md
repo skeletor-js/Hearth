@@ -128,15 +128,15 @@ Every phase must end green and be checkpoint-committed. A task is "done" only wh
 - [x] **P0-5.** Logic gates + boot + visual gate green; checkpoint commit.
 
 ### P1 — Chat, wired (core loop, re-skinned; serial)
-- [ ] **P1-1.** Chat surface: messages, role headers, tool-strips, `wb-ref` /
+- [x] **P1-1.** Chat surface: messages, role headers, tool-strips, `wb-ref` /
       `plan-ref` chips. Map the ACP stream (`message/thought/tool-call/diff`) to it.
-- [ ] **P1-2.** **Agent-trace timeline** (steps, status nodes, spine, inline
+- [x] **P1-2.** **Agent-trace timeline** (steps, status nodes, spine, inline
       mini-diff, progressive reveal, result row → open Review). Drive from the stream.
-- [ ] **P1-3.** Composer: ctx chips (branch, self-edit), mode seg (plan/auto/ask →
+- [x] **P1-3.** Composer: ctx chips (branch, self-edit), mode seg (plan/auto/ask →
       permission/plan mode), send/stop → `agent.prompt`/`cancel`; thinking ember + run line.
-- [ ] **P1-4.** Approve card ← `permission.onRequest/respond`; backend switch in the
+- [x] **P1-4.** Approve card ← `permission.onRequest/respond`; backend switch in the
       composer/popover ← `agent.getBackend/setBackend`.
-- [ ] **P1-5.** Replace the v1 `ChatApp`. Gates + visual + a live turn (non-nested)
+- [x] **P1-5.** Replace the v1 `ChatApp`. Gates + visual + a live turn (non-nested)
       render as the trace timeline; checkpoint commit.
 
 ### P2 — Workbench: shell + Review + Plan + Self + Git  ∥
