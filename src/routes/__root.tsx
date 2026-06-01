@@ -6,6 +6,9 @@ import { Resizer } from '@/shell/Resizer'
 import { PanelBtn } from '@/shell/Icon'
 import { useShell, applyTheme } from '@/shell/store'
 import { WorkPanel } from '@/app/workbench/WorkPanel'
+import { CommandPalette, useCommandPalette } from '@/shell/CommandPalette'
+import { Onboarding } from '@/shell/Onboarding'
+import { Toaster } from '@/shell/toast'
 
 export const Route = createRootRoute({ component: RootLayout })
 
@@ -34,9 +37,21 @@ function RootLayout() {
   ) : null
 
   const showRight = isSession && (s.layout === 'focus' || s.rightOpen)
+  const cmdk = useCommandPalette()
+
+  if (!s.onboarded) {
+    return (
+      <div className="app">
+        <Onboarding />
+        <Toaster />
+      </div>
+    )
+  }
 
   return (
     <div className="app" data-rail-collapsed={s.railCollapsed ? 'true' : 'false'} data-layout={isSession ? s.layout : undefined}>
+      {cmdk.open && <CommandPalette onClose={() => cmdk.setOpen(false)} />}
+      <Toaster />
       <Rail />
       <div className="stage">
         <div className="stage-row">

@@ -228,19 +228,19 @@ Terminal/Browser land in P4).
 - [x] **P5-4.** Gates + visual; checkpoint commit.
 
 ### P6 — History/Personality/Memory + ⌘K + onboarding + polish
-- [ ] **P6-1. History** (the code self-mod timeline) — build
+- [x] **P6-1. History** (the code self-mod timeline) — build
       per [SELF-EVOLUTION-HISTORY.md](SELF-EVOLUTION-HISTORY.md) (signed off: **Model A**
       append-only revert; revert **conflicts auto-handed to Hearth's agent**; no
       checkout-style "Restore" for now). Timeline (applied/undone, current-build
       boundary derived from net-effect), undo/redo, conflict→agent-resolve, clean-tree
       guard, HMR tier via `diffPaths`. Filter to `Hearth-Kind: code`. TDD the model.
-- [ ] **P6-1b. Personality + Memory surfaces** — the soul-change and memory-change
+- [x] **P6-1b. Personality + Memory surfaces** — the soul-change and memory-change
       histories (commits filtered by `Hearth-Kind: soul` / `memory`), distinct from
       History. (Settings hosts the editors; these are the change views.)
-- [ ] **P6-2.** ⌘K command palette (nav / skills / workspaces / theme actions).
-- [ ] **P6-3.** Onboarding (trimmed: connect-agent + choose-workspace), first-run
+- [x] **P6-2.** ⌘K command palette (nav / skills / workspaces / theme actions).
+- [x] **P6-3.** Onboarding (trimmed: connect-agent + choose-workspace), first-run
       only; first-run state persisted.
-- [ ] **P6-4.** Toasts, context menus, popovers; final fidelity pass; checkpoint commit.
+- [x] **P6-4.** Toasts, context menus, popovers; final fidelity pass; checkpoint commit.
 
 ---
 

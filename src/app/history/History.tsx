@@ -1,0 +1,139 @@
+import { useEffect, useState } from 'react'
+import { Icon } from '@/shell/Icon'
+import { Seg } from '@/app/settings/controls'
+import { toast } from '@/shell/toast'
+import type { SelfModLogEntry, SelfModKind } from '../../../electron/main/self-mod/git'
+
+const TITLE: Record<SelfModKind, { h1: string; sub: string; empty: string }> = {
+  code: {
+    h1: 'History',
+    sub: 'Every time Hearth changes its own UI, prompts, or skills, it lands here as a commit. Undo reverts it — the live app follows.',
+    empty: 'No self-edits yet. Ask Hearth to change itself and it shows up here.',
+  },
+  soul: {
+    h1: 'Personality',
+    sub: 'Changes to Hearth’s personality (the compiled Soul) are versioned here, separate from code.',
+    empty: 'No personality changes yet. Adjust it in Settings.',
+  },
+  memory: {
+    h1: 'Memory',
+    sub: 'Changes to Hearth’s long-term memory are versioned here, separate from code.',
+    empty: 'No memory changes yet. Say “remember this” in a session.',
+  },
+}
+
+export function History() {
+  const [entries, setEntries] = useState<SelfModLogEntry[]>([])
+  const [kind, setKind] = useState<SelfModKind>('code')
+  const [busy, setBusy] = useState<string | null>(null)
+  const [note, setNote] = useState<string | null>(null)
+
+  const load = () => void window.hearth.selfMod.history().then(setEntries)
+  useEffect(load, [])
+
+  const shown = entries.filter((e) => e.kind === kind)
+  const undone = shown.filter((e) => e.reverted).length
+
+  const undo = async (hash: string, title: string) => {
+    setBusy(hash)
+    setNote(null)
+    try {
+      await window.hearth.selfMod.undo(hash)
+      toast(`Undone · ${title}`)
+      load()
+    } catch (e) {
+      // A revert conflict would be auto-handed to Hearth's agent to resolve; for now
+      // surface it so the user can ask Hearth in chat.
+      setNote(`Couldn’t auto-revert “${title}”: ${String(e)}. Ask Hearth to resolve it in chat.`)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const t = TITLE[kind]
+  return (
+    <div className="screen scroll" data-screen-label="History">
+      <div className="screen-inner narrow">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 7 }}>
+          <span style={{ color: 'var(--accent)', display: 'inline-flex' }}>
+            <Icon name={kind === 'soul' ? 'chat-text' : kind === 'memory' ? 'brain' : 'clock-counter-clockwise'} className="ico-20" />
+          </span>
+          <h1 className="screen-title" style={{ margin: 0 }}>
+            {t.h1}
+          </h1>
+        </div>
+        <p className="screen-sub">{t.sub}</p>
+
+        <div className="evo-toolbar">
+          <Seg<SelfModKind>
+            value={kind}
+            options={[['code', 'History'], ['soul', 'Personality'], ['memory', 'Memory']]}
+            onChange={setKind}
+          />
+          <span className="evo-state">
+            {undone === 0 ? (
+              <>
+                <span className="dot ok" /> {shown.length} change{shown.length === 1 ? '' : 's'}
+              </>
+            ) : (
+              <>
+                <span className="dot warn" /> {undone} undone · {shown.length} total
+              </>
+            )}
+          </span>
+        </div>
+
+        {note && (
+          <div className="card-row" style={{ marginTop: 12, color: 'var(--subtle)' }}>
+            <span className="cr-mark">
+              <Icon name="info" />
+            </span>
+            <div className="cr-body">
+              <div className="cr-sub" style={{ whiteSpace: 'normal' }}>{note}</div>
+            </div>
+          </div>
+        )}
+
+        <div className="sec" style={{ marginTop: 18 }}>
+          {shown.length === 0 ? (
+            <div className="wb-empty" style={{ minHeight: 200 }}>
+              <Icon name="clock-counter-clockwise" />
+              <h3>{t.h1}</h3>
+              <p>{t.empty}</p>
+            </div>
+          ) : (
+            shown.map((e) => (
+              <div key={e.hash} className={'card-row evo-row' + (e.reverted ? ' evo-undone' : '')} style={{ alignItems: 'flex-start' }}>
+                <span className="cr-mark">
+                  <Icon name={e.reverted ? 'arrow-counter-clockwise' : 'flame'} fill={!e.reverted} />
+                </span>
+                <div className="cr-body">
+                  <div className="cr-title">
+                    <span className="evo-name">{e.subject}</span>
+                    {e.reverted ? (
+                      <span className="chip evo-badge-undone" style={{ height: 18 }}>
+                        <Icon name="arrow-counter-clockwise" className="ico-12" /> Undone
+                      </span>
+                    ) : (
+                      <span className="chip chip-accent" style={{ height: 18 }}>
+                        <Icon name="check" className="ico-12" /> Applied
+                      </span>
+                    )}
+                  </div>
+                  <div className="evo-stats">
+                    <span style={{ fontFamily: 'var(--mono)' }}>{e.hash.slice(0, 7)}</span>
+                  </div>
+                </div>
+                {!e.reverted && (
+                  <button className="btn btn-sm btn-quiet" disabled={busy === e.hash} onClick={() => undo(e.hash, e.subject)}>
+                    <Icon name="arrow-u-up-left" /> {busy === e.hash ? 'Undoing…' : 'Undo'}
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

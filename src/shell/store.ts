@@ -35,6 +35,9 @@ interface ShellState {
   // agent
   approval: 'auto' | 'commands' | 'always'
   setApproval: (v: 'auto' | 'commands' | 'always') => void
+  // first-run
+  onboarded: boolean
+  setOnboarded: (v: boolean) => void
   // actions
   setTheme: (t: Theme) => void
   toggleTheme: () => void
@@ -68,6 +71,8 @@ export const useShell = create<ShellState>()(
       bottomTab: 'terminal',
       approval: 'commands',
       setApproval: (approval) => set({ approval }),
+      onboarded: false,
+      setOnboarded: (onboarded) => set({ onboarded }),
 
       setTheme: (theme) => set({ theme }),
       toggleTheme: () => set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
