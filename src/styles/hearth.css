@@ -226,7 +226,7 @@ button.rail-item{ width:100%;border:0;background:transparent;font:inherit;text-a
 .resizer{ position:absolute;z-index:40; }
 .resizer-x{ top:16px;bottom:16px;width:12px;cursor:col-resize; }
 .resizer-y{ left:16px;right:16px;height:12px;cursor:row-resize; }
-.resizer-rail{ right:-10px; }
+.resizer-rail{ right:-11px; }
 .resizer-wb{ left:-11px; }
 .resizer-panel{ top:-11px; }
 .resizer::after{ content:"";position:absolute;border-radius:3px;background:transparent;transition:background .15s; }
