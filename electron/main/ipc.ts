@@ -9,6 +9,7 @@ import type { WorkspaceRegistry } from './workspaces/registry.js'
 import type { SessionStore, TranscriptEntry } from './sessions/store.js'
 import type { CreateSessionInput } from './sessions/store.js'
 import { listDir, readFile as fsReadFile, writeFile as fsWriteFile } from './fs/files.js'
+import { TerminalManager } from './terminal/pty.js'
 import { getDiff } from './self-mod/git-diff.js'
 import {
   branches as gitBranches,
@@ -144,6 +145,20 @@ export function registerIpc(services: MainServices): void {
   ipcMain.handle(HEARTH_CHANNELS.sessionsDelete, (_e, id: string) => sessions.remove(id))
   ipcMain.handle(HEARTH_CHANNELS.sessionsDuplicate, (_e, id: string) => sessions.duplicate(id))
 
+  // Terminal: a real PTY per panel. Output streams to the renderer keyed by id.
+  const terminals = new TerminalManager(
+    (id, data) => window.webContents.send(HEARTH_CHANNELS.terminalData, { id, data }),
+    (id) => window.webContents.send(HEARTH_CHANNELS.terminalExit, { id }),
+  )
+  ipcMain.on(HEARTH_CHANNELS.terminalCreate, (_e, p: { id: string; cwd?: string; cols?: number; rows?: number }) =>
+    terminals.create(p.id, p.cwd || repoRoot, p.cols, p.rows),
+  )
+  ipcMain.on(HEARTH_CHANNELS.terminalWrite, (_e, p: { id: string; data: string }) => terminals.write(p.id, p.data))
+  ipcMain.on(HEARTH_CHANNELS.terminalResize, (_e, p: { id: string; cols: number; rows: number }) =>
+    terminals.resize(p.id, p.cols, p.rows),
+  )
+  ipcMain.on(HEARTH_CHANNELS.terminalKill, (_e, p: { id: string }) => terminals.kill(p.id))
+
   // Files (workspace-rooted; cwd defaults to the Hearth repo).
   ipcMain.handle(HEARTH_CHANNELS.fsList, (_e, cwd: string | undefined, rel?: string) => listDir(cwd || repoRoot, rel))
   ipcMain.handle(HEARTH_CHANNELS.fsRead, (_e, cwd: string | undefined, rel: string) => fsReadFile(cwd || repoRoot, rel))
@@ -160,6 +175,7 @@ export function registerIpc(services: MainServices): void {
   ipcMain.handle(HEARTH_CHANNELS.microAppStop, (_e, name: string) => stopMicroApp(name))
 
   app.on('before-quit', () => {
+    terminals.disposeAll()
     void host.dispose()
   })
 }

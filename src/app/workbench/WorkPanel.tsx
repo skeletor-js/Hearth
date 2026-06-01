@@ -5,7 +5,8 @@ import { ReviewTab } from './ReviewTab'
 import { PlanTab } from './PlanTab'
 import { SelfTab } from './SelfTab'
 import { FilesTab } from './FilesTab'
-import { BrowserTab, TerminalTab } from './placeholders'
+import { TerminalTab } from './TerminalTab'
+import { BrowserTab } from './placeholders'
 import { GitPanel } from './GitPanel'
 
 const WB_TABS = [

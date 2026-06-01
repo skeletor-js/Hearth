@@ -39,6 +39,13 @@ export const HEARTH_CHANNELS = {
   fsList: 'fs:list',
   fsRead: 'fs:read',
   fsWrite: 'fs:write',
+  // terminal: a real PTY per panel.
+  terminalCreate: 'terminal:create',
+  terminalWrite: 'terminal:write',
+  terminalResize: 'terminal:resize',
+  terminalKill: 'terminal:kill',
+  terminalData: 'terminal:data', // main → renderer
+  terminalExit: 'terminal:exit', // main → renderer
   microAppCreate: 'micro-app:create',
   microAppStart: 'micro-app:start',
   microAppStop: 'micro-app:stop',

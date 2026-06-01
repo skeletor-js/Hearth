@@ -92,6 +92,23 @@ const api = {
     delete: (id: string): Promise<void> => ipcRenderer.invoke(CH.sessionsDelete, id),
     duplicate: (id: string): Promise<SessionMeta | null> => ipcRenderer.invoke(CH.sessionsDuplicate, id),
   },
+  terminal: {
+    create: (id: string, cwd: string | undefined, cols: number, rows: number) =>
+      ipcRenderer.send(CH.terminalCreate, { id, cwd, cols, rows }),
+    write: (id: string, data: string) => ipcRenderer.send(CH.terminalWrite, { id, data }),
+    resize: (id: string, cols: number, rows: number) => ipcRenderer.send(CH.terminalResize, { id, cols, rows }),
+    kill: (id: string) => ipcRenderer.send(CH.terminalKill, { id }),
+    onData: (cb: (id: string, data: string) => void) => {
+      const h = (_e: unknown, p: { id: string; data: string }) => cb(p.id, p.data)
+      ipcRenderer.on(CH.terminalData, h)
+      return () => void ipcRenderer.off(CH.terminalData, h)
+    },
+    onExit: (cb: (id: string) => void) => {
+      const h = (_e: unknown, p: { id: string }) => cb(p.id)
+      ipcRenderer.on(CH.terminalExit, h)
+      return () => void ipcRenderer.off(CH.terminalExit, h)
+    },
+  },
   files: {
     list: (cwd: string | undefined, rel?: string): Promise<FileEntry[]> => ipcRenderer.invoke(CH.fsList, cwd, rel),
     read: (cwd: string | undefined, rel: string): Promise<FileContent> => ipcRenderer.invoke(CH.fsRead, cwd, rel),

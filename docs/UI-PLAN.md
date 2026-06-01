@@ -188,7 +188,7 @@ Terminal/Browser land in P4).
       open/edit/save a code file and a markdown file. *(Note: editing a Hearth source
       file HMRs live but is NOT auto-committed — History is agent self-mods, not the
       user's manual editor edits.)*
-- [ ] **P4-2.** ∥ **Terminal:** `node-pty` PTY per panel (cwd = workspace) streamed
+- [x] **P4-2.** ∥ **Terminal:** `node-pty` PTY per panel (cwd = workspace) streamed
       to `xterm.js`. Add deps. *Accept:* a real shell runs in the panel.
 - [ ] **P4-3.** ∥ **Browser (real, persistent):** an embedded Chromium pane
       (`WebContentsView`) the user can navigate **anywhere** and **log into** — backed
