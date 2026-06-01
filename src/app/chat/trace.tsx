@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Icon } from '@/shell/Icon'
+import { renderMd } from './markdown'
 import type { AgentKind } from '../../../electron/shared/protocol'
 
 export type StepKind = 'think' | 'search' | 'read' | 'edit' | 'run'
@@ -11,6 +12,15 @@ export type TraceStep = {
   status: 'pending' | 'running' | 'done' | 'error'
   title: string
   diff?: { path: string; add: number; del: number; rows: DiffRow[] }
+  /** Reasoning timing (live turns only; absent on replay). */
+  startedAt?: number
+  thinkMs?: number
+}
+
+function fmtSecs(ms?: number): string {
+  if (!ms || ms < 400) return ''
+  const s = ms / 1000
+  return ` for ${s < 10 ? s.toFixed(1) : Math.round(s)}s`
 }
 
 export type TraceResult = { text: string; hasDiff: boolean }
@@ -41,6 +51,25 @@ export function inferKind(title: string): StepKind | undefined {
 function Step({ step, running, isLast }: { step: TraceStep; running: boolean; isLast: boolean }) {
   const [open, setOpen] = useState(false)
   const isRunning = running && isLast && step.status !== 'error'
+
+  // Reasoning: a quiet, collapsed "Thought" line that expands to the full text.
+  if (step.kind === 'think') {
+    return (
+      <div className={'tstep' + (isLast ? ' is-last' : '')}>
+        <div className={'tstep-node ' + (isRunning ? 'run' : 'done')}>
+          {isRunning ? <span className="tspin" /> : <Icon name="brain" className="ico-12" />}
+        </div>
+        <div className="tstep-main">
+          <div className="tstep-line tthink has-detail" onClick={() => setOpen((v) => !v)}>
+            <span className="tverb plain">{isRunning ? 'Thinking…' : 'Thought' + fmtSecs(step.thinkMs)}</span>
+            <Icon name="caret-right" className={'tchev ico-12' + (open ? ' open' : '')} />
+          </div>
+          {open && <div className="tstep-detail think-detail" dangerouslySetInnerHTML={{ __html: renderMd(step.title) }} />}
+        </div>
+      </div>
+    )
+  }
+
   const status = isRunning ? 'run' : step.status === 'error' ? 'err' : step.status === 'done' ? 'done' : 'run'
   const hasDetail = !!step.diff
 

@@ -414,6 +414,15 @@ button.rail-item{ width:100%;border:0;background:transparent;font:inherit;text-a
 .tstep-line .tchev{ color:var(--faint);transition:transform .15s;margin-left:6px; }
 .tstep-line .tchev.open{ transform:rotate(90deg); }
 .tstep-detail{ margin-top:7px; }
+/* Reasoning: quiet collapsed label + de-emphasized expanded text */
+.tstep-line.tthink{ cursor:default; }
+.tstep-line.tthink .tverb.plain{ color:var(--subtle); }
+.tstep-line.tthink .tchev{ color:var(--faint); }
+.think-detail{ margin-top:7px;font-size:var(--t-12);color:var(--subtle);line-height:1.6;
+  border-left:2px solid var(--border-strong);padding-left:11px; }
+.think-detail p{ margin:0 0 6px; } .think-detail p:last-child{ margin-bottom:0; }
+.think-detail code{ font-family:var(--mono);font-size:11px;background:var(--code-bg);padding:1px 4px;border-radius:4px; }
+.think-detail ul,.think-detail ol{ margin:5px 0;padding-left:18px; }
 .tstep-detail.note{ font-size:var(--t-12);color:var(--subtle);line-height:1.55;
   border-left:2px solid var(--border-strong);padding-left:10px; }
 .diff-mini{ font-family:var(--mono);font-size:11px;line-height:1.7;border:1px solid var(--border);

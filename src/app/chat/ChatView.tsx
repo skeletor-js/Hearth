@@ -9,8 +9,7 @@ import { readScratchpad, wrapForPrompt } from '../scratchpad'
 import { Composer } from './Composer'
 import { LiveTrace, inferKind, type DiffRow, type TraceResult, type TraceStep } from './trace'
 import type { TranscriptEntry } from '../../../electron/main/sessions/store'
-import { marked } from 'marked'
-import DOMPurify from 'dompurify'
+import { renderMd } from './markdown'
 
 type Block =
   | { kind: 'text'; text: string }
@@ -25,12 +24,6 @@ const MAX_DIFF_ROWS = 60
 
 function basename(p: string): string {
   return p.split('/').pop() || p
-}
-
-// Render assistant text as sanitized markdown (same path as the Files preview).
-marked.setOptions({ gfm: true, breaks: true })
-function renderMd(text: string): string {
-  return DOMPurify.sanitize(marked.parse(text, { async: false }) as string)
 }
 
 function diffRows(oldText: string | null, newText: string): { add: number; del: number; rows: DiffRow[] } {
@@ -85,7 +78,7 @@ export function ChatView() {
     return [[...prev, fresh], fresh as Extract<Msg, { role: 'hearth' }>]
   }
 
-  const apply = (u: SessionUpdate) =>
+  const apply = (u: SessionUpdate, replay = false) =>
     setMsgs((prev0) => {
       const [prev, tail] = withHearthTail(prev0)
       const blocks = tail.blocks
@@ -141,14 +134,20 @@ export function ChatView() {
           // instead of spawning a node per chunk.
           if (openThought.current && last?.kind === 'think') {
             const next = [...steps]
-            next[next.length - 1] = { ...last, title: last.title + u.text }
+            next[next.length - 1] = {
+              ...last,
+              title: last.title + u.text,
+              thinkMs: last.startedAt ? Date.now() - last.startedAt : last.thinkMs,
+            }
             return rebuild(next)
           }
           openThought.current = true
-          return rebuild([...steps, { kind: 'think', status: 'done', title: u.text }])
+          return rebuild([...steps, { kind: 'think', status: 'done', title: u.text, startedAt: replay ? undefined : Date.now() }])
         }
         case 'tool-call': {
           openText.current = false
+          // The agent's internal tool-discovery is plumbing, not a user-facing step.
+          if (/^tool\s*search$/i.test(u.title.trim())) return prev
           const { steps, rebuild } = ensureTrace()
           const i = steps.findIndex((s) => s.toolId === u.id)
           if (i >= 0) {
@@ -245,7 +244,7 @@ export function ChatView() {
       if (detail) {
         for (const e of detail.entries) {
           if (e.kind === 'user') pushUser(e.text)
-          else apply(e.update)
+          else apply(e.update, true)
         }
       }
       // A prompt queued elsewhere (e.g. a History revert conflict) sends here,
