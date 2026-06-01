@@ -5,6 +5,8 @@ import { app, BrowserWindow } from 'electron'
 import { createMainWindow } from './window.js'
 import { registerIpc } from './ipc.js'
 import { ClaudeAgent } from './agents/claude.js'
+import { FakeAgent } from './agents/fake.js'
+import type { Agent } from './agents/agent.js'
 import { SelfModService } from './self-mod/self-mod-service.js'
 import { HmrController } from './self-mod/hmr.js'
 import { stopAllMicroApps } from './micro-apps/server.js'
@@ -17,13 +19,17 @@ const REPO_ROOT = process.env.HEARTH_REPO_ROOT ?? process.cwd()
 async function bootstrap(): Promise<void> {
   const window = createMainWindow()
 
-  const agent = new ClaudeAgent({
-    kind: 'claude',
-    cwd: REPO_ROOT,
-    // Default to the user's existing Claude Code login. Flip to
-    // { mode: 'api-key', envVar: 'ANTHROPIC_API_KEY' } for BYO-key. See COMPLIANCE.md.
-    auth: { mode: 'subscription' },
-  })
+  // HEARTH_FAKE_AGENT=1 swaps in a scripted agent for UI/permission development
+  // without a live model. See agents/fake.ts.
+  const agent: Agent = process.env.HEARTH_FAKE_AGENT
+    ? new FakeAgent()
+    : new ClaudeAgent({
+        kind: 'claude',
+        cwd: REPO_ROOT,
+        // Default to the user's existing Claude Code login. Flip to
+        // { mode: 'api-key', envVar: 'ANTHROPIC_API_KEY' } for BYO-key. See COMPLIANCE.md.
+        auth: { mode: 'subscription' },
+      })
 
   const hmr = new HmrController({
     reloadWindow: () => window.webContents.reload(),

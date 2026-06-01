@@ -28,15 +28,16 @@ uninstalled, there are **no git commits**, and the ACP client throws
 **Known gaps & bugs to fix (tracked as tasks below):**
 1. ~~`AcpClient.connect()` / `newSession()` throw — the core stub.~~ — DONE in
    Track A (handshake + session verified live; translation unit-tested).
-2. Permission flow is **entirely unwired** end to end: `agent.onPermission` is
-   never registered in `ipc.ts`, no IPC channel, no preload API, no UI. (P1-B1)
+2. ~~Permission flow is **entirely unwired**~~ — DONE in P1-B1 (channels + ipc
+   resolver bridge + preload + PermissionPrompt UI).
 3. ~~IPC/preload **channel drift**~~ — FIXED in P0-3 (single shared `channels.ts`).
-4. **Session lifecycle wrong**: `agent:prompt` creates a new session per prompt
-   instead of reusing one. (P0-3 / P2)
+4. ~~**Session lifecycle wrong**~~ — DONE: `ipc.ts` now holds one lazily-created
+   session per window and reuses it; `agent:cancel` targets it (P2-1 landed early).
 5. `SelfModService.undo` reads `listDirty` *after* the revert is already
    committed → sees nothing → no reload. Derive changed paths from the revert
    commit's diff instead. (P3)
-6. `startMicroApp` spawns bare `vite` with no install step / no resolution. (P1-B4)
+6. ~~`startMicroApp` spawns bare `vite`~~ — DONE in P1-B4 (resolves local vite,
+   installs first, timeout, fixed exit bug).
 
 ---
 
@@ -144,16 +145,19 @@ without a live agent. Build a tiny **`FakeAgent` implementing `Agent`** (emits
 scripted `SessionUpdate`s and one `PermissionRequest`) so B1/B5 can be exercised
 end to end before Track A is done.
 
-- [ ] **P1-B0. FakeAgent test double.** Implements `Agent`; scripts a turn:
-      message → tool-call(running→done) → diff → permission ask → end. Unblocks
-      B1 and B5. *Files:* `electron/main/agents/fake.ts` (dev-only).
-- [ ] **P1-B1. Permission flow wiring** (the flagged risk). Add IPC channels
-      (`permission:request` main→renderer, `permission:respond` renderer→main),
-      register `agent.onPermission` in `ipc.ts` to bridge them, add the preload
-      API, and build the renderer prompt UI (allow / allow-always / reject).
-      *Files:* ipc.ts, preload/index.ts, a renderer `PermissionPrompt` component.
-      *Accept:* against FakeAgent, a permission ask renders, the chosen option id
-      flows back, and the agent's promise resolves.
+- [x] **P1-B0. FakeAgent test double.** [fake.ts](../electron/main/agents/fake.ts)
+      scripts message → thought → tool-call(running) → diff → permission ask →
+      tool-call(done/error) → message → end. Selected via `HEARTH_FAKE_AGENT=1`
+      (see index.ts). 5 tests prove the ask blocks the turn and the answer flips
+      the outcome.
+- [x] **P1-B1. Permission flow wiring** (the flagged risk — was at zero). Channels
+      `permission:request`/`permission:respond` in shared/channels.ts; `ipc.ts`
+      registers `agent.onPermission`, holds the resolver keyed by request id, and
+      completes it on the renderer's reply (so the turn never hangs); preload
+      `permission.{onRequest,respond}`; renderer
+      [PermissionPrompt](../src/app/chat/PermissionPrompt.tsx) with allow /
+      allow-always / reject. Verified at the agent level (FakeAgent gates on the
+      answer) and boots clean; live-model verification deferred with P2.
 - [x] **P1-B2. git service tests + harden.** 18 tests against throwaway temp
       repos. **Two real bugs found+fixed**: `listDirty` mangled paths with spaces
       (plain `--porcelain` C-quotes them; switched to `-z` NUL-separated); and
@@ -162,15 +166,17 @@ end to end before Track A is done.
 - [x] **P1-B3. Classifier tests.** 26 table-driven tests covering all three tiers,
       `classifyBatch` strongest-wins, Windows-backslash normalization, and edge
       cases (`src/routes` vs `src/routes/`). No impl bugs — the classifier was correct.
-- [ ] **P1-B4. Micro-app server harden.** Resolve `vite` from the micro-app's own
-      `node_modules` (run `bun install` on first start, or use Vite's
-      programmatic `createServer`); handle the no-URL-printed timeout; expose
-      `microAppStop` over IPC. *Files:* micro-apps/server.ts, scaffold.ts, ipc.ts.
-      *Accept:* `startMicroApp` returns a live URL for a freshly scaffolded app.
-- [ ] **P1-B5. Richer chat rendering.** Render thoughts, tool-call status
-      transitions, and diffs (not just `message`/`end`) in ChatApp, driven by the
-      FakeAgent stream. *Files:* ChatApp.tsx (+ small subcomponents).
-      *Accept:* every `SessionUpdate` variant has a visible representation.
+- [x] **P1-B4. Micro-app server harden.** Pure `extractDevUrl()` (8 tests);
+      resolves vite from the micro-app's own `node_modules/.bin`, runs `bun install`
+      first if missing, 30s no-URL timeout, fixed the double-settle exit bug.
+      `microAppStop` IPC handler + preload `microApps.stop` wired (orchestrator).
+      [MicroAppFrame](../src/shell/MicroAppFrame.tsx) is a sandboxed iframe host
+      (`sandbox="allow-scripts allow-same-origin"`, no-referrer) with loading/error
+      states. Live serve is exercised in P4.
+- [x] **P1-B5. Richer chat rendering.** [ChatApp.tsx](../src/app/chat/ChatApp.tsx)
+      renders all five update variants: coalesced assistant messages, italic
+      thoughts, in-place tool-call status (○◐●✕), and diff chips with +/- line
+      counts; auto-scrolls. Drops `agentUpdate` through the typed `AgentUpdatePayload`.
 
 **Parallelism summary:** B1, B2, B3, B4, B5 → up to **5 concurrent subagents**
 after P1-B0. They share only `agent.ts` (read-only contract) and, for B1/B4, the
@@ -187,8 +193,8 @@ conflicts (assign the channel-map edit to B1, have B4 rebase onto it).
 
 Replace FakeAgent with the real `ClaudeAgent` and wire the live loop.
 
-- [ ] **P2-1. Session reuse.** Hold one `AgentSession` per window instead of
-      `newSession()` per prompt; route prompts/cancels to it. *Files:* ipc.ts.
+- [x] **P2-1. Session reuse.** `ipc.ts` holds one lazily-created `AgentSession`
+      per window and routes prompts + cancel to it. (Landed during B1.)
 - [ ] **P2-2. Real updates → UI.** Confirm Track A's `SessionUpdate`s render via
       the B5 chat UI over the real stream.
 - [ ] **P2-3. Real permission asks → UI.** Confirm B1's flow answers real

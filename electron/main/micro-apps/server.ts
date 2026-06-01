@@ -2,11 +2,12 @@
 // sandboxed <iframe>. Servers are kept in a map so we can stop them and avoid
 // leaking ports across the app's lifetime.
 //
-// TODO(v1): the simplest working version spawns `vite` as a child process in the
-// micro-app dir and parses the printed URL. A later version can use Vite's
-// programmatic createServer for cleaner lifecycle + HMR wiring.
+// A micro-app is its own isolated Vite + React project with its own deps. We run
+// its vite from its OWN node_modules so we don't depend on a global install, and
+// install deps on first start if they're missing.
 
 import { spawn, type ChildProcess } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 interface RunningApp {
@@ -16,30 +17,94 @@ interface RunningApp {
 
 const running = new Map<string, RunningApp>()
 
+// vite prints something like "  ➜  Local: http://localhost:5173/". Match the
+// first loopback URL on the line, tolerating surrounding text and ANSI codes.
 const URL_RE = /(https?:\/\/(?:localhost|127\.0\.0\.1):\d+\/?)/
 
-export function startMicroApp(repoRoot: string, name: string): Promise<string> {
+const START_TIMEOUT_MS = 30_000
+
+// Pure, unit-testable: pull the dev-server URL out of a vite output chunk.
+export function extractDevUrl(chunk: string): string | null {
+  const match = chunk.match(URL_RE)
+  return match ? match[1] : null
+}
+
+function microAppDir(repoRoot: string, name: string): string {
+  return join(repoRoot, 'micro-apps', name)
+}
+
+function viteBin(dir: string): string {
+  return join(dir, 'node_modules', '.bin', 'vite')
+}
+
+// Install the micro-app's deps with bun. Resolves on a clean exit, rejects with
+// a clear message otherwise.
+function installDeps(dir: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('bun', ['install'], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] })
+    let stderr = ''
+    child.stderr?.on('data', (buf: Buffer) => {
+      stderr += buf.toString()
+    })
+    child.on('error', (err) => reject(new Error(`bun install failed to spawn in ${dir}: ${err.message}`)))
+    child.on('exit', (code) => {
+      if (code === 0) resolve()
+      else reject(new Error(`bun install failed in ${dir} (exit ${code})${stderr ? `: ${stderr.trim()}` : ''}`))
+    })
+  })
+}
+
+export async function startMicroApp(repoRoot: string, name: string): Promise<string> {
   const existing = running.get(name)
-  if (existing) return Promise.resolve(existing.url)
+  if (existing) return existing.url
 
-  const dir = join(repoRoot, 'micro-apps', name)
-  const child = spawn('vite', ['--strictPort=false'], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] })
+  const dir = microAppDir(repoRoot, name)
+  if (!existsSync(dir)) throw new Error(`micro-app not found: ${dir}`)
 
-  return new Promise<string>((resolveUrl, reject) => {
-    const onData = (buf: Buffer) => {
-      const match = buf.toString().match(URL_RE)
-      if (match) {
-        const url = match[1]
-        running.set(name, { child, url })
-        child.stdout?.off('data', onData)
-        resolveUrl(url)
-      }
+  // Use the micro-app's own vite. If it isn't installed yet, install first.
+  if (!existsSync(viteBin(dir))) {
+    await installDeps(dir)
+    if (!existsSync(viteBin(dir))) {
+      throw new Error(`micro-app ${name} has no vite after install (check its package.json)`)
     }
+  }
+
+  const child = spawn(viteBin(dir), ['--strictPort=false'], {
+    cwd: dir,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+
+  return new Promise<string>((resolve, reject) => {
+    let settled = false
+
+    const finish = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      child.stdout?.off('data', onData)
+      fn()
+    }
+
+    const timer = setTimeout(() => {
+      finish(() => {
+        child.kill()
+        reject(new Error(`micro-app ${name} did not print a dev URL within ${START_TIMEOUT_MS / 1000}s`))
+      })
+    }, START_TIMEOUT_MS)
+
+    const onData = (buf: Buffer) => {
+      const url = extractDevUrl(buf.toString())
+      if (url) finish(() => {
+        running.set(name, { child, url })
+        resolve(url)
+      })
+    }
+
     child.stdout?.on('data', onData)
-    child.on('error', reject)
+    child.on('error', (err) => finish(() => reject(err)))
     child.on('exit', (code) => {
       running.delete(name)
-      if (!running.has(name)) reject(new Error(`micro-app ${name} vite exited (${code}) before printing a URL`))
+      finish(() => reject(new Error(`micro-app ${name} vite exited (${code}) before printing a URL`)))
     })
   })
 }

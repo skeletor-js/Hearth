@@ -14,20 +14,10 @@ export interface AgentConfig {
   auth: AgentAuth
 }
 
-/** A single streamed update from a turn — mirrors ACP `session/update`. */
-export type SessionUpdate =
-  | { type: 'message'; role: 'assistant'; text: string }
-  | { type: 'thought'; text: string }
-  | { type: 'tool-call'; id: string; title: string; status: 'pending' | 'running' | 'done' | 'error' }
-  | { type: 'diff'; path: string; oldText: string | null; newText: string }
-  | { type: 'end'; stopReason: string }
-
-/** Permission ask raised mid-turn. The UI must answer or the agent hangs. */
-export interface PermissionRequest {
-  id: string
-  title: string
-  options: Array<{ id: string; label: string; kind: 'allow' | 'allow-always' | 'reject' }>
-}
+// The streamed-update and permission shapes live in shared/ so the renderer and
+// preload import the exact same definitions. Re-exported here for main-process code.
+export type { SessionUpdate, PermissionRequest, PermissionOption } from '../../shared/protocol.js'
+import type { SessionUpdate, PermissionRequest } from '../../shared/protocol.js'
 
 export interface AgentSession {
   readonly id: string
