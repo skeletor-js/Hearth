@@ -2,7 +2,7 @@
 // logic lives in the renderer (which is self-editable) or in the named services.
 
 import { app, BrowserWindow } from 'electron'
-import { createMainWindow } from './window.js'
+import { createMainWindow, createSnapshotWindow } from './window.js'
 import { registerIpc } from './ipc.js'
 import { ClaudeAgent } from './agents/claude.js'
 import { CodexAgent } from './agents/codex.js'
@@ -71,7 +71,8 @@ async function bootstrap(): Promise<void> {
   const selfMod = new SelfModService(REPO_ROOT, hmr)
 
   // Loopback endpoint so the agent can capture the live window (its own work).
-  startSnapshotServer(window, REPO_ROOT)
+  // Route captures use a hidden window so the user's view is never disturbed.
+  startSnapshotServer({ mainWindow: window, createSnapshotWindow }, REPO_ROOT)
 
   registerIpc({ repoRoot: REPO_ROOT, host, selfMod, window })
 

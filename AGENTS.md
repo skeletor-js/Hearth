@@ -12,17 +12,20 @@ it, **this repo is the running app** and you may be asked to change its own UI.
 
 ## Visually verifying UI changes
 
-You can't see the Electron window, but you can capture it. After changing
-renderer code, run:
+You can't see the Electron window directly, but you can capture it. Always do this
+for tasks about appearance, layout, or styling — don't claim a visual change works
+without looking at it.
 
-```
-node scripts/view-app.mjs
-```
+**Preferred: the `view_app` tool.** Hearth gives you an MCP tool `view_app` that
+returns a screenshot of the live, hot-reloaded app. Call it with no arguments to
+see the current screen, or pass a route to inspect a specific one:
 
-This saves a PNG of the live, hot-reloaded app to `.hearth/snapshot.png`. **Open /
-view that image** to confirm your change looks right before you finish. Always do
-this for tasks about appearance, layout, or styling — don't claim a visual change
-works without looking at it.
+- `view_app()` — current view
+- `view_app({ path: "/history" })` — the History view
+- `view_app({ path: "/chat" })`, `view_app({ path: "/micro/demo" })`, etc.
+
+**Fallback (shell):** `node scripts/view-app.mjs [route]` saves the same PNG to
+`.hearth/snapshot.png` for you to read — e.g. `node scripts/view-app.mjs /history`.
 
 (The raw dev URL `http://localhost:5173` will NOT render correctly outside the
-app — it needs Electron's preload bridge. Use the snapshot script instead.)
+app — it needs Electron's preload bridge. Use `view_app` instead.)

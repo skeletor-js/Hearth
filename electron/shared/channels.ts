@@ -21,6 +21,7 @@ export const HEARTH_CHANNELS = {
   agentError: 'agent:error',
   permissionRequest: 'permission:request',
   backendChanged: 'agent:backend:changed',
+  viewNavigate: 'view:navigate', // ask the renderer to route somewhere before a snapshot
 } as const
 
 export type HearthChannel = (typeof HEARTH_CHANNELS)[keyof typeof HEARTH_CHANNELS]

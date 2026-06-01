@@ -3,11 +3,12 @@
 // inspect its own UI work. Hearth's main process serves the rendered frame at a
 // loopback URL (see electron/main/snapshot.ts); this fetches it and saves a PNG.
 //
-//   node scripts/view-app.mjs            -> writes .hearth/snapshot.png
-//   node scripts/view-app.mjs out.png    -> writes the given path
+//   node scripts/view-app.mjs                  -> capture the current view
+//   node scripts/view-app.mjs /history         -> route to /history first, then capture
+//   node scripts/view-app.mjs /history out.png -> ...and write to out.png
 //
-// Then open/read the PNG to see the current app. Requires Hearth to be running
-// (`bun dev`).
+// A leading-slash first arg is treated as a route to navigate to; otherwise it's
+// the output path. Then open/read the PNG. Requires Hearth running (`bun dev`).
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { resolve, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -20,8 +21,11 @@ if (!existsSync(urlFile)) {
   process.exit(1)
 }
 
-const url = readFileSync(urlFile, 'utf-8').trim()
-const out = resolve(process.argv[2] ?? join(repoRoot, '.hearth', 'snapshot.png'))
+const args = process.argv.slice(2)
+const path = args[0]?.startsWith('/') ? args.shift() : undefined
+const base = readFileSync(urlFile, 'utf-8').trim()
+const url = path ? `${base}?path=${encodeURIComponent(path)}` : base
+const out = resolve(args[0] ?? join(repoRoot, '.hearth', 'snapshot.png'))
 
 try {
   const res = await fetch(url)

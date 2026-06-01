@@ -15,6 +15,12 @@ declare module '@tanstack/react-router' {
   }
 }
 
+// Let main route the app before an agent snapshot (see electron/main/snapshot.ts).
+// Memory history isn't URL-driven, so navigation has to go through the router.
+window.hearth?.view?.onNavigate(({ path }) => {
+  router.history.push(path)
+})
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <RouterProvider router={router} />

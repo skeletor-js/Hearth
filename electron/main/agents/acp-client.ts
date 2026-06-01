@@ -12,11 +12,14 @@
 
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { Readable, Writable } from 'node:stream'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   ClientSideConnection,
   ndJsonStream,
   PROTOCOL_VERSION,
   type Client,
+  type McpServerStdio,
   type RequestPermissionRequest,
   type RequestPermissionResponse,
   type SessionNotification,
@@ -98,11 +101,32 @@ export class AcpClient {
     })
   }
 
+  // Give the agent the Hearth `view_app` MCP tool so it can screenshot the live
+  // app. Bridges to main's loopback snapshot endpoint (written to .hearth/snapshot-url
+  // at boot). Empty if Hearth isn't serving snapshots (e.g. running headless).
+  private viewMcpServers(): McpServerStdio[] {
+    const urlFile = join(this.cwd, '.hearth', 'snapshot-url')
+    if (!existsSync(urlFile)) return []
+    const snapshotUrl = readFileSync(urlFile, 'utf-8').trim()
+    if (!snapshotUrl) return []
+    return [
+      {
+        name: 'hearth-view',
+        command: process.execPath, // electron-as-node (see env below)
+        args: [join(this.cwd, 'electron', 'main', 'agent-tools', 'view-mcp-server.mjs')],
+        env: [
+          { name: 'ELECTRON_RUN_AS_NODE', value: '1' },
+          { name: 'HEARTH_SNAPSHOT_URL', value: snapshotUrl },
+        ],
+      },
+    ]
+  }
+
   async newSession(): Promise<AgentSession> {
     const connection = this.connection
     if (!connection) throw new Error('not connected — call connect() first')
 
-    const { sessionId } = await connection.newSession({ cwd: this.cwd, mcpServers: [] })
+    const { sessionId } = await connection.newSession({ cwd: this.cwd, mcpServers: this.viewMcpServers() })
 
     return {
       id: sessionId,

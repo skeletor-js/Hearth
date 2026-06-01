@@ -37,6 +37,14 @@ const api = {
     // Answer it by option id; fire-and-forget (main holds the resolver).
     respond: (id: string, optionId: string) => ipcRenderer.send(CH.permissionRespond, { id, optionId }),
   },
+  // Main asks the renderer to route somewhere before the agent's snapshot capture.
+  view: {
+    onNavigate: (cb: (payload: { path: string }) => void) => {
+      const handler = (_e: unknown, payload: { path: string }) => cb(payload)
+      ipcRenderer.on(CH.viewNavigate, handler)
+      return () => void ipcRenderer.off(CH.viewNavigate, handler)
+    },
+  },
   selfMod: {
     history: () => ipcRenderer.invoke(CH.selfModHistory),
     undo: (hash: string) => ipcRenderer.invoke(CH.selfModUndo, hash),
