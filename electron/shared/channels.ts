@@ -11,6 +11,16 @@ export const HEARTH_CHANNELS = {
   backendSet: 'agent:backend:set',
   selfModHistory: 'self-mod:history',
   selfModUndo: 'self-mod:undo',
+  // workbench: review diff + working-tree git ops (operate on a workspace cwd;
+  // defaults to the Hearth repo until workspaces land in P3).
+  gitDiff: 'git:diff',
+  gitStatus: 'git:status',
+  gitStage: 'git:stage',
+  gitUnstage: 'git:unstage',
+  gitCommit: 'git:commit',
+  gitBranches: 'git:branches',
+  gitSwitchBranch: 'git:switch-branch',
+  gitCreatePr: 'git:create-pr',
   microAppCreate: 'micro-app:create',
   microAppStart: 'micro-app:start',
   microAppStop: 'micro-app:stop',

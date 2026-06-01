@@ -3,10 +3,14 @@ import type { AgentKind, PermissionRequest, SessionUpdate } from '../../../elect
 import { FlameMark, ThinkingEmber } from '@/shell/Mascot'
 import { Icon } from '@/shell/Icon'
 import { useShell } from '@/shell/store'
+import { useSession } from '../session-store'
 import { Composer } from './Composer'
 import { LiveTrace, inferKind, type DiffRow, type TraceResult, type TraceStep } from './trace'
 
-type Block = { kind: 'text'; text: string } | { kind: 'trace'; steps: TraceStep[]; result?: TraceResult; edits: number }
+type Block =
+  | { kind: 'text'; text: string }
+  | { kind: 'trace'; steps: TraceStep[]; result?: TraceResult; edits: number }
+  | { kind: 'planref'; done: number; total: number }
 type Msg =
   | { id: number; role: 'user'; text: string }
   | { id: number; role: 'hearth'; blocks: Block[] }
@@ -90,6 +94,19 @@ export function ChatView() {
           openText.current = true
           return replaceTail([...blocks, { kind: 'text', text: u.text }])
         }
+        case 'plan': {
+          openText.current = false
+          useSession.getState().setPlan(u.entries)
+          const done = u.entries.filter((e) => e.status === 'completed').length
+          const ref: Block = { kind: 'planref', done, total: u.entries.length }
+          const pi = blocks.findIndex((b) => b.kind === 'planref')
+          if (pi >= 0) {
+            const next = [...blocks]
+            next[pi] = ref
+            return replaceTail(next)
+          }
+          return replaceTail([...blocks, ref])
+        }
         case 'thought': {
           openText.current = false
           const { steps, rebuild } = ensureTrace()
@@ -153,7 +170,10 @@ export function ChatView() {
     const offBe = window.hearth.agent.onBackendChanged((s) => setBackend(s.kind))
     const offUpdate = window.hearth.agent.onUpdate(({ update }) => {
       apply(update)
-      if (update.type === 'end') setBusy(false)
+      if (update.type === 'end') {
+        setBusy(false)
+        useSession.getState().refreshDiff() // working tree may have changed this turn
+      }
     })
     const offError = window.hearth.agent.onError((message) => {
       openText.current = false
@@ -184,7 +204,10 @@ export function ChatView() {
     setMsgs((p) => [...p, { id: id(), role: 'user', text }, { id: id(), role: 'hearth', blocks: [] }])
     setBusy(true)
     try {
-      await window.hearth.agent.prompt(text)
+      const result = await window.hearth.agent.prompt(text)
+      if (result) {
+        useSession.getState().setLastSelfEdit({ commit: result.commit, subject: text, changedPaths: result.changedPaths })
+      }
     } catch (e) {
       setMsgs((p) => [...p, { id: id(), role: 'system', text: `failed to send: ${String(e)}` }])
       setBusy(false)
@@ -205,6 +228,7 @@ export function ChatView() {
               busy={busy}
               isLast={i === msgs.length - 1}
               onOpenReview={() => openRightTab('review')}
+              onOpenPlan={() => openRightTab('plan')}
             />
           ))}
           {permission && <ApproveCard req={permission} onAnswer={answer} />}
@@ -221,12 +245,14 @@ function MessageView({
   busy,
   isLast,
   onOpenReview,
+  onOpenPlan,
 }: {
   m: Msg
   backend: AgentKind
   busy: boolean
   isLast: boolean
   onOpenReview: () => void
+  onOpenPlan: () => void
 }) {
   if (m.role === 'system') {
     return (
@@ -263,6 +289,20 @@ function MessageView({
       )}
       {m.blocks.map((b, i) => {
         if (b.kind === 'text') return <div key={i} className="msg-body" style={{ whiteSpace: 'pre-wrap' }}>{b.text}</div>
+        if (b.kind === 'planref')
+          return (
+            <div key={i} className="wb-ref" onClick={onOpenPlan}>
+              <Icon name="list-checks" />
+              <span>
+                <b>Plan</b>
+                <span style={{ color: 'var(--subtle)' }}>
+                  {' '}
+                  · {b.done}/{b.total} done
+                </span>
+              </span>
+              <Icon name="arrow-up-right" className="arrow" />
+            </div>
+          )
         const running = liveTurn && i === m.blocks.length - 1
         return (
           <LiveTrace

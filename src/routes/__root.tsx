@@ -3,8 +3,9 @@ import { createRootRoute, Outlet, useRouterState } from '@tanstack/react-router'
 import { Rail } from '@/shell/Rail'
 import { Topbar } from '@/shell/Topbar'
 import { Resizer } from '@/shell/Resizer'
-import { Icon, PanelBtn } from '@/shell/Icon'
+import { PanelBtn } from '@/shell/Icon'
 import { useShell, applyTheme } from '@/shell/store'
+import { WorkPanel } from '@/app/workbench/WorkPanel'
 
 export const Route = createRootRoute({ component: RootLayout })
 
@@ -14,47 +15,6 @@ const CRUMB: Record<string, string> = {
   '/search': 'Search',
   '/history': 'History',
   '/settings': 'Settings',
-}
-
-// Placeholder workbench panel — replaced by the functional WorkPanel in P2-0.
-const WB_TABS = [
-  ['review', 'git-diff', 'Review'],
-  ['self', 'flame', 'Self'],
-  ['files', 'folder', 'Files'],
-  ['terminal', 'terminal-window', 'Terminal'],
-  ['browser', 'globe', 'Browser'],
-  ['plan', 'list-checks', 'Plan'],
-] as const
-
-function PanelPlaceholder({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="wp">
-      <div className="wb-tabbar">
-        {WB_TABS.map(([id, icon, label], i) => (
-          <div key={id} className={'wb-tab' + (i === 0 ? ' is-active' : '')}>
-            <Icon name={icon} fill={id === 'self' && i === 0} />
-            {label}
-          </div>
-        ))}
-        <span className="spacer" />
-        <div className="wb-actions">
-          <button className="btn-icon" title="Open a tab">
-            <Icon name="plus" />
-          </button>
-          <button className="btn-icon" title="Close" onClick={onClose}>
-            <Icon name="x" />
-          </button>
-        </div>
-      </div>
-      <div className="wb-body scroll">
-        <div className="wb-empty">
-          <Icon name="cards-three" />
-          <h3>Workbench</h3>
-          <p>Review, Files, Terminal, Browser, and Plan land here.</p>
-        </div>
-      </div>
-    </div>
-  )
 }
 
 function RootLayout() {
@@ -89,7 +49,7 @@ function RootLayout() {
           {showRight && (
             <div className={'wb-col' + (s.layout === 'focus' && !s.rightOpen ? ' is-hidden' : '')} style={s.layout === 'split' ? undefined : { width: s.wbW }}>
               {s.layout !== 'focus' && <Resizer axis="x" className="resizer-wb" onResize={s.resizeWb} />}
-              <PanelPlaceholder onClose={() => s.setRightOpen(false)} />
+              <WorkPanel orientation="right" tab={s.rightTab} setTab={s.openRightTab} onClose={() => s.setRightOpen(false)} />
             </div>
           )}
           {isSession && s.layout === 'focus' && s.rightOpen && <div className="focus-scrim" onClick={() => s.setRightOpen(false)} />}
@@ -97,7 +57,7 @@ function RootLayout() {
         {isSession && s.bottomOpen && (
           <div className="wb-panel" style={{ height: s.panelH }}>
             <Resizer axis="y" className="resizer-panel" onResize={s.resizePanel} />
-            <PanelPlaceholder onClose={() => s.setBottomOpen(false)} />
+            <WorkPanel orientation="bottom" tab={s.bottomTab} setTab={s.setBottomTab} onClose={() => s.setBottomOpen(false)} />
           </div>
         )}
       </div>

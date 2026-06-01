@@ -5,6 +5,16 @@
 import { app, ipcMain, type BrowserWindow } from 'electron'
 import { scaffoldMicroApp } from './micro-apps/scaffold.js'
 import { startMicroApp, stopMicroApp } from './micro-apps/server.js'
+import { getDiff } from './self-mod/git-diff.js'
+import {
+  branches as gitBranches,
+  commit as gitCommit,
+  createPr as gitCreatePr,
+  stage as gitStage,
+  status as gitStatus,
+  switchBranch as gitSwitchBranch,
+  unstage as gitUnstage,
+} from './self-mod/git-ops.js'
 import { HEARTH_CHANNELS } from '../shared/channels.js'
 import type { SelfModService } from './self-mod/self-mod-service.js'
 import type { AgentHost } from './agents/agent-host.js'
@@ -73,6 +83,22 @@ export function registerIpc(services: MainServices): void {
 
   ipcMain.handle(HEARTH_CHANNELS.selfModHistory, () => selfMod.history())
   ipcMain.handle(HEARTH_CHANNELS.selfModUndo, (_e, hash: string) => selfMod.undo(hash))
+
+  // Workbench git surface. `cwd` defaults to the Hearth repo until workspaces
+  // (P3) thread a real per-session cwd.
+  const at = (cwd?: string) => cwd || repoRoot
+  ipcMain.handle(HEARTH_CHANNELS.gitDiff, (_e, cwd?: string, rev?: string) => getDiff(at(cwd), rev))
+  ipcMain.handle(HEARTH_CHANNELS.gitStatus, (_e, cwd?: string) => gitStatus(at(cwd)))
+  ipcMain.handle(HEARTH_CHANNELS.gitStage, (_e, paths: string[], cwd?: string) => gitStage(at(cwd), paths))
+  ipcMain.handle(HEARTH_CHANNELS.gitUnstage, (_e, paths: string[], cwd?: string) => gitUnstage(at(cwd), paths))
+  ipcMain.handle(HEARTH_CHANNELS.gitCommit, (_e, message: string, cwd?: string) => gitCommit(at(cwd), message))
+  ipcMain.handle(HEARTH_CHANNELS.gitBranches, (_e, cwd?: string) => gitBranches(at(cwd)))
+  ipcMain.handle(HEARTH_CHANNELS.gitSwitchBranch, (_e, name: string, create: boolean, cwd?: string) =>
+    gitSwitchBranch(at(cwd), name, create),
+  )
+  ipcMain.handle(HEARTH_CHANNELS.gitCreatePr, (_e, title: string, body: string, cwd?: string) =>
+    gitCreatePr(at(cwd), title, body),
+  )
 
   ipcMain.handle(HEARTH_CHANNELS.microAppCreate, (_e, name: string) =>
     scaffoldMicroApp(repoRoot, name),

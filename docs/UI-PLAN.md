@@ -145,23 +145,23 @@ each with its own active tab. Panel content is scoped to the **active session +
 workspace cwd**. Chat `wb-ref`/`plan-ref` chips open the right panel to a tab
 (`openTab`). Full tab set: Review · Self · Files · Terminal · Browser · Plan (Files/
 Terminal/Browser land in P4).
-- [ ] **P2-0.** Workbench shell: right + bottom panels (shared `WorkPanel`), tab bar
+- [x] **P2-0.** Workbench shell: right + bottom panels (shared `WorkPanel`), tab bar
       (badges), add-tab menu, env/git button, close. Wire chat chips → `openTab`.
-- [ ] **P2-1.** ∥ **Review/diff:** `getDiff(cwd, rev?)` IPC (dugite) → structured
+- [x] **P2-1.** ∥ **Review/diff:** `getDiff(cwd, rev?)` IPC (dugite) → structured
       hunks; `DiffView` + Review subhead (branch, +/-, "Open in Self"). TDD the diff parse.
-- [ ] **P2-2.** ∥ **Plan:** capture ACP `plan` session updates (currently dropped in
+- [x] **P2-2.** ∥ **Plan:** capture ACP `plan` session updates (currently dropped in
       `acp-translate`) → per-session plan store → Plan tab + chat plan-ref.
-- [ ] **P2-3.** ∥ **Self tab:** wired to self-mod, always available. **Apply model:
+- [x] **P2-3.** ∥ **Self tab:** wired to self-mod, always available. **Apply model:
       AUTO-APPLY** (locked) — permission-gate *before* the write → agent writes →
       `captureTurn` commits + HMR. So the Self tab shows *what just changed* (the
       latest self-edit set + result) with an **Undo** (→ History), not a manual apply
       gate. *Accept:* reflects the latest self-edit; Undo reverts it.
-- [ ] **P2-4.** ∥ **Environment & git** (the panel's git button + Review's **Draft
+- [x] **P2-4.** ∥ **Environment & git** (the panel's git button + Review's **Draft
       PR**): working-tree status, stage/commit, branch switch/create, create PR
       (via `gh` if present, else surface the command). Operates on the active
       workspace cwd; built on dugite. TDD the git ops. *(Net-new subsystem the panel
       bars imply — was previously only a toast in the mock.)*
-- [ ] **P2-5.** Gates + visual (both panels, all three layouts); checkpoint commit.
+- [x] **P2-5.** Gates + visual (both panels, all three layouts); checkpoint commit.
 
 ### P3 — Workspaces + Sessions (keystone; serial spine, ∥ within)
 - [ ] **P3-1.** Workspace registry (`electron/main/workspaces/`): built-in Hearth

@@ -4,10 +4,14 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { HEARTH_CHANNELS as CH } from '../shared/channels.js'
 import type { AgentKind, AgentUpdatePayload, BackendStatus, PermissionRequestPayload } from '../shared/protocol.js'
+import type { DiffSummary } from '../main/self-mod/git-diff.js'
+import type { BranchInfo, GitStatus, PrResult } from '../main/self-mod/git-ops.js'
+import type { SelfModResult } from '../main/self-mod/self-mod-service.js'
+import type { SelfModLogEntry } from '../main/self-mod/git.js'
 
 const api = {
   agent: {
-    prompt: (text: string) => ipcRenderer.invoke(CH.agentPrompt, text),
+    prompt: (text: string): Promise<SelfModResult | null> => ipcRenderer.invoke(CH.agentPrompt, text),
     cancel: () => ipcRenderer.invoke(CH.agentCancel),
     getBackend: (): Promise<AgentKind> => ipcRenderer.invoke(CH.backendGet),
     setBackend: (kind: AgentKind): Promise<BackendStatus> => ipcRenderer.invoke(CH.backendSet, kind),
@@ -46,8 +50,20 @@ const api = {
     },
   },
   selfMod: {
-    history: () => ipcRenderer.invoke(CH.selfModHistory),
-    undo: (hash: string) => ipcRenderer.invoke(CH.selfModUndo, hash),
+    history: (): Promise<SelfModLogEntry[]> => ipcRenderer.invoke(CH.selfModHistory),
+    undo: (hash: string): Promise<SelfModResult> => ipcRenderer.invoke(CH.selfModUndo, hash),
+  },
+  git: {
+    diff: (cwd?: string, rev?: string): Promise<DiffSummary> => ipcRenderer.invoke(CH.gitDiff, cwd, rev),
+    status: (cwd?: string): Promise<GitStatus> => ipcRenderer.invoke(CH.gitStatus, cwd),
+    stage: (paths: string[], cwd?: string): Promise<void> => ipcRenderer.invoke(CH.gitStage, paths, cwd),
+    unstage: (paths: string[], cwd?: string): Promise<void> => ipcRenderer.invoke(CH.gitUnstage, paths, cwd),
+    commit: (message: string, cwd?: string): Promise<string> => ipcRenderer.invoke(CH.gitCommit, message, cwd),
+    branches: (cwd?: string): Promise<BranchInfo> => ipcRenderer.invoke(CH.gitBranches, cwd),
+    switchBranch: (name: string, create: boolean, cwd?: string): Promise<void> =>
+      ipcRenderer.invoke(CH.gitSwitchBranch, name, create, cwd),
+    createPr: (title: string, body: string, cwd?: string): Promise<PrResult> =>
+      ipcRenderer.invoke(CH.gitCreatePr, title, body, cwd),
   },
   microApps: {
     create: (name: string) => ipcRenderer.invoke(CH.microAppCreate, name),

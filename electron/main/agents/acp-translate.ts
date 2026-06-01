@@ -115,8 +115,20 @@ export function translateUpdate(
       return out
     }
 
-    // Plans, mode/config/usage/command updates, and the echo of the user's own
-    // message aren't part of the v1 chat surface.
+    case 'plan':
+      return [
+        {
+          type: 'plan',
+          entries: update.entries.map((e) => ({
+            content: e.content,
+            status: e.status,
+            priority: e.priority,
+          })),
+        },
+      ]
+
+    // mode/config/usage/command updates, and the echo of the user's own
+    // message aren't part of the chat surface.
     default:
       return []
   }

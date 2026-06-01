@@ -14,12 +14,20 @@ export interface BackendStatus {
   error?: string
 }
 
+/** A single plan task (mirrors ACP `PlanEntry`). */
+export interface PlanEntry {
+  content: string
+  status: 'pending' | 'in_progress' | 'completed'
+  priority: 'high' | 'medium' | 'low'
+}
+
 /** A single streamed update from a turn — mirrors ACP `session/update`. */
 export type SessionUpdate =
   | { type: 'message'; role: 'assistant'; text: string }
   | { type: 'thought'; text: string }
   | { type: 'tool-call'; id: string; title: string; status: 'pending' | 'running' | 'done' | 'error' }
   | { type: 'diff'; path: string; oldText: string | null; newText: string }
+  | { type: 'plan'; entries: PlanEntry[] }
   | { type: 'end'; stopReason: string }
 
 /** One option the user can pick when answering a permission ask. */

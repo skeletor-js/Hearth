@@ -145,7 +145,28 @@ describe('translateUpdate', () => {
 
   test('user_message_chunk and unhandled updates are dropped', () => {
     expect(translateUpdate(u({ sessionUpdate: 'user_message_chunk', content: { type: 'text', text: 'me' } }), titles())).toEqual([])
-    expect(translateUpdate(u({ sessionUpdate: 'plan', entries: [] }), titles())).toEqual([])
     expect(translateUpdate(u({ sessionUpdate: 'usage_update' }), titles())).toEqual([])
+  })
+
+  test('plan -> plan update carrying entries (content/status/priority)', () => {
+    const out = translateUpdate(
+      u({
+        sessionUpdate: 'plan',
+        entries: [
+          { content: 'Read the file', status: 'completed', priority: 'high' },
+          { content: 'Make the edit', status: 'in_progress', priority: 'medium' },
+        ],
+      }),
+      titles(),
+    )
+    expect(out).toEqual([
+      {
+        type: 'plan',
+        entries: [
+          { content: 'Read the file', status: 'completed', priority: 'high' },
+          { content: 'Make the edit', status: 'in_progress', priority: 'medium' },
+        ],
+      },
+    ])
   })
 })

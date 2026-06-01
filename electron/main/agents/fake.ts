@@ -37,6 +37,15 @@ export class FakeAgent implements Agent {
     await sleep(120)
     this.emit(sessionId, { type: 'message', role: 'assistant', text: `On it — "${text.slice(0, 40)}".` })
     await sleep(120)
+    this.emit(sessionId, {
+      type: 'plan',
+      entries: [
+        { content: 'Locate the title in the shell', status: 'completed', priority: 'high' },
+        { content: 'Edit the markup', status: 'in_progress', priority: 'high' },
+        { content: 'Hot-reload and verify', status: 'pending', priority: 'medium' },
+      ],
+    })
+    await sleep(120)
     this.emit(sessionId, { type: 'thought', text: `Opening ${path} to find the title.` })
     await sleep(150)
     this.emit(sessionId, { type: 'tool-call', id: 'tc1', title: `Edit ${path}`, status: 'running' })

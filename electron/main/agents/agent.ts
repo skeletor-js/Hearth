@@ -17,7 +17,7 @@ export interface AgentConfig {
 
 // The streamed-update and permission shapes live in shared/ so the renderer and
 // preload import the exact same definitions. Re-exported here for main-process code.
-export type { SessionUpdate, PermissionRequest, PermissionOption } from '../../shared/protocol.js'
+export type { SessionUpdate, PermissionRequest, PermissionOption, PlanEntry } from '../../shared/protocol.js'
 import type { SessionUpdate, PermissionRequest } from '../../shared/protocol.js'
 
 export interface AgentSession {

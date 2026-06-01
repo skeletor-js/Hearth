@@ -23,7 +23,7 @@ describe('FakeAgent scripted turn', () => {
   test('emits every update variant in order and ends', async () => {
     const { updates } = await runTurn('allow')
     const types = updates.map((u) => u.type)
-    expect(types).toEqual(['message', 'thought', 'tool-call', 'diff', 'tool-call', 'message', 'end'])
+    expect(types).toEqual(['message', 'plan', 'thought', 'tool-call', 'diff', 'tool-call', 'message', 'end'])
     expect(updates.at(-1)).toEqual({ type: 'end', stopReason: 'end_turn' })
   })
 
