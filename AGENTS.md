@@ -36,3 +36,43 @@ A good loop: `read_ui` (or `view_app`) to orient → `click`/`fill`/`eval_js` to
 Shell fallback for screenshots: `node scripts/view-app.mjs [route]` saves a PNG to
 `.hearth/snapshot.png`. (The raw dev URL `http://localhost:5173` will NOT render
 outside the app — it needs the preload bridge.)
+
+## Design (keep Hearth's UI coherent)
+
+Reuse the design system; don't invent a parallel one.
+
+- **Use tokens, never hardcode.** Pull from `src/styles/hearth.css`: `var(--bg)`,
+  `var(--bg-panel)`, `var(--strong)`/`var(--subtle)`/`var(--faint)` for text,
+  `var(--accent)`, `var(--border)`/`var(--border-strong)`, the `--t-*` type scale,
+  `var(--font)`/`var(--mono)`. They flip with theme — hardcoded hex won't.
+- **Reuse the vocabulary.** Existing classes (`btn`, `card-row`, `chip`, `screen`,
+  `wb-*`, `dot ok|warn|err`) and the Phosphor `<Icon name=…>` set. Don't mix in a
+  different icon family or a one-off button style for a single screen.
+- **No AI slop.** Don't pile cards on cards, sprinkle gradients/badges/emoji to fill
+  space, or add affordances that aren't earned. Quiet, spacious, intentional.
+- **Use the full canvas** on app pages; don't float a tiny modal-like card in empty
+  space. **Human copy** — no exposed jargon, no em dashes, no decorative restating.
+
+## Parallel subagents
+
+If you spawn parallel subagents to edit Hearth, **give each subagent a disjoint set
+of files.** Two subagents editing the same file race on disk (last writer wins) — if
+work must share a file (e.g. both touch `src/routes/__root.tsx`), do it sequentially
+or assign it to one subagent. Hearth groups a turn's commits by file so disjoint work
+is independently undoable; overlapping work merges into one commit.
+
+## Validation
+
+After editing renderer or main-process code, run `bun run typecheck`. Restart-tier
+edits (`electron/**`, configs) are typechecked automatically before the app restarts;
+a failure is surfaced rather than bricking the app.
+
+## Live-view semantics (important for view_app)
+
+- **Single-agent edits** hot-reload into the live app immediately — your normal
+  `view_app` verify-as-you-go loop works as usual.
+- **During parallel-subagent work**, the live UI is held at its pre-turn state and
+  swaps in atomically when the parallel phase finishes (so the user never sees a
+  half-applied, flickering, or crashing UI). So mid-parallel-phase, `view_app` shows
+  the OLD UI — verify your edits by reading files / running typecheck, not by
+  screenshotting, until the phase completes.

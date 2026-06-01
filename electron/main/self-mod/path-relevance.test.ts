@@ -1,5 +1,5 @@
 import { test, expect, describe } from 'bun:test'
-import { classifyPath, classifyBatch, type ReloadKind } from './path-relevance'
+import { classifyPath, classifyBatch, isViteTrackablePath, type ReloadKind } from './path-relevance'
 
 describe('classifyPath', () => {
   const cases: Array<[string, ReloadKind]> = [
@@ -80,4 +80,11 @@ describe('classifyBatch (strongest wins)', () => {
   test('empty array => hmr (documented default)', () => {
     expect(classifyBatch([])).toBe('hmr')
   })
+})
+
+describe('isViteTrackablePath', () => {
+  const yes = ['src/app/chat/ChatApp.tsx', 'src/shell/Rail.tsx', 'src/styles/hearth.css', 'index.html']
+  const no = ['electron/main/index.ts', 'electron/preload/index.ts', 'package.json', 'docs/x.md']
+  for (const p of yes) test(`${p} → trackable`, () => expect(isViteTrackablePath(p)).toBe(true))
+  for (const p of no) test(`${p} → not trackable`, () => expect(isViteTrackablePath(p)).toBe(false))
 })

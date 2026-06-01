@@ -15,6 +15,8 @@ export const HEARTH_CHANNELS = {
   selfModHistory: 'self-mod:history',
   selfModUndo: 'self-mod:undo',
   selfModRedo: 'self-mod:redo',
+  selfModActivity: 'self-mod:activity', // main → renderer: live subagent lanes (W4)
+  selfModValidation: 'self-mod:validation', // main → renderer: post-edit typecheck result (W5)
   // workbench: review diff + working-tree git ops (operate on a workspace cwd;
   // defaults to the Hearth repo until workspaces land in P3).
   gitDiff: 'git:diff',

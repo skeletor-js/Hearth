@@ -32,6 +32,17 @@ export function classifyPath(repoRelPath: string): ReloadKind {
   return 'hmr'
 }
 
+/**
+ * True for paths the Vite dev server serves to the renderer and the self-mod
+ * overlay (W1) can therefore pin to a baseline and swap atomically. Narrower than
+ * the reload classifier: the overlay can't make main-process code, configs, or
+ * package installs visible — those go through HmrController's restart tiers.
+ */
+export function isViteTrackablePath(repoRelPath: string): boolean {
+  const p = repoRelPath.replace(/\\/g, '/')
+  return p.startsWith('src/') || p === 'index.html'
+}
+
 /** The strongest reload required by a batch of edits. */
 export function classifyBatch(paths: string[]): ReloadKind {
   let strongest: ReloadKind = 'hmr'

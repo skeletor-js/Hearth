@@ -67,6 +67,10 @@ export function mapPermissionKind(kind: PermissionOptionKind): 'allow' | 'allow-
  * tool that asked.
  */
 export function translatePermission(req: RequestPermissionRequest): PermissionRequest {
+  // Surface the raw shell command (when present) so the policy layer can
+  // auto-reject source-mutating shell. ACP carries it in the tool call's raw input.
+  const rawInput = (req.toolCall as { rawInput?: { command?: unknown } }).rawInput
+  const command = typeof rawInput?.command === 'string' ? rawInput.command : undefined
   return {
     id: req.toolCall.toolCallId,
     title: req.toolCall.title ?? 'Permission requested',
@@ -75,6 +79,7 @@ export function translatePermission(req: RequestPermissionRequest): PermissionRe
       label: o.name,
       kind: mapPermissionKind(o.kind),
     })),
+    ...(command ? { command } : {}),
   }
 }
 
@@ -102,30 +107,34 @@ export function translateUpdate(
 
     case 'tool_call': {
       titles.set(update.toolCallId, update.title)
+      const parent = parentToolCallId(update)
       const out: SessionUpdate[] = [
         {
           type: 'tool-call',
           id: update.toolCallId,
           title: update.title,
           status: mapToolStatus(update.status, false),
+          ...(parent ? { parentToolCallId: parent } : {}),
         },
       ]
-      out.push(...diffsFromContent(update.content))
+      out.push(...diffsFromContent(update.content, parent))
       return out
     }
 
     case 'tool_call_update': {
       const title = update.title ?? titles.get(update.toolCallId) ?? 'Tool call'
       if (update.title) titles.set(update.toolCallId, update.title)
+      const parent = parentToolCallId(update)
       const out: SessionUpdate[] = [
         {
           type: 'tool-call',
           id: update.toolCallId,
           title,
           status: mapToolStatus(update.status, true),
+          ...(parent ? { parentToolCallId: parent } : {}),
         },
       ]
-      out.push(...diffsFromContent(update.content))
+      out.push(...diffsFromContent(update.content, parent))
       return out
     }
 
@@ -152,12 +161,33 @@ type ToolContent = NonNullable<
   Extract<AcpSessionUpdate, { sessionUpdate: 'tool_call' }>['content']
 >
 
-function diffsFromContent(content: ToolContent | null | undefined): SessionUpdate[] {
+/**
+ * The parent Task tool-call id when this update came from inside a subagent.
+ * The Claude adapter stashes it at `_meta.claudeCode.parentToolUseId`; ACP's
+ * `_meta` is an open record so we read it defensively. Codex doesn't populate it
+ * (returns undefined → treated as the main thread). See SELF-MOD-HARDENING-PLAN W0.
+ */
+function parentToolCallId(update: { _meta?: unknown }): string | undefined {
+  const meta = update._meta as { claudeCode?: { parentToolUseId?: unknown } } | undefined
+  const id = meta?.claudeCode?.parentToolUseId
+  return typeof id === 'string' && id.length > 0 ? id : undefined
+}
+
+function diffsFromContent(
+  content: ToolContent | null | undefined,
+  parent?: string,
+): SessionUpdate[] {
   if (!content) return []
   const out: SessionUpdate[] = []
   for (const item of content) {
     if (item.type === 'diff') {
-      out.push({ type: 'diff', path: item.path, oldText: item.oldText ?? null, newText: item.newText })
+      out.push({
+        type: 'diff',
+        path: item.path,
+        oldText: item.oldText ?? null,
+        newText: item.newText,
+        ...(parent ? { parentToolCallId: parent } : {}),
+      })
     }
   }
   return out

@@ -18,14 +18,20 @@ agent can edit renderer source on disk and the change hot-reloads into the
 running UI. Self-evolution is not a feature we build; it falls out of running
 the app as its own dev environment.
 
-The compiled/native concerns stay in the main process, thin and stable. The
-agent evolves the renderer + skills/prompts, never the parts that would need a
-rebuild.
+The renderer hot-reloads, so it's the agent's *primary* canvas. But the agent
+isn't fenced to it: it may edit anything in the repo — `electron/main`, preload,
+config, deps included — **except** a hard-blocked denylist (secrets, system
+paths, internal state) and a small protected safety-net island. Main-process
+edits can't hot-reload, so they ride a guarded path (blocking typecheck + a boot
+watchdog that auto-reverts a boot-breaking edit). Safety comes from
+*recoverability*, not from fencing the agent out. See
+[the self-evolution engine](#the-self-evolution-engine-electronmainself-mod) and
+[SELF-MOD-HARDENING-PLAN.md](SELF-MOD-HARDENING-PLAN.md).
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Electron MAIN  (Node — thin, stable, NOT self-edited)       │
-│                                                              │
+│  Electron MAIN  (Node — editable but guarded;               │
+│                  self-mod/ island stays inviolable)          │
 │  window mgmt ── ipc ── dev-server (serves renderer)          │
 │       │                                                       │
 │       ├── agents/      ACP client → Claude Code / Codex       │
@@ -36,7 +42,7 @@ rebuild.
                 ▼                               ▼
 ┌──────────────────────────────┐   ┌──────────────────────────┐
 │  RENDERER (React, Vite)      │   │  Agent subprocesses       │
-│  — self-evolvable surface —  │   │  (claude-agent-acp, codex)│
+│  — primary canvas (hot) —    │   │  (claude-agent-acp, codex)│
 │                              │   └──────────────────────────┘
 │  routes/   TanStack file     │
 │  app/      sidebar apps      │   ┌──────────────────────────┐
@@ -49,8 +55,11 @@ rebuild.
 ## Process boundaries (who owns what)
 
 **Main process** owns everything that touches the OS, credentials, child
-processes, or git. It is the trust boundary. It does NOT contain app feature
-logic the agent would want to rewrite.
+processes, or git. It is the trust boundary. It *is* editable by the agent
+(guarded — see self-evolution below), but a **protected island** within it —
+`electron/main/self-mod/`, the boot watchdog, and the recovery anchor — is
+inviolable and dependency-isolated, so the agent can never disarm its own
+guardrails even while rewriting the rest of main.
 
 - `electron/main/index.ts` — app lifecycle, creates the window, wires services.
 - `electron/main/window.ts` — BrowserWindow creation, macOS chrome.
@@ -92,20 +101,35 @@ routing requests through a subscription" lane. See docs/COMPLIANCE.md.
 
 ## The self-evolution engine (`electron/main/self-mod/`)
 
-When the agent edits Hearth's own source, three things happen:
+**Scope first.** A write guard (port of Stella's `isBlockedPath`) splits the repo
+into three tiers: *hard-blocked* (secrets, system dirs, internal state — never
+writable), the *protected island* (the self-mod engine, boot watchdog, recovery
+anchor, hook config — editable only with explicit user approval, dependency-
+isolated from editable code), and the *canvas* (everything else, including the
+rest of `electron/main`). Writes route through Hearth (ACP `fs` capability) so
+the guard is a real choke point; shell writes that bypass it are forced back onto
+the mediated path (a `PreToolUse` hook on Claude, permission-reject on Codex) and
+caught by a file-watch backstop.
 
-1. **Classify the edit** (`path-relevance.ts`) — renderer component → HMR;
-   route tree → full reload; main-process file → process restart. Port Stella's
-   `path-relevance.ts` classification tiers.
-2. **Apply it** (`hmr.ts`) — drive Vite HMR for hot-swappable paths; escalate to
-   reload/restart otherwise. Tracks in-flight edits so concurrent agent runs
-   don't stomp each other.
-3. **Commit it** (`git.ts` via `dugite`) — every self-mod is a git commit tagged
-   with the conversation that caused it. "Undo that" → `git revert`. This is the
-   safety net; an AI does not rewrite the app without a reversible history.
+When the agent edits a canvas path, four things happen:
 
-`self-mod-service.ts` orchestrates the three and exposes `commit` / `revert` to
-IPC.
+1. **Classify the edit** (`path-relevance.ts`) — renderer → HMR; route tree/html
+   → full reload; main/preload/config → process restart. Port Stella's tiers.
+2. **Apply it** (`hmr.ts` + a snapshot-overlay Vite plugin) — single-writer edits
+   hot-swap immediately; the moment **2+ subagents write concurrently**, the
+   overlay pins their pre-edit baselines and swaps the whole batch in atomically,
+   so the live UI never shows a half-applied state. Restart-tier edits run a
+   **blocking typecheck** first and refuse to restart if it fails.
+3. **Commit it** (`git.ts` via `dugite`) — a turn becomes **file-disjoint
+   commits** (one per subagent group), grouped by a `Hearth-Run` trailer. Undo is
+   Model A net-effect `git revert`; History shows the logical timeline.
+4. **Recover if it breaks** — a main-anchored crash surface (the renderer can't
+   be the only net since main is editable) offers Reload / Repair / Undo, with one
+   guarded auto-repair; a **boot watchdog** auto-reverts a main edit that bricks
+   startup. An async typecheck after canvas edits surfaces type breakage.
+
+`self-mod-service.ts` orchestrates these and exposes `commit` / `revert` to IPC.
+Full design + rationale in [SELF-MOD-HARDENING-PLAN.md](SELF-MOD-HARDENING-PLAN.md).
 
 ## Micro-apps (`electron/main/micro-apps/` + `templates/micro-app/`)
 
@@ -143,8 +167,10 @@ state.
 ## What we deliberately do NOT do
 
 - No Next.js. SSR is meaningless in a renderer; plain Vite + React.
-- No self-modification of compiled/native code. The main process is restartable
-  but is not the agent's canvas.
+- No *unguarded* self-modification of main/native code, and no agent writes to
+  the protected safety-net island or the secrets/system denylist. Main is
+  editable, but only behind the boot watchdog + blocking typecheck; the island and
+  denylist are off-limits.
 - No hand-rolled ACP framing. Use the SDK.
 - No module federation for micro-apps. Standalone server + iframe is simpler and
   safer.

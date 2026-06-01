@@ -3,6 +3,7 @@ import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwind from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
+import { selfModOverlay } from './electron/vite-plugins/self-mod-overlay'
 
 // Three build targets: main (Node), preload (Node, sandboxed bridge), renderer (web).
 // The renderer is where all self-evolvable code lives — it is served by a live
@@ -30,7 +31,13 @@ export default defineConfig({
     resolve: {
       alias: { '@': resolve(__dirname, 'src') },
     },
+    // Disable Vite's built-in error overlay: self-mod build/parse errors are
+    // forwarded to Hearth's own crash surface instead (src/lib/vite-error-recovery.ts, W3).
+    server: { hmr: { overlay: false } },
     plugins: [
+      // Self-mod snapshot overlay: pins modules to baselines during a
+      // parallel-subagent turn so the swap is atomic (W1).
+      selfModOverlay(resolve(__dirname)),
       tanstackRouter({ target: 'react', routesDirectory: 'src/routes' }),
       react(),
       tailwind(),

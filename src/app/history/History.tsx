@@ -24,6 +24,18 @@ const TITLE: Record<SelfModKind, { h1: string; sub: string; empty: string }> = {
   },
 }
 
+/** Group adjacent entries that share a runId (one turn's per-subagent commits are
+ * made together, so they're contiguous in the log). null runId → singleton. */
+function groupRuns(entries: SelfModLogEntry[]): Array<{ runId: string | null; members: SelfModLogEntry[] }> {
+  const groups: Array<{ runId: string | null; members: SelfModLogEntry[] }> = []
+  for (const e of entries) {
+    const last = groups[groups.length - 1]
+    if (e.runId && last && last.runId === e.runId) last.members.push(e)
+    else groups.push({ runId: e.runId, members: [e] })
+  }
+  return groups
+}
+
 export function History() {
   const navigate = useNavigate()
   const [entries, setEntries] = useState<SelfModLogEntry[]>([])
@@ -72,6 +84,53 @@ export function History() {
       setBusy(null)
     }
   }
+
+  // Undo/redo every member of a run (file-disjoint, so order is safe). Reverts
+  // sequentially through the shared `step` so conflicts still route to the agent.
+  const stepRun = async (op: 'undo' | 'redo', members: SelfModLogEntry[]) => {
+    const targets = members.filter((m) => (op === 'undo' ? !m.reverted : m.reverted))
+    for (const m of targets) await step(op, m.hash, m.subject)
+  }
+
+  const row = (e: SelfModLogEntry, nested = false) => (
+    <div
+      key={e.hash}
+      className={'card-row evo-row' + (e.reverted ? ' evo-undone' : '')}
+      style={{ alignItems: 'flex-start', ...(nested ? { marginLeft: 22 } : {}) }}
+    >
+      <span className="cr-mark">
+        <Icon name={e.reverted ? 'arrow-counter-clockwise' : 'flame'} fill={!e.reverted} />
+      </span>
+      <div className="cr-body">
+        <div className="cr-title">
+          <span className="evo-name">{e.subagent && nested ? e.subagent : e.subject}</span>
+          {e.reverted ? (
+            <span className="chip evo-badge-undone" style={{ height: 18 }}>
+              <Icon name="arrow-counter-clockwise" className="ico-12" /> Undone
+            </span>
+          ) : (
+            <span className="chip chip-accent" style={{ height: 18 }}>
+              <Icon name="check" className="ico-12" /> Applied
+            </span>
+          )}
+        </div>
+        <div className="evo-stats">
+          <span style={{ fontFamily: 'var(--mono)' }}>{e.hash.slice(0, 7)}</span>
+        </div>
+      </div>
+      {e.reverted ? (
+        <button className="btn btn-sm btn-quiet" disabled={busy === e.hash} onClick={() => step('redo', e.hash, e.subject)}>
+          <Icon name="arrow-u-up-right" /> {busy === e.hash ? 'Redoing…' : 'Redo'}
+        </button>
+      ) : (
+        <button className="btn btn-sm btn-quiet" disabled={busy === e.hash} onClick={() => step('undo', e.hash, e.subject)}>
+          <Icon name="arrow-u-up-left" /> {busy === e.hash ? 'Undoing…' : 'Undo'}
+        </button>
+      )}
+    </div>
+  )
+
+  const groups = groupRuns(shown)
 
   const t = TITLE[kind]
   return (
@@ -125,39 +184,36 @@ export function History() {
               <p>{t.empty}</p>
             </div>
           ) : (
-            shown.map((e) => (
-              <div key={e.hash} className={'card-row evo-row' + (e.reverted ? ' evo-undone' : '')} style={{ alignItems: 'flex-start' }}>
-                <span className="cr-mark">
-                  <Icon name={e.reverted ? 'arrow-counter-clockwise' : 'flame'} fill={!e.reverted} />
-                </span>
-                <div className="cr-body">
-                  <div className="cr-title">
-                    <span className="evo-name">{e.subject}</span>
-                    {e.reverted ? (
-                      <span className="chip evo-badge-undone" style={{ height: 18 }}>
-                        <Icon name="arrow-counter-clockwise" className="ico-12" /> Undone
-                      </span>
-                    ) : (
-                      <span className="chip chip-accent" style={{ height: 18 }}>
-                        <Icon name="check" className="ico-12" /> Applied
-                      </span>
-                    )}
+            groups.map((g) => {
+              if (g.members.length === 1) return row(g.members[0])
+              // A parallel-subagent run: one expandable block, Undo/Redo all + per-member.
+              const allUndone = g.members.every((m) => m.reverted)
+              const base = g.members[0].subject.replace(/^[^:]+:\s*/, '')
+              return (
+                <div key={g.runId!} className="card-row evo-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="cr-mark">
+                      <Icon name="git-branch" fill />
+                    </span>
+                    <div className="cr-body">
+                      <div className="cr-title">
+                        <span className="evo-name">{base}</span>
+                        <span className="chip" style={{ height: 18 }}>{g.members.length} parallel edits</span>
+                      </div>
+                    </div>
+                    <button
+                      className="btn btn-sm btn-quiet"
+                      disabled={!!busy}
+                      onClick={() => stepRun(allUndone ? 'redo' : 'undo', g.members)}
+                    >
+                      <Icon name={allUndone ? 'arrow-u-up-right' : 'arrow-u-up-left'} />{' '}
+                      {allUndone ? 'Redo all' : 'Undo all'}
+                    </button>
                   </div>
-                  <div className="evo-stats">
-                    <span style={{ fontFamily: 'var(--mono)' }}>{e.hash.slice(0, 7)}</span>
-                  </div>
+                  {g.members.map((m) => row(m, true))}
                 </div>
-                {e.reverted ? (
-                  <button className="btn btn-sm btn-quiet" disabled={busy === e.hash} onClick={() => step('redo', e.hash, e.subject)}>
-                    <Icon name="arrow-u-up-right" /> {busy === e.hash ? 'Redoing…' : 'Redo'}
-                  </button>
-                ) : (
-                  <button className="btn btn-sm btn-quiet" disabled={busy === e.hash} onClick={() => step('undo', e.hash, e.subject)}>
-                    <Icon name="arrow-u-up-left" /> {busy === e.hash ? 'Undoing…' : 'Undo'}
-                  </button>
-                )}
-              </div>
-            ))
+              )
+            })
           )}
         </div>
       </div>

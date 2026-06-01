@@ -26,6 +26,7 @@ import {
 } from '@agentclientprotocol/sdk'
 import type { AgentSession, PermissionRequest, SessionUpdate } from './agent.js'
 import { normalizeModels, translatePermission, translateUpdate } from './acp-translate.js'
+import { createWriteBroker } from '../self-mod/write-broker.js'
 
 export interface AdapterSpec {
   /** Executable + args that launch the ACP adapter, e.g. the claude-agent-acp bin. */
@@ -74,6 +75,18 @@ export class AcpClient {
     const fromAgent = Readable.toWeb(child.stdout) as ReadableStream<Uint8Array>
     const stream = ndJsonStream(toAgent, fromAgent)
 
+    // W0b write-mediation: when enabled, the agent's Edit/Write tools route writes
+    // THROUGH Hearth (scope guard + 3-way merge). Gated behind HEARTH_MEDIATE_WRITES.
+    // SPIKE RESULT (see SELF-MOD-HARDENING-PLAN W0b): the current
+    // @zed-industries/claude-agent-acp adapter does NOT route Edit/Write through the
+    // client fs capability — it writes disk directly and reports diffs. So mediation
+    // is inert with this adapter and stays OFF; scope enforcement instead happens at
+    // the commit layer (self-mod-service), and correctness comes from the overlay +
+    // git-HEAD + commits. The broker is kept, tested, and ready for a future adapter
+    // that honors client fs. The diff stream is unaffected by the capability.
+    const mediate = !!process.env.HEARTH_MEDIATE_WRITES
+    const broker = mediate ? createWriteBroker({ repoRoot: this.cwd }) : null
+
     const client: Client = {
       sessionUpdate: async (params: SessionNotification) => {
         for (const update of translateUpdate(params.update, this.toolTitles)) {
@@ -90,14 +103,29 @@ export class AcpClient {
           return { outcome: { outcome: 'cancelled' } }
         }
       },
+      ...(broker
+        ? {
+            readTextFile: async (params: { path: string }) => ({
+              content: broker.readFile(params.path) ?? '',
+            }),
+            writeTextFile: async (params: { path: string; content: string }) => {
+              const r = await broker.writeFile(params.path, params.content)
+              if (r.status === 'blocked' || r.status === 'protected' || r.status === 'conflict') {
+                throw new Error(`Hearth blocked write to ${params.path}: ${r.reason}`)
+              }
+              return {}
+            },
+          }
+        : {}),
     }
 
     this.connection = new ClientSideConnection(() => client, stream)
     await this.connection.initialize({
       protocolVersion: PROTOCOL_VERSION,
-      // No fs capability: the agent writes edits directly to disk in cwd, which
-      // is exactly what the self-mod git layer needs to observe. See ARCHITECTURE.md.
-      clientCapabilities: { fs: { readTextFile: false, writeTextFile: false } },
+      // fs capability mirrors mediation: ON routes writes through Hearth's broker
+      // (scope + merge); OFF means the agent writes directly to disk and the git
+      // self-mod layer observes after (the default — see ARCHITECTURE.md).
+      clientCapabilities: { fs: { readTextFile: mediate, writeTextFile: mediate } },
     })
   }
 
