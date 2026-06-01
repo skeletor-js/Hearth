@@ -77,7 +77,12 @@ self-edit regardless of cwd. `captureTurn` always targets `REPO_ROOT`.
    `AgentHost.prompt` → `AcpClient.newSession({cwd})`; inject `REPO_ROOT` +
    self-edit instructions into every session; `captureTurn` always targets `REPO_ROOT`.
 4. **Self-mod global, `REPO_ROOT`-scoped** (see principle).
-5. **All in `src/`** → hot-reloadable, self-editable. The new UI is itself evolvable.
+5. **The agent can see/drive the app AND the browser** via Hearth's MCP server —
+   `view_app`/`read_ui`/`click`/`fill`/`eval_js` for the renderer (built), plus
+   `browser_*` for the embedded browser pane (P4-3b). Backend-agnostic; the agent
+   shares the user's persistent, logged-in browser rather than depending on each
+   backend's native/add-on browser support.
+6. **All in `src/`** → hot-reloadable, self-editable. The new UI is itself evolvable.
 
 ---
 
@@ -146,25 +151,17 @@ Terminal/Browser land in P4).
       hunks; `DiffView` + Review subhead (branch, +/-, "Open in Self"). TDD the diff parse.
 - [ ] **P2-2.** ∥ **Plan:** capture ACP `plan` session updates (currently dropped in
       `acp-translate`) → per-session plan store → Plan tab + chat plan-ref.
-- [ ] **P2-3.** ∥ **Self tab:** self-edit file list + Apply, wired to self-mod;
-      always available. **Decide the apply model first** (see flag below): auto-apply
-      (current: permission-gate → write → captureTurn commits + HMR) vs stage-then-apply
-      (review the self-edit diff, then Apply). *Accept:* reflects the latest self-edit;
-      action matches the chosen model.
+- [ ] **P2-3.** ∥ **Self tab:** wired to self-mod, always available. **Apply model:
+      AUTO-APPLY** (locked) — permission-gate *before* the write → agent writes →
+      `captureTurn` commits + HMR. So the Self tab shows *what just changed* (the
+      latest self-edit set + result) with an **Undo** (→ History), not a manual apply
+      gate. *Accept:* reflects the latest self-edit; Undo reverts it.
 - [ ] **P2-4.** ∥ **Environment & git** (the panel's git button + Review's **Draft
       PR**): working-tree status, stage/commit, branch switch/create, create PR
       (via `gh` if present, else surface the command). Operates on the active
       workspace cwd; built on dugite. TDD the git ops. *(Net-new subsystem the panel
       bars imply — was previously only a toast in the mock.)*
 - [ ] **P2-5.** Gates + visual (both panels, all three layouts); checkpoint commit.
-
-> **Flag — Self-edit apply model (decide before P2-3):** the mock shows a manual
-> "Apply & hot-reload" button; Hearth today gates *before* the write (permission)
-> and auto-commits + HMRs *after*. Either keep auto-apply (the Self tab becomes
-> "what just changed + Undo") or move to stage-then-apply for self-edits (agent
-> writes to a holding area / branch, you review, then Apply). Auto-apply is simpler
-> and matches the live self-mod we already built; stage-then-apply is closer to the
-> mock and safer but heavier (no native "staging" in ACP file tools).
 
 ### P3 — Workspaces + Sessions (keystone; serial spine, ∥ within)
 - [ ] **P3-1.** Workspace registry (`electron/main/workspaces/`): built-in Hearth
@@ -203,6 +200,15 @@ Terminal/Browser land in P4).
       dev-server URL (via `extractDevUrl`) and default Hearth to its renderer URL — but
       it's a general browser, not just a preview. Per-workspace last-URL remembered.
       *Accept:* browse to a site, log in, restart, still logged in.
+- [ ] **P4-3b.** ∥ **Agent browser control** (same pattern as `view_app`/control, but
+      targeting the browser view's webContents): extend the Hearth MCP server with
+      `browser_navigate / browser_read (snapshot+text) / browser_screenshot /
+      browser_click / browser_fill / browser_eval / browser_back|forward|reload`.
+      The agent drives the **same persistent browser the user logs into** — so it can
+      act in the user's authenticated sessions. Permission-gated like the other control
+      tools; backend-agnostic (works on Claude AND Codex without relying on either's
+      native/add-on browser support). *Accept:* the agent navigates + reads a page via
+      the tools; a user login is visible to the agent's reads.
 - [ ] **P4-4.** Gates + visual; checkpoint commit.
 
 ### P5 — Settings + Personality/Memory + Agents  ∥
@@ -254,10 +260,8 @@ rather than one sweep — this build is visual and has product judgment in it.
 
 ## Open questions
 
-- **Self-edit apply model** (flag under P2-3): auto-apply (permission-gate → write →
-  auto-commit + HMR, what we built) vs stage-then-apply (review the self-edit diff,
-  then Apply). Blocks **P2-3 only**; P0/P1 unaffected.
-
-Everything else is signed off (sessions, settings, onboarding, History model,
-Soul + Memory + the three-surface split, workbench scope incl. the git-ops
-subsystem and Browser URL discovery). **P0 is ready to start.**
+None blocking. All decisions are signed off — sessions (persist), settings,
+onboarding (trim), History model (Model A, agent-resolves conflicts), Soul + Memory
+(native managed-block, global + per-workspace) and the History/Personality/Memory
+split, workbench (auto-apply self-edits, git-ops subsystem, real persistent browser
+the **agent** can also drive, in-app CodeMirror editor). **P0 is ready to start.**
