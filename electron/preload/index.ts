@@ -3,7 +3,7 @@
 
 import { contextBridge, ipcRenderer } from 'electron'
 import { HEARTH_CHANNELS as CH } from '../shared/channels.js'
-import type { AgentKind, AgentUpdatePayload, BackendStatus, PermissionRequestPayload } from '../shared/protocol.js'
+import type { AgentKind, AgentUpdatePayload, BackendStatus, ModelState, PermissionRequestPayload } from '../shared/protocol.js'
 import type { DiffSummary } from '../main/self-mod/git-diff.js'
 import type { BranchInfo, GitStatus, PrResult } from '../main/self-mod/git-ops.js'
 import type { SelfModResult } from '../main/self-mod/self-mod-service.js'
@@ -28,6 +28,13 @@ const api = {
     cancel: () => ipcRenderer.invoke(CH.agentCancel),
     getBackend: (): Promise<AgentKind> => ipcRenderer.invoke(CH.backendGet),
     setBackend: (kind: AgentKind): Promise<BackendStatus> => ipcRenderer.invoke(CH.backendSet, kind),
+    getModels: (): Promise<ModelState> => ipcRenderer.invoke(CH.agentGetModels),
+    setModel: (modelId: string): Promise<void> => ipcRenderer.invoke(CH.agentSetModel, modelId),
+    onModelsChanged: (cb: (state: ModelState) => void) => {
+      const handler = (_e: unknown, state: ModelState) => cb(state)
+      ipcRenderer.on(CH.agentModelsChanged, handler)
+      return () => void ipcRenderer.off(CH.agentModelsChanged, handler)
+    },
     onBackendChanged: (cb: (status: BackendStatus) => void) => {
       const handler = (_e: unknown, status: BackendStatus) => cb(status)
       ipcRenderer.on(CH.backendChanged, handler)

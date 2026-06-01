@@ -20,11 +20,23 @@ export class FakeAgent implements Agent {
     // Nothing to spawn.
   }
 
+  private model = 'sonnet'
+
   async newSession(_opts?: { cwd?: string }): Promise<AgentSession> {
     const id = `fake-${++this.counter}`
     return {
       id,
+      models: {
+        available: [
+          { id: 'sonnet', name: 'Claude Sonnet' },
+          { id: 'opus', name: 'Claude Opus' },
+        ],
+        current: this.model,
+      },
       prompt: (text: string) => this.runTurn(id, text),
+      setModel: async (modelId: string) => {
+        this.model = modelId
+      },
       cancel: async () => {
         this.emit(id, { type: 'end', stopReason: 'cancelled' })
       },

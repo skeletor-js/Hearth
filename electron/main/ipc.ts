@@ -100,6 +100,11 @@ export function registerIpc(services: MainServices): void {
     }
   })
 
+  // Model select (per backend; exposed via ACP newSession + set_model).
+  host.onModelsChanged((state) => window.webContents.send(HEARTH_CHANNELS.agentModelsChanged, state))
+  ipcMain.handle(HEARTH_CHANNELS.agentGetModels, () => host.getModels())
+  ipcMain.handle(HEARTH_CHANNELS.agentSetModel, (_e, modelId: string) => host.setModel(modelId))
+
   ipcMain.handle(HEARTH_CHANNELS.selfModHistory, () => selfMod.history())
   ipcMain.handle(HEARTH_CHANNELS.selfModUndo, (_e, hash: string) => selfMod.undo(hash))
 

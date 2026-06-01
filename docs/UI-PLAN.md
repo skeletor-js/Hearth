@@ -223,7 +223,7 @@ Terminal/Browser land in P4).
       Personality → Soul block; Memory = global block + per-workspace block (in the
       workspace's project instructions); read/updated via chat. Commit + categorize
       (`Hearth-Kind`) so soul/memory edits surface under Personality/Memory, not History.
-- [~] **P5-3.** ∥ Agents screen: per-model select; connect an arbitrary ACP server
+- [x] **P5-3.** Per-model select for the two backends (Claude/Codex), wired to ACP `availableModels`/`set_model`. Arbitrary ACP connectors are explicitly OUT of scope (decision: two backends only).
       (generalize beyond claude/codex). 
 - [x] **P5-4.** Gates + visual; checkpoint commit.
 

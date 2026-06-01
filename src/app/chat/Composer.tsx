@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { AgentKind } from '../../../electron/shared/protocol'
+import type { AgentKind, ModelState } from '../../../electron/shared/protocol'
 import { Icon } from '@/shell/Icon'
 
 const MODES = [
@@ -17,12 +17,16 @@ const BACKENDS: Record<AgentKind, { name: string; sub: string; icon: string }> =
 function BackendPop({
   current,
   anchor,
+  models,
   onPick,
+  onPickModel,
   onClose,
 }: {
   current: AgentKind
   anchor: { left: number; bottom: number }
+  models: ModelState
   onPick: (k: AgentKind) => void
+  onPickModel: (id: string) => void
   onClose: () => void
 }) {
   return (
@@ -52,6 +56,23 @@ function BackendPop({
             </div>
           )
         })}
+        {models.available.length > 0 && (
+          <>
+            <div className="pop-sect">Model</div>
+            {models.available.map((m) => (
+              <div key={m.id} className="pop-item" onClick={() => onPickModel(m.id)}>
+                <span className="pi-mark">
+                  <Icon name="cpu" />
+                </span>
+                <div className="pi-body">
+                  <div className="pi-name">{m.name}</div>
+                  {m.description && <div className="pi-sub">{m.description}</div>}
+                </div>
+                {models.current === m.id && <Icon name="check" className="pi-check" />}
+              </div>
+            ))}
+          </>
+        )}
       </div>
     </>
   )
@@ -71,18 +92,32 @@ export function Composer({
   const [input, setInput] = useState('')
   const [mode, setMode] = useState<Mode>('auto')
   const [backend, setBackend] = useState<AgentKind>('claude')
+  const [models, setModels] = useState<ModelState>({ available: [], current: null })
   const [popAnchor, setPopAnchor] = useState<{ left: number; bottom: number } | null>(null)
   const beRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     void window.hearth.agent.getBackend().then(setBackend)
-    return window.hearth.agent.onBackendChanged((s) => setBackend(s.kind))
+    void window.hearth.agent.getModels().then(setModels)
+    const offBe = window.hearth.agent.onBackendChanged((s) => {
+      setBackend(s.kind)
+      void window.hearth.agent.getModels().then(setModels)
+    })
+    const offModels = window.hearth.agent.onModelsChanged(setModels)
+    return () => {
+      offBe()
+      offModels()
+    }
   }, [])
 
   const pickBackend = async (k: AgentKind) => {
     if (k === backend) return
     setBackend(k)
     await window.hearth.agent.setBackend(k)
+  }
+  const pickModel = (id: string) => {
+    setModels((m) => ({ ...m, current: id }))
+    void window.hearth.agent.setModel(id)
   }
 
   const openPop = () => {
@@ -146,7 +181,14 @@ export function Composer({
         </div>
       </div>
       {popAnchor && (
-        <BackendPop current={backend} anchor={popAnchor} onPick={pickBackend} onClose={() => setPopAnchor(null)} />
+        <BackendPop
+          current={backend}
+          anchor={popAnchor}
+          models={models}
+          onPick={pickBackend}
+          onPickModel={pickModel}
+          onClose={() => setPopAnchor(null)}
+        />
       )}
     </div>
   )

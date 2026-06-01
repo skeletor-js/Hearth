@@ -10,8 +10,22 @@ import type {
   RequestPermissionRequest,
   PermissionOptionKind,
   ToolCallStatus,
+  SessionModelState,
 } from '@agentclientprotocol/sdk'
-import type { PermissionRequest, SessionUpdate } from './agent.js'
+import type { ModelState, PermissionRequest, SessionUpdate } from './agent.js'
+
+/** Normalize ACP's `SessionModelState` into Hearth's `{available, current}`. Pure. */
+export function normalizeModels(state: SessionModelState | null | undefined): ModelState {
+  if (!state) return { available: [], current: null }
+  return {
+    available: (state.availableModels ?? []).map((m) => ({
+      id: m.modelId,
+      name: m.name,
+      description: m.description ?? undefined,
+    })),
+    current: state.currentModelId ?? null,
+  }
+}
 
 /** ACP tool-call status → our coarser lifecycle. */
 export function mapToolStatus(

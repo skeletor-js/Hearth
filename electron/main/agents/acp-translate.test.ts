@@ -1,5 +1,29 @@
 import { test, expect, describe } from 'bun:test'
-import { mapToolStatus, mapPermissionKind, translatePermission, translateUpdate } from './acp-translate.js'
+import { mapToolStatus, mapPermissionKind, translatePermission, translateUpdate, normalizeModels } from './acp-translate.js'
+
+describe('normalizeModels', () => {
+  test('absent/null → empty', () => {
+    expect(normalizeModels(null)).toEqual({ available: [], current: null })
+    expect(normalizeModels(undefined)).toEqual({ available: [], current: null })
+  })
+  test('maps available models + current id, dropping null descriptions', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const state: any = {
+      availableModels: [
+        { modelId: 'sonnet', name: 'Sonnet', description: null },
+        { modelId: 'opus', name: 'Opus', description: 'most capable' },
+      ],
+      currentModelId: 'sonnet',
+    }
+    expect(normalizeModels(state)).toEqual({
+      available: [
+        { id: 'sonnet', name: 'Sonnet', description: undefined },
+        { id: 'opus', name: 'Opus', description: 'most capable' },
+      ],
+      current: 'sonnet',
+    })
+  })
+})
 
 describe('mapToolStatus', () => {
   test('maps known ACP statuses', () => {

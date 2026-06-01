@@ -14,6 +14,19 @@ export interface BackendStatus {
   error?: string
 }
 
+/** A selectable model exposed by the active backend (mirrors ACP `ModelInfo`). */
+export interface AgentModel {
+  id: string
+  name: string
+  description?: string
+}
+
+/** The models a backend offers + which is current (mirrors ACP `SessionModelState`). */
+export interface ModelState {
+  available: AgentModel[]
+  current: string | null
+}
+
 /** A single plan task (mirrors ACP `PlanEntry`). */
 export interface PlanEntry {
   content: string

@@ -4,11 +4,14 @@
 // from whichever agent is live and re-points them on switch. The per-window
 // session also lives here, so a switch transparently starts a fresh session.
 
-import type { Agent, AgentKind, AgentSession, PermissionRequest, SessionUpdate } from './agent.js'
+import type { Agent, AgentKind, AgentSession, ModelState, PermissionRequest, SessionUpdate } from './agent.js'
 
 export type AgentFactory = (kind: AgentKind) => Agent
 type UpdateHandler = (sessionId: string, update: SessionUpdate) => void
 type PermissionHandler = (sessionId: string, req: PermissionRequest) => Promise<string>
+type ModelsHandler = (state: ModelState) => void
+
+const EMPTY_MODELS: ModelState = { available: [], current: null }
 
 export class AgentHost {
   private agent: Agent | null = null
@@ -20,6 +23,11 @@ export class AgentHost {
   private offUpdate: (() => void) | null = null
   private readonly updateHandlers = new Set<UpdateHandler>()
   private permissionHandler: PermissionHandler | null = null
+  // Latest model state per backend kind (captured on session creation) + the
+  // user's preferred model per kind (re-applied to new sessions of that kind).
+  private modelsByKind = new Map<AgentKind, ModelState>()
+  private preferredModel = new Map<AgentKind, string>()
+  private readonly modelsHandlers = new Set<ModelsHandler>()
 
   constructor(
     private readonly factory: AgentFactory,
@@ -80,6 +88,15 @@ export class AgentHost {
     if (!session) {
       session = await agent.newSession({ cwd: opts?.cwd })
       this.sessions.set(key, session)
+      // Cache the models this backend offered; apply the user's preferred model
+      // (chosen for this kind) if it differs from the session's default.
+      let state = session.models
+      const preferred = this.preferredModel.get(this.currentKind)
+      if (preferred && preferred !== state.current && state.available.some((m) => m.id === preferred)) {
+        await session.setModel(preferred)
+        state = { ...state, current: preferred }
+      }
+      this.setModelCache(state)
     }
     this.activeKey = key
     await session.prompt(text)
@@ -88,6 +105,30 @@ export class AgentHost {
 
   async cancel(): Promise<void> {
     if (this.activeKey) await this.sessions.get(this.activeKey)?.cancel()
+  }
+
+  /** Models the current backend offers (cached from the latest session). */
+  getModels(): ModelState {
+    return this.modelsByKind.get(this.currentKind) ?? EMPTY_MODELS
+  }
+
+  onModelsChanged(cb: ModelsHandler): () => void {
+    this.modelsHandlers.add(cb)
+    return () => this.modelsHandlers.delete(cb)
+  }
+
+  /** Switch the current backend's model — applied to the active session and
+   * remembered as the preferred model for new sessions of this kind. */
+  async setModel(modelId: string): Promise<void> {
+    this.preferredModel.set(this.currentKind, modelId)
+    if (this.activeKey) await this.sessions.get(this.activeKey)?.setModel(modelId)
+    const cur = this.getModels()
+    this.setModelCache({ ...cur, current: modelId })
+  }
+
+  private setModelCache(state: ModelState): void {
+    this.modelsByKind.set(this.currentKind, state)
+    for (const h of this.modelsHandlers) h(state)
   }
 
   /** Tear down the current backend and bring up `kind`. No-op if already on it. */

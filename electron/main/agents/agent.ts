@@ -17,12 +17,16 @@ export interface AgentConfig {
 
 // The streamed-update and permission shapes live in shared/ so the renderer and
 // preload import the exact same definitions. Re-exported here for main-process code.
-export type { SessionUpdate, PermissionRequest, PermissionOption, PlanEntry } from '../../shared/protocol.js'
-import type { SessionUpdate, PermissionRequest } from '../../shared/protocol.js'
+export type { SessionUpdate, PermissionRequest, PermissionOption, PlanEntry, AgentModel, ModelState } from '../../shared/protocol.js'
+import type { SessionUpdate, PermissionRequest, ModelState } from '../../shared/protocol.js'
 
 export interface AgentSession {
   readonly id: string
+  /** Models the backend offered for this session (may be empty). */
+  readonly models: ModelState
   prompt(text: string): Promise<void>
+  /** Switch the model for this session (no-op if the backend exposes none). */
+  setModel(modelId: string): Promise<void>
   cancel(): Promise<void>
   dispose(): Promise<void>
 }

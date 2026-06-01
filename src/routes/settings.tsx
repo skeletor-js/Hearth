@@ -3,32 +3,42 @@ import { createFileRoute } from '@tanstack/react-router'
 import { Icon } from '@/shell/Icon'
 import { useShell, ACCENT_OPTIONS, type Accent } from '@/shell/store'
 import { Seg, SetRow, Switch } from '@/app/settings/controls'
-import type { AgentKind } from '../../electron/shared/protocol'
+import type { AgentKind, ModelState } from '../../electron/shared/protocol'
 import type { SoulConfig } from '../../electron/main/soul/soul'
 
 export const Route = createFileRoute('/settings')({ component: SettingsScreen })
 
-const MODELS: Record<AgentKind, string[]> = {
-  claude: ['Claude (subscription / BYO key)'],
-  codex: ['Codex (subscription / BYO key)'],
-}
-
 function SettingsScreen() {
   const s = useShell()
   const [backend, setBackend] = useState<AgentKind>('claude')
+  const [models, setModels] = useState<ModelState>({ available: [], current: null })
   const [soul, setSoul] = useState<SoulConfig | null>(null)
   const [memory, setMemory] = useState('')
 
+  const loadModels = () => void window.hearth.agent.getModels().then(setModels)
   useEffect(() => {
     void window.hearth.agent.getBackend().then(setBackend)
+    loadModels()
     void window.hearth.personality.get().then(setSoul)
     void window.hearth.memory.get().then(setMemory)
-    return window.hearth.agent.onBackendChanged((st) => setBackend(st.kind))
+    const offBe = window.hearth.agent.onBackendChanged((st) => {
+      setBackend(st.kind)
+      loadModels()
+    })
+    const offModels = window.hearth.agent.onModelsChanged(setModels)
+    return () => {
+      offBe()
+      offModels()
+    }
   }, [])
 
   const setBe = (k: AgentKind) => {
     setBackend(k)
     void window.hearth.agent.setBackend(k)
+  }
+  const pickModel = (id: string) => {
+    setModels((m) => ({ ...m, current: id }))
+    void window.hearth.agent.setModel(id)
   }
   const patchSoul = (patch: Partial<SoulConfig>) => {
     if (!soul) return
@@ -68,11 +78,19 @@ function SettingsScreen() {
           <Seg<AgentKind> value={backend} options={[['claude', 'Claude'], ['codex', 'Codex']]} onChange={setBe} />
         </SetRow>
         <SetRow k="Default model" h={`Models exposed by ${backend === 'codex' ? 'Codex' : 'Claude'}.`}>
-          <select className="field" value={MODELS[backend][0]} onChange={() => {}}>
-            {MODELS[backend].map((m) => (
-              <option key={m}>{m}</option>
-            ))}
-          </select>
+          {models.available.length === 0 ? (
+            <select className="field" disabled>
+              <option>Default</option>
+            </select>
+          ) : (
+            <select className="field" value={models.current ?? ''} onChange={(e) => pickModel(e.target.value)}>
+              {models.available.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          )}
         </SetRow>
         <SetRow k="Command approval" h="When Hearth wants to run a shell command or write files.">
           <Seg

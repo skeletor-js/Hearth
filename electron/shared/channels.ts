@@ -9,6 +9,9 @@ export const HEARTH_CHANNELS = {
   agentCancel: 'agent:cancel',
   backendGet: 'agent:backend:get',
   backendSet: 'agent:backend:set',
+  agentGetModels: 'agent:models:get',
+  agentSetModel: 'agent:model:set',
+  agentModelsChanged: 'agent:models:changed', // main → renderer
   selfModHistory: 'self-mod:history',
   selfModUndo: 'self-mod:undo',
   // workbench: review diff + working-tree git ops (operate on a workspace cwd;

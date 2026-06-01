@@ -25,7 +25,7 @@ import {
   type SessionNotification,
 } from '@agentclientprotocol/sdk'
 import type { AgentSession, PermissionRequest, SessionUpdate } from './agent.js'
-import { translatePermission, translateUpdate } from './acp-translate.js'
+import { normalizeModels, translatePermission, translateUpdate } from './acp-translate.js'
 
 export interface AdapterSpec {
   /** Executable + args that launch the ACP adapter, e.g. the claude-agent-acp bin. */
@@ -130,16 +130,23 @@ export class AcpClient {
     // The session's task cwd (the workspace) may differ from the connect-time
     // cwd (REPO_ROOT). The MCP bridge stays anchored at REPO_ROOT (this.cwd).
     const sessionCwd = opts?.cwd ?? this.cwd
-    const { sessionId } = await connection.newSession({ cwd: sessionCwd, mcpServers: this.bridgeMcpServers() })
+    const res = await connection.newSession({ cwd: sessionCwd, mcpServers: this.bridgeMcpServers() })
+    const sessionId = res.sessionId
+    const models = normalizeModels(res.models)
 
     return {
       id: sessionId,
+      models,
       prompt: async (text: string) => {
         const { stopReason } = await connection.prompt({
           sessionId,
           prompt: [{ type: 'text', text }],
         })
         this.emit(sessionId, { type: 'end', stopReason })
+      },
+      setModel: async (modelId: string) => {
+        // unstable_* in the SDK; a no-op on backends that don't implement it.
+        await connection.unstable_setSessionModel?.({ sessionId, modelId })
       },
       cancel: async () => {
         await connection.cancel({ sessionId })
