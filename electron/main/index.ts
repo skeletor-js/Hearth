@@ -55,8 +55,16 @@ async function bootstrap(): Promise<void> {
   const hmr = new HmrController({
     reloadWindow: () => window.webContents.reload(),
     restartApp: () => {
-      app.relaunch()
-      app.exit(0)
+      // In dev, electron-vite owns the process lifecycle and restarts the app
+      // when a main-process file is *written* — self-relaunching here would kill
+      // the dev session (and its Vite server), leaving a blank window. Only
+      // relaunch in a packaged build; in dev a window reload is the safe fallback.
+      if (app.isPackaged) {
+        app.relaunch()
+        app.exit(0)
+      } else {
+        window.webContents.reload()
+      }
     },
   })
   const selfMod = new SelfModService(REPO_ROOT, hmr)
