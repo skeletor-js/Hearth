@@ -6,7 +6,7 @@ import { HEARTH_CHANNELS as CH } from '../shared/channels.js'
 import type { AgentKind, AgentUpdatePayload, BackendStatus, ModelState, PermissionRequestPayload } from '../shared/protocol.js'
 import type { DiffSummary } from '../main/self-mod/git-diff.js'
 import type { BranchInfo, GitStatus, PrResult } from '../main/self-mod/git-ops.js'
-import type { SelfModResult } from '../main/self-mod/self-mod-service.js'
+import type { SelfModResult, StepResult } from '../main/self-mod/self-mod-service.js'
 import type { SelfModLogEntry } from '../main/self-mod/git.js'
 import type { Workspace } from '../main/workspaces/registry.js'
 import type { FileContent, FileEntry } from '../main/fs/files.js'
@@ -71,7 +71,8 @@ const api = {
   },
   selfMod: {
     history: (): Promise<SelfModLogEntry[]> => ipcRenderer.invoke(CH.selfModHistory),
-    undo: (hash: string): Promise<SelfModResult> => ipcRenderer.invoke(CH.selfModUndo, hash),
+    undo: (hash: string): Promise<StepResult> => ipcRenderer.invoke(CH.selfModUndo, hash),
+    redo: (hash: string): Promise<StepResult> => ipcRenderer.invoke(CH.selfModRedo, hash),
   },
   git: {
     diff: (cwd?: string, rev?: string): Promise<DiffSummary> => ipcRenderer.invoke(CH.gitDiff, cwd, rev),

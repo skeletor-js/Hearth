@@ -87,6 +87,22 @@ export async function revertCommit(repoRoot: string, hash: string): Promise<stri
   return (await git(repoRoot, ['rev-parse', 'HEAD'])).trim()
 }
 
+export type RevertOutcome = { ok: true; commit: string } | { ok: false; files: string[] }
+
+/**
+ * Revert `hash`, but on a merge conflict capture the unmerged files and ABORT
+ * (leaving a clean tree) rather than leaving Hearth mid-revert — the caller hands
+ * the conflict to the agent to resolve from clean state. Non-conflict failures throw.
+ */
+export async function tryRevert(repoRoot: string, hash: string): Promise<RevertOutcome> {
+  const r = await runGit(['revert', '--no-edit', hash], repoRoot)
+  if (r.exitCode === 0) return { ok: true, commit: (await git(repoRoot, ['rev-parse', 'HEAD'])).trim() }
+  const conflicted = (await git(repoRoot, ['diff', '--name-only', '--diff-filter=U', '-z'])).split('\0').filter(Boolean)
+  await runGit(['revert', '--abort'], repoRoot) // restore a clean tree either way
+  if (conflicted.length) return { ok: false, files: conflicted }
+  throw new Error(`git revert ${hash} failed (${r.exitCode}): ${r.stderr.trim()}`)
+}
+
 /** Repo-relative paths a given commit changed. Used to pick the HMR reload tier after a revert. */
 export async function diffPaths(repoRoot: string, hash: string): Promise<string[]> {
   // --root so a root (parentless) commit still reports its files.
@@ -106,19 +122,68 @@ export interface SelfModLogEntry {
   reverted: boolean
 }
 
-/**
- * Full hashes that an existing revert commit points at. `git revert` writes
- * "This reverts commit <40-hex>." into the body; we scan for those so the UI can
- * show which self-mods have already been undone.
- */
-async function revertedHashes(repoRoot: string, limit: number): Promise<Set<string>> {
-  const out = await git(repoRoot, ['log', `-n${limit}`, '--grep=This reverts commit', '--pretty=%b'])
-  const set = new Set<string>()
-  for (const m of out.matchAll(/This reverts commit ([0-9a-f]{7,40})/g)) set.add(m[1])
-  return set
+// ── Net-effect undo/redo (Model A) — pure helpers ──────────────────────────
+// `git revert X` writes "This reverts commit <40-hex>." So we build a graph of
+// "which commit reverts which" and compute each self-mod's *logical* state:
+// applied iff the number of its *effective* reverts (reverts that are themselves
+// still applied) is even. Redo = revert-the-revert, so the chain must be followed,
+// not just "does any revert exist". These are pure so they unit-test without git.
+
+export interface RawCommit {
+  hash: string
+  /** Commit body (where `git revert` records "This reverts commit <hash>."). */
+  body: string
 }
 
-/** Recent self-mod commits, newest first. */
+/** The full target hash a revert commit points at, or null if it isn't a revert. */
+export function parseRevertTarget(body: string): string | null {
+  const m = /This reverts commit ([0-9a-f]{7,40})/.exec(body)
+  return m ? m[1] : null
+}
+
+/** Map: target hash → revert-commit hashes that revert it (newest first, as logged). */
+export function buildRevertGraph(commits: RawCommit[]): Map<string, string[]> {
+  const reverts = new Map<string, string[]>()
+  for (const c of commits) {
+    const target = parseRevertTarget(c.body)
+    if (!target) continue
+    const list = reverts.get(target) ?? []
+    list.push(c.hash)
+    reverts.set(target, list)
+  }
+  return reverts
+}
+
+/** Logical state: a commit is applied iff its effective (themselves-applied)
+ * reverts net out even. Recurses through revert-of-revert chains. */
+export function isApplied(hash: string, reverts: Map<string, string[]>, memo = new Map<string, boolean>()): boolean {
+  const cached = memo.get(hash)
+  if (cached !== undefined) return cached
+  memo.set(hash, true) // guard cycles (shouldn't happen in a commit DAG)
+  const effective = (reverts.get(hash) ?? []).filter((r) => isApplied(r, reverts, memo))
+  const applied = effective.length % 2 === 0
+  memo.set(hash, applied)
+  return applied
+}
+
+/** The revert to undo when redoing `hash`: its newest effective (applied) revert. */
+export function effectiveRevertOf(hash: string, reverts: Map<string, string[]>): string | null {
+  const memo = new Map<string, boolean>()
+  return (reverts.get(hash) ?? []).find((r) => isApplied(r, reverts, memo)) ?? null
+}
+
+async function allCommits(repoRoot: string, limit: number): Promise<RawCommit[]> {
+  const out = await git(repoRoot, ['log', `-n${limit}`, '-z', '--pretty=%H%x1f%b'])
+  return out
+    .split('\0')
+    .filter(Boolean)
+    .map((rec) => {
+      const i = rec.indexOf('\x1f')
+      return { hash: rec.slice(0, i), body: rec.slice(i + 1) }
+    })
+}
+
+/** Recent self-mod commits, newest first, with net-effect applied/undone state. */
 export async function recentSelfMods(repoRoot: string, limit = 50): Promise<SelfModLogEntry[]> {
   const out = await git(repoRoot, [
     'log',
@@ -129,7 +194,8 @@ export async function recentSelfMods(repoRoot: string, limit = 50): Promise<Self
   ])
   // Look back further for reverts than for the self-mods themselves — an old
   // self-mod can be reverted by a very recent commit and vice versa.
-  const reverted = await revertedHashes(repoRoot, Math.max(limit * 4, 200))
+  const reverts = buildRevertGraph(await allCommits(repoRoot, Math.max(limit * 6, 300)))
+  const memo = new Map<string, boolean>()
   return out
     .split('\0')
     .filter(Boolean)
@@ -141,7 +207,13 @@ export async function recentSelfMods(repoRoot: string, limit = 50): Promise<Self
         subject,
         conversationId: conversationId?.trim() || null,
         kind: (k === 'soul' || k === 'memory' ? k : 'code') as SelfModKind,
-        reverted: reverted.has(hash),
+        reverted: !isApplied(hash, reverts, memo),
       }
     })
+}
+
+/** The revert commit to revert in order to redo (re-apply) `hash`, or null. */
+export async function redoTarget(repoRoot: string, hash: string): Promise<string | null> {
+  const reverts = buildRevertGraph(await allCommits(repoRoot, 300))
+  return effectiveRevertOf(hash, reverts)
 }

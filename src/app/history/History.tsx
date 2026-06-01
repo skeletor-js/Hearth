@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { Icon } from '@/shell/Icon'
 import { Seg } from '@/app/settings/controls'
 import { toast } from '@/shell/toast'
+import { useSession } from '../session-store'
 import type { SelfModLogEntry, SelfModKind } from '../../../electron/main/self-mod/git'
 
 const TITLE: Record<SelfModKind, { h1: string; sub: string; empty: string }> = {
@@ -23,6 +25,7 @@ const TITLE: Record<SelfModKind, { h1: string; sub: string; empty: string }> = {
 }
 
 export function History() {
+  const navigate = useNavigate()
   const [entries, setEntries] = useState<SelfModLogEntry[]>([])
   const [kind, setKind] = useState<SelfModKind>('code')
   const [busy, setBusy] = useState<string | null>(null)
@@ -34,17 +37,37 @@ export function History() {
   const shown = entries.filter((e) => e.kind === kind)
   const undone = shown.filter((e) => e.reverted).length
 
-  const undo = async (hash: string, title: string) => {
+  const step = async (op: 'undo' | 'redo', hash: string, title: string) => {
     setBusy(hash)
     setNote(null)
     try {
-      await window.hearth.selfMod.undo(hash)
-      toast(`Undone · ${title}`)
-      load()
-    } catch (e) {
-      // A revert conflict would be auto-handed to Hearth's agent to resolve; for now
-      // surface it so the user can ask Hearth in chat.
-      setNote(`Couldn’t auto-revert “${title}”: ${String(e)}. Ask Hearth to resolve it in chat.`)
+      const r = op === 'undo' ? await window.hearth.selfMod.undo(hash) : await window.hearth.selfMod.redo(hash)
+      if (r.status === 'ok') {
+        toast(`${op === 'undo' ? 'Undone' : 'Redone'} · ${title}`)
+        load()
+      } else if (r.status === 'dirty') {
+        setNote('You have uncommitted changes — commit or discard them before stepping history.')
+      } else if (r.status === 'noop') {
+        load()
+      } else if (r.status === 'conflict') {
+        // Model A: a non-latest revert can conflict. Hand it to Hearth's own agent to
+        // resolve, routed through the normal chat send (transcript + UI).
+        const active = useSession.getState().active
+        const files = r.files.join(', ')
+        if (active) {
+          const verb = op === 'undo' ? 'Undo' : 'Redo'
+          useSession
+            .getState()
+            .setPendingPrompt(
+              `${verb} the self-edit "${title}" (commit ${hash.slice(0, 7)}). A \`git revert\` conflicts with later changes to ${files}. ` +
+                `Perform the revert, resolve the conflict so the undo's intent is preserved, and commit it as a normal change.`,
+            )
+          toast(`Conflict — handing “${title}” to Hearth to resolve…`)
+          void navigate({ to: '/chat' })
+        } else {
+          setNote(`“${title}” conflicts with later changes to ${files}. Open a session and ask Hearth to resolve it.`)
+        }
+      }
     } finally {
       setBusy(null)
     }
@@ -124,8 +147,12 @@ export function History() {
                     <span style={{ fontFamily: 'var(--mono)' }}>{e.hash.slice(0, 7)}</span>
                   </div>
                 </div>
-                {!e.reverted && (
-                  <button className="btn btn-sm btn-quiet" disabled={busy === e.hash} onClick={() => undo(e.hash, e.subject)}>
+                {e.reverted ? (
+                  <button className="btn btn-sm btn-quiet" disabled={busy === e.hash} onClick={() => step('redo', e.hash, e.subject)}>
+                    <Icon name="arrow-u-up-right" /> {busy === e.hash ? 'Redoing…' : 'Redo'}
+                  </button>
+                ) : (
+                  <button className="btn btn-sm btn-quiet" disabled={busy === e.hash} onClick={() => step('undo', e.hash, e.subject)}>
                     <Icon name="arrow-u-up-left" /> {busy === e.hash ? 'Undoing…' : 'Undo'}
                   </button>
                 )}

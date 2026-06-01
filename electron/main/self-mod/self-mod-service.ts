@@ -6,7 +6,7 @@
 // versions it, and reloads. Keeping the write authority with the agent and the
 // safety/versioning here is the separation that makes the loop debuggable.
 
-import { commitSelfMod, diffPaths, listDirty, recentSelfMods, revertCommit, type SelfModKind, type SelfModLogEntry } from './git.js'
+import { commitSelfMod, diffPaths, listDirty, recentSelfMods, redoTarget, tryRevert, type SelfModKind, type SelfModLogEntry } from './git.js'
 import { HmrController } from './hmr.js'
 import type { ReloadKind } from './path-relevance.js'
 
@@ -15,6 +15,13 @@ export interface SelfModResult {
   changedPaths: string[]
   reload: ReloadKind
 }
+
+/** Result of an undo/redo step. A conflict is routed to the agent by the UI. */
+export type StepResult =
+  | { status: 'ok'; commit: string; changedPaths: string[]; reload: ReloadKind }
+  | { status: 'dirty' }
+  | { status: 'conflict'; hash: string; files: string[] }
+  | { status: 'noop' }
 
 export class SelfModService {
   constructor(
@@ -49,14 +56,28 @@ export class SelfModService {
     return { commit, changedPaths, reload }
   }
 
-  async undo(hash: string): Promise<SelfModResult> {
-    const commit = await revertCommit(this.repoRoot, hash)
-    // `git revert` already commits, so the tree is clean — listDirty would see
-    // nothing. Read the files the revert commit itself touched to pick the right
-    // reload tier (a reverted route edit still needs a full reload, etc.).
-    const changedPaths = await diffPaths(this.repoRoot, commit)
+  /**
+   * Step the history (undo a self-mod, or redo by reverting its revert). Guards a
+   * dirty tree, and on a revert conflict returns the conflicted files so the UI can
+   * hand the resolution to Hearth's agent (Model A — see SELF-EVOLUTION-HISTORY.md).
+   */
+  async undo(hash: string): Promise<StepResult> {
+    return this.step(hash, hash)
+  }
+
+  async redo(hash: string): Promise<StepResult> {
+    const target = await redoTarget(this.repoRoot, hash)
+    if (!target) return { status: 'noop' }
+    return this.step(hash, target)
+  }
+
+  private async step(originalHash: string, revertHash: string): Promise<StepResult> {
+    if ((await listDirty(this.repoRoot)).length > 0) return { status: 'dirty' }
+    const outcome = await tryRevert(this.repoRoot, revertHash)
+    if (!outcome.ok) return { status: 'conflict', hash: originalHash, files: outcome.files }
+    const changedPaths = await diffPaths(this.repoRoot, outcome.commit)
     const reload = this.hmr.apply(changedPaths)
-    return { commit, changedPaths, reload }
+    return { status: 'ok', commit: outcome.commit, changedPaths, reload }
   }
 
   /**

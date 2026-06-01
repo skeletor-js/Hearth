@@ -107,6 +107,7 @@ export function registerIpc(services: MainServices): void {
 
   ipcMain.handle(HEARTH_CHANNELS.selfModHistory, () => selfMod.history())
   ipcMain.handle(HEARTH_CHANNELS.selfModUndo, (_e, hash: string) => selfMod.undo(hash))
+  ipcMain.handle(HEARTH_CHANNELS.selfModRedo, (_e, hash: string) => selfMod.redo(hash))
 
   // Workbench git surface. `cwd` defaults to the Hearth repo until workspaces
   // (P3) thread a real per-session cwd.

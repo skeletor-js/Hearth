@@ -85,14 +85,14 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[!]` blocked
 
 ## Track B — History: redo + revert-conflict auto-resolve  ∥
 
-- [ ] **B-1. Model-A redo (git + service).** Add `findRevertOf(repoRoot, hash)` (newest
+- [x] **B-DONE. Model-A redo (git + service).** Add `findRevertOf(repoRoot, hash)` (newest
       `git revert` commit whose body says "This reverts commit <hash>") and
       `SelfModService.redo(hash)` = revert-the-revert (re-applies). Logical state
       (`applied | undone`) derives from net reverts (extends today's `reverted`). **TDD**
       the net-effect model: commit → undo → redo → undo across multiple edits resolves to
       the correct applied/undone set. *Accept:* redo re-applies an undone self-edit; state
       is correct after interleaved undo/redo.
-- [ ] **B-2. ∥ Conflict detection + clean-tree guard + agent hand-off (service).** Make the
+- [x] **B-DONE. ∥ Conflict detection + clean-tree guard + agent hand-off (service).** Make the
       revert path return `{ ok, commit }` | `{ conflict: true, files[] }` instead of
       throwing (detect via nonzero exit / `git diff --name-only --diff-filter=U`); a
       clean-tree guard (reuse `listDirty`) before stepping. On conflict: build a resolve
@@ -101,12 +101,12 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[!]` blocked
       conflict." Fallback: `git revert --abort` + a structured error. **TDD** the
       guard + the conflict shape (force a conflicting revert in a temp repo). *Accept:* a
       conflicting undo doesn't throw; returns a routable conflict; abort leaves a clean tree.
-- [ ] **B-3. History UI: redo + conflict flow (renderer).** Undone commits get a **Redo**
+- [x] **B-DONE. History UI: redo + conflict flow (renderer).** Undone commits get a **Redo**
       button (→ `selfMod.redo`); a conflict result shows "Hearth is resolving this revert…",
       kicks the agent turn, and toasts the outcome; dirty tree → the guard message. Keep
       the `Hearth-Kind` Code/Personality/Memory filter. *Accept:* undo→redo round-trips
       live; a forced conflict routes to the agent (or shows the abort fallback).
-- [ ] **B-4. Gates + visual (History redo + conflict states); checkpoint commit.**
+- [x] **B-DONE. Gates + visual (History redo + conflict states); checkpoint commit.**
 
 ---
 

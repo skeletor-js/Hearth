@@ -14,6 +14,7 @@ export const HEARTH_CHANNELS = {
   agentModelsChanged: 'agent:models:changed', // main → renderer
   selfModHistory: 'self-mod:history',
   selfModUndo: 'self-mod:undo',
+  selfModRedo: 'self-mod:redo',
   // workbench: review diff + working-tree git ops (operate on a workspace cwd;
   // defaults to the Hearth repo until workspaces land in P3).
   gitDiff: 'git:diff',

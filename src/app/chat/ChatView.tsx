@@ -215,10 +215,19 @@ export function ChatView() {
       return
     }
     void window.hearth.sessions.get(active.id).then((detail) => {
-      if (!live || !detail) return
-      for (const e of detail.entries) {
-        if (e.kind === 'user') pushUser(e.text)
-        else apply(e.update)
+      if (!live) return
+      if (detail) {
+        for (const e of detail.entries) {
+          if (e.kind === 'user') pushUser(e.text)
+          else apply(e.update)
+        }
+      }
+      // A prompt queued elsewhere (e.g. a History revert conflict) sends here,
+      // after the transcript is restored, through the normal send path.
+      const pending = useSession.getState().pendingPrompt
+      if (pending) {
+        useSession.getState().setPendingPrompt(null)
+        void send(pending)
       }
     })
     return () => {

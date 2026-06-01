@@ -13,7 +13,76 @@ import {
   recentSelfMods,
   diffPaths,
   categorizeKind,
+  parseRevertTarget,
+  buildRevertGraph,
+  isApplied,
+  effectiveRevertOf,
+  tryRevert,
 } from './git'
+
+describe('tryRevert conflict handling', () => {
+  test('a conflicting revert reports the files and leaves a clean tree', async () => {
+    const repo = mkdtempSync(join(tmpdir(), 'hearth-revert-'))
+    const run = (args: string[]) => gitExec(args, repo)
+    await run(['init', '-b', 'main'])
+    await run(['config', 'user.email', 't@h.dev'])
+    await run(['config', 'user.name', 'T'])
+    writeFileSync(join(repo, 'f.txt'), 'line1\nline2\nline3\n')
+    await run(['add', '-A'])
+    await run(['commit', '-m', 'base'])
+    // X changes line2; a later commit changes the same line → reverting X conflicts.
+    writeFileSync(join(repo, 'f.txt'), 'line1\nX-change\nline3\n')
+    await run(['add', '-A'])
+    await run(['commit', '-m', 'X'])
+    const x = (await gitExec(['rev-parse', 'HEAD'], repo)).stdout.trim()
+    writeFileSync(join(repo, 'f.txt'), 'line1\nlater-change\nline3\n')
+    await run(['add', '-A'])
+    await run(['commit', '-m', 'later'])
+
+    const outcome = await tryRevert(repo, x)
+    expect(outcome.ok).toBe(false)
+    if (!outcome.ok) expect(outcome.files).toContain('f.txt')
+    // tree is clean (revert aborted) — no unmerged paths, no revert in progress
+    expect(await listDirty(repo)).toEqual([])
+
+    rmSync(repo, { recursive: true, force: true })
+  })
+})
+
+describe('net-effect undo/redo (Model A)', () => {
+  test('parseRevertTarget reads the reverted hash', () => {
+    expect(parseRevertTarget('subject\n\nThis reverts commit abc1234.')).toBe('abc1234')
+    expect(parseRevertTarget('an ordinary commit body')).toBeNull()
+  })
+
+  // git records the full hex hash, so use hex ids here.
+  const X = 'aaaaaaa'
+  const R1 = 'bbbbbbb'
+  const R2 = 'ccccccc'
+
+  test('applied state follows the revert-of-revert chain', () => {
+    // newest first: R2 reverts R1, R1 reverts X
+    const reverts = buildRevertGraph([
+      { hash: R2, body: `Revert revert\n\nThis reverts commit ${R1}.` },
+      { hash: R1, body: `Revert X\n\nThis reverts commit ${X}.` },
+      { hash: X, body: 'edit X' },
+    ])
+    // X undone once (R1) then redone (R2 cancels R1) → X is applied again.
+    expect(isApplied(X, reverts)).toBe(true)
+    expect(isApplied(R1, reverts)).toBe(false) // R1 itself is reverted by R2
+    // Nothing to redo for X (it's applied).
+    expect(effectiveRevertOf(X, reverts)).toBeNull()
+  })
+
+  test('a single revert leaves the commit undone with a redo target', () => {
+    const reverts = buildRevertGraph([
+      { hash: R1, body: `Revert X\n\nThis reverts commit ${X}.` },
+      { hash: X, body: 'edit X' },
+    ])
+    expect(isApplied(X, reverts)).toBe(false)
+    expect(effectiveRevertOf(X, reverts)).toBe(R1) // revert this to redo X
+  })
+})
 
 describe('categorizeKind', () => {
   test('routes pure soul/memory edits, else code', () => {

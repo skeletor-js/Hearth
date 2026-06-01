@@ -45,6 +45,10 @@ interface SessionState {
   /** Bumped after session list mutations so the rail/recents re-fetch. */
   sessionsNonce: number
   bumpSessions: () => void
+
+  /** A prompt queued from elsewhere (e.g. History conflict) for the chat to send. */
+  pendingPrompt: string | null
+  setPendingPrompt: (p: string | null) => void
 }
 
 export const useSession = create<SessionState>((set, get) => ({
@@ -65,4 +69,7 @@ export const useSession = create<SessionState>((set, get) => ({
 
   sessionsNonce: 0,
   bumpSessions: () => set((s) => ({ sessionsNonce: s.sessionsNonce + 1 })),
+
+  pendingPrompt: null,
+  setPendingPrompt: (pendingPrompt) => set({ pendingPrompt }),
 }))
