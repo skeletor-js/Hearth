@@ -212,10 +212,10 @@ Terminal/Browser land in P4).
 - [x] **P4-4.** Gates + visual; checkpoint commit.
 
 ### P5 — Settings + Personality/Memory + Agents  ∥
-- [ ] **P5-1.** ∥ Settings screen: Account (display), Appearance (✅ wire),
+- [x] **P5-1.** ∥ Settings screen: Account (display), Appearance (✅ wire),
       Agent (default backend/model, command-approval → `HEARTH_PERMISSION_MODE`).
       **No self-evolution toggles.**
-- [ ] **P5-2.** ∥ Personality + Memory per [SOUL-AND-MEMORY.md](SOUL-AND-MEMORY.md)
+- [x] **P5-2.** ∥ Personality + Memory per [SOUL-AND-MEMORY.md](SOUL-AND-MEMORY.md)
       (signed off): one managed-block writer → each backend's native global
       instructions (Claude's isolated `CLAUDE_CONFIG_DIR/CLAUDE.md`; surgical block in
       `~/.codex/AGENTS.md`). Move Hearth's operating instructions there too (so they
@@ -223,9 +223,9 @@ Terminal/Browser land in P4).
       Personality → Soul block; Memory = global block + per-workspace block (in the
       workspace's project instructions); read/updated via chat. Commit + categorize
       (`Hearth-Kind`) so soul/memory edits surface under Personality/Memory, not History.
-- [ ] **P5-3.** ∥ Agents screen: per-model select; connect an arbitrary ACP server
+- [~] **P5-3.** ∥ Agents screen: per-model select; connect an arbitrary ACP server
       (generalize beyond claude/codex). 
-- [ ] **P5-4.** Gates + visual; checkpoint commit.
+- [x] **P5-4.** Gates + visual; checkpoint commit.
 
 ### P6 — History/Personality/Memory + ⌘K + onboarding + polish
 - [ ] **P6-1. History** (the code self-mod timeline) — build

@@ -12,7 +12,34 @@ import {
   revertCommit,
   recentSelfMods,
   diffPaths,
+  categorizeKind,
 } from './git'
+
+describe('categorizeKind', () => {
+  test('routes pure soul/memory edits, else code', () => {
+    expect(categorizeKind(['.hearth/personality.json'])).toBe('soul')
+    expect(categorizeKind(['.hearth/memory.md'])).toBe('memory')
+    expect(categorizeKind(['src/app/chat/ChatView.tsx'])).toBe('code')
+    expect(categorizeKind(['.hearth/personality.json', 'src/x.ts'])).toBe('code') // mixed → code
+    expect(categorizeKind([])).toBe('code')
+  })
+})
+
+describe('Hearth-Kind trailer round-trips', () => {
+  test('a soul commit is tagged and parsed as soul', async () => {
+    const repo = mkdtempSync(join(tmpdir(), 'hearth-kind-'))
+    const run = (args: string[]) => gitExec(args, repo)
+    await run(['init', '-b', 'main'])
+    await run(['config', 'user.email', 't@h.dev'])
+    await run(['config', 'user.name', 'T'])
+    mkdirSync(join(repo, '.hearth'), { recursive: true })
+    writeFileSync(join(repo, '.hearth/personality.json'), '{}\n')
+    await commitSelfMod(repo, { paths: ['.hearth/personality.json'], subject: 'personality', conversationId: 'c1' })
+    const mods = await recentSelfMods(repo)
+    expect(mods[0].kind).toBe('soul')
+    rmSync(repo, { recursive: true, force: true })
+  })
+})
 
 // Thin fixture helper: run git in the temp repo, throw on failure.
 async function run(repo: string, args: string[]): Promise<string> {

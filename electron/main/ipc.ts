@@ -11,6 +11,9 @@ import type { CreateSessionInput } from './sessions/store.js'
 import { listDir, readFile as fsReadFile, writeFile as fsWriteFile } from './fs/files.js'
 import { TerminalManager } from './terminal/pty.js'
 import type { BrowserManager, Rect } from './browser/browser-view.js'
+import { SoulService, DEFAULT_SOUL, type SoulConfig } from './soul/soul.js'
+import { mkdir, readFile as nodeReadFile, writeFile as nodeWriteFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { getDiff } from './self-mod/git-diff.js'
 import {
   branches as gitBranches,
@@ -180,6 +183,26 @@ export function registerIpc(services: MainServices): void {
   ipcMain.handle(HEARTH_CHANNELS.fsWrite, (_e, cwd: string | undefined, rel: string, content: string) =>
     fsWriteFile(cwd || repoRoot, rel, content),
   )
+
+  // Personality (soul) + memory. Personality is versioned in the repo
+  // (.hearth/personality.json, committed as Hearth-Kind: soul) AND compiled into
+  // each backend's native global instructions so the agent actually reads it.
+  const soul = new SoulService()
+  const personalityPath = join(repoRoot, '.hearth', 'personality.json')
+  ipcMain.handle(HEARTH_CHANNELS.personalityGet, async (): Promise<SoulConfig> => {
+    try {
+      return { ...DEFAULT_SOUL, ...(JSON.parse(await nodeReadFile(personalityPath, 'utf8')) as Partial<SoulConfig>) }
+    } catch {
+      return DEFAULT_SOUL
+    }
+  })
+  ipcMain.handle(HEARTH_CHANNELS.personalitySet, async (_e, config: SoulConfig) => {
+    await mkdir(dirname(personalityPath), { recursive: true })
+    await nodeWriteFile(personalityPath, JSON.stringify(config, null, 2) + '\n')
+    await soul.setPersonality(config) // writes the managed block into Claude/Codex global files
+    return selfMod.commitManaged(['.hearth/personality.json'], 'update personality', 'soul')
+  })
+  ipcMain.handle(HEARTH_CHANNELS.memoryGet, () => soul.getMemory())
 
   ipcMain.handle(HEARTH_CHANNELS.microAppCreate, (_e, name: string) =>
     scaffoldMicroApp(repoRoot, name),

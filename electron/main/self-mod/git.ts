@@ -37,16 +37,36 @@ export async function listDirty(repoRoot: string): Promise<string[]> {
   return paths
 }
 
+/** Which surface a self-mod belongs to (derived from the files it changed). */
+export type SelfModKind = 'code' | 'soul' | 'memory'
+
+// Repo-tracked source of truth for the global soul/memory (see SOUL-AND-MEMORY.md).
+const SOUL_FILES = ['.hearth/personality.json']
+const MEMORY_FILES = ['.hearth/memory.md']
+
+/** Categorize a self-mod by its changed paths: pure soul/memory edits route to
+ * those surfaces; anything else (or a mix) is code. */
+export function categorizeKind(paths: string[]): SelfModKind {
+  if (paths.length === 0) return 'code'
+  const all = (set: string[]) => paths.every((p) => set.includes(p))
+  if (all(SOUL_FILES)) return 'soul'
+  if (all(MEMORY_FILES)) return 'memory'
+  return 'code'
+}
+
 export interface SelfModCommit {
   /** Files to stage (repo-relative). Empty = stage everything dirty. */
   paths?: string[]
   subject: string
   /** Conversation that produced the change; recorded as a trailer for revert routing. */
   conversationId: string
+  /** Surface category; defaults to derive-from-paths. */
+  kind?: SelfModKind
 }
 
 export async function commitSelfMod(repoRoot: string, c: SelfModCommit): Promise<string> {
-  const message = `${c.subject}\n\nHearth-Conversation: ${c.conversationId}\nHearth-SelfMod: true`
+  const kind = c.kind ?? categorizeKind(c.paths ?? [])
+  const message = `${c.subject}\n\nHearth-Conversation: ${c.conversationId}\nHearth-Kind: ${kind}\nHearth-SelfMod: true`
   if (c.paths?.length) {
     // Stage AND commit only these paths (pathspec on commit) so any other dirty
     // or already-staged files in the tree are left untouched — the self-mod
@@ -81,6 +101,7 @@ export interface SelfModLogEntry {
   hash: string
   subject: string
   conversationId: string | null
+  kind: SelfModKind
   /** True if a later `git revert` commit already undid this one. */
   reverted: boolean
 }
@@ -102,17 +123,25 @@ export async function recentSelfMods(repoRoot: string, limit = 50): Promise<Self
   const out = await git(repoRoot, [
     'log',
     `-n${limit}`,
+    '-z', // NUL-separate commits so trailer values (which carry newlines) don't split records
     '--grep=Hearth-SelfMod: true',
-    '--pretty=%H%x1f%s%x1f%(trailers:key=Hearth-Conversation,valueonly)',
+    '--pretty=%H%x1f%s%x1f%(trailers:key=Hearth-Conversation,valueonly)%x1f%(trailers:key=Hearth-Kind,valueonly)',
   ])
   // Look back further for reverts than for the self-mods themselves — an old
   // self-mod can be reverted by a very recent commit and vice versa.
   const reverted = await revertedHashes(repoRoot, Math.max(limit * 4, 200))
   return out
-    .split('\n')
+    .split('\0')
     .filter(Boolean)
     .map((line) => {
-      const [hash, subject, conversationId] = line.split('\x1f')
-      return { hash, subject, conversationId: conversationId?.trim() || null, reverted: reverted.has(hash) }
+      const [hash, subject, conversationId, kind] = line.split('\x1f')
+      const k = kind?.trim()
+      return {
+        hash,
+        subject,
+        conversationId: conversationId?.trim() || null,
+        kind: (k === 'soul' || k === 'memory' ? k : 'code') as SelfModKind,
+        reverted: reverted.has(hash),
+      }
     })
 }

@@ -11,6 +11,7 @@ import type { SelfModLogEntry } from '../main/self-mod/git.js'
 import type { Workspace } from '../main/workspaces/registry.js'
 import type { FileContent, FileEntry } from '../main/fs/files.js'
 import type { BrowserState } from '../main/browser/browser-view.js'
+import type { SoulConfig } from '../main/soul/soul.js'
 import type { CreateSessionInput, SessionDetail, SessionMeta, TranscriptEntry } from '../main/sessions/store.js'
 
 interface WorkspaceStatus {
@@ -129,6 +130,13 @@ const api = {
       ipcRenderer.on(CH.browserState, h)
       return () => void ipcRenderer.off(CH.browserState, h)
     },
+  },
+  personality: {
+    get: (): Promise<SoulConfig> => ipcRenderer.invoke(CH.personalityGet),
+    set: (config: SoulConfig): Promise<{ commit: string; changedPaths: string[] }> => ipcRenderer.invoke(CH.personalitySet, config),
+  },
+  memory: {
+    get: (): Promise<string> => ipcRenderer.invoke(CH.memoryGet),
   },
   microApps: {
     create: (name: string) => ipcRenderer.invoke(CH.microAppCreate, name),

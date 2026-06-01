@@ -6,7 +6,7 @@
 // versions it, and reloads. Keeping the write authority with the agent and the
 // safety/versioning here is the separation that makes the loop debuggable.
 
-import { commitSelfMod, diffPaths, listDirty, recentSelfMods, revertCommit, type SelfModLogEntry } from './git.js'
+import { commitSelfMod, diffPaths, listDirty, recentSelfMods, revertCommit, type SelfModKind, type SelfModLogEntry } from './git.js'
 import { HmrController } from './hmr.js'
 import type { ReloadKind } from './path-relevance.js'
 
@@ -57,6 +57,16 @@ export class SelfModService {
     const changedPaths = await diffPaths(this.repoRoot, commit)
     const reload = this.hmr.apply(changedPaths)
     return { commit, changedPaths, reload }
+  }
+
+  /**
+   * Commit specific repo paths directly (not via an agent turn) with an explicit
+   * surface category — used by Settings to version soul/memory edits. No HMR:
+   * soul/memory are instruction data, not renderer source.
+   */
+  async commitManaged(paths: string[], subject: string, kind: SelfModKind): Promise<{ commit: string; changedPaths: string[] }> {
+    const commit = await commitSelfMod(this.repoRoot, { paths, subject, conversationId: 'settings', kind })
+    return { commit, changedPaths: paths }
   }
 
   history(): Promise<SelfModLogEntry[]> {

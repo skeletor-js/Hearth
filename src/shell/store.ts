@@ -32,6 +32,9 @@ interface ShellState {
   bottomOpen: boolean
   rightTab: string
   bottomTab: string
+  // agent
+  approval: 'auto' | 'commands' | 'always'
+  setApproval: (v: 'auto' | 'commands' | 'always') => void
   // actions
   setTheme: (t: Theme) => void
   toggleTheme: () => void
@@ -63,6 +66,8 @@ export const useShell = create<ShellState>()(
       bottomOpen: false,
       rightTab: 'review',
       bottomTab: 'terminal',
+      approval: 'commands',
+      setApproval: (approval) => set({ approval }),
 
       setTheme: (theme) => set({ theme }),
       toggleTheme: () => set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),

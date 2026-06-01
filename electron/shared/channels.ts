@@ -55,6 +55,10 @@ export const HEARTH_CHANNELS = {
   browserSetBounds: 'browser:set-bounds',
   browserHide: 'browser:hide',
   browserState: 'browser:state', // main → renderer
+  // personality (soul) + memory — managed blocks in each backend's global file.
+  personalityGet: 'personality:get',
+  personalitySet: 'personality:set',
+  memoryGet: 'memory:get',
   microAppCreate: 'micro-app:create',
   microAppStart: 'micro-app:start',
   microAppStop: 'micro-app:stop',
