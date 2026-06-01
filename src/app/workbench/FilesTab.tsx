@@ -116,7 +116,7 @@ export function FilesTab() {
               editable={!open.readonly}
               onChange={(v) => setOpen((o) => (o ? { ...o, draft: v } : o))}
               basicSetup={{ lineNumbers: true, foldGutter: true, highlightActiveLine: true }}
-              style={{ fontSize: 12.5 }}
+              style={{ fontSize: 'var(--t-13)' }}
             />
           )}
         </div>

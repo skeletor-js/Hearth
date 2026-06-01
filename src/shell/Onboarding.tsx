@@ -105,7 +105,7 @@ export function Onboarding() {
                   </span>
                   <div className="pk-body">
                     <div className="pk-name">{w.name}</div>
-                    <div className="pk-sub" style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{w.path}</div>
+                    <div className="pk-sub" style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-11)' }}>{w.path}</div>
                   </div>
                   {wsId === w.id && <Icon name="check-circle" fill className="pk-check" />}
                 </div>

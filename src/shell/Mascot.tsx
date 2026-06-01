@@ -59,7 +59,7 @@ export function AsciiEmber({
 export function ThinkingEmber({ label = 'Hearth is thinking' }: { label?: string }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 'var(--t-12)', color: 'var(--subtle)' }}>
-      <i className="ph-fill ph-flame thinking-flame" style={{ color: 'var(--accent)', fontSize: 14 }} />
+      <i className="ph-fill ph-flame thinking-flame" style={{ color: 'var(--accent)', fontSize: 'var(--t-14)' }} />
       <span>{label}</span>
       <span className="typing">
         <span />

@@ -32,7 +32,7 @@ function SearchScreen() {
     <div className="screen scroll" data-screen-label="Search">
       <div className="screen-inner narrow">
         <div className="search-field">
-          <Icon name="magnifying-glass" style={{ color: 'var(--subtle)', fontSize: 18 }} />
+          <Icon name="magnifying-glass" style={{ color: 'var(--subtle)', fontSize: 'var(--t-18)' }} />
           <input autoFocus placeholder="Search sessions by title or workspace…" value={q} onChange={(e) => setQ(e.target.value)} />
           {q && (
             <button className="btn-icon" onClick={() => setQ('')}>

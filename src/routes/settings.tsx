@@ -158,7 +158,7 @@ function SettingsScreen() {
           </span>
         </SetRow>
         {memory && (
-          <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--subtle)', padding: '4px 2px' }}>
+          <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'var(--mono)', fontSize: 'var(--t-11_5)', color: 'var(--subtle)', padding: '4px 2px' }}>
             {memory}
           </pre>
         )}

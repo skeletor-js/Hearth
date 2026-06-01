@@ -145,7 +145,7 @@ export function ScratchpadTab() {
           onUpdate={(u) => setHasSel(!u.state.selection.main.empty)}
           placeholder="Jot notes here. Send them to the agent, or turn on Auto-attach."
           basicSetup={{ lineNumbers: false, foldGutter: false, highlightActiveLine: false }}
-          style={{ fontSize: 12.5 }}
+          style={{ fontSize: 'var(--t-13)' }}
         />
       </div>
       <div className="wb-subhead" style={{ justifyContent: 'flex-end' }}>

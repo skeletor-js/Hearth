@@ -101,8 +101,8 @@ export function GitPanel({ anchor, onClose }: { anchor: { left: number; bottom: 
             ))}
             <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
               <input
-                className="composer-input"
-                style={{ padding: '7px 9px', border: '1px solid var(--border)', borderRadius: 7 }}
+                className="field"
+                style={{ minWidth: 0, width: '100%' }}
                 placeholder="Commit message"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
@@ -127,8 +127,8 @@ export function GitPanel({ anchor, onClose }: { anchor: { left: number; bottom: 
         <div className="pop-sect">Branch</div>
         <div style={{ padding: '0 10px 10px', display: 'flex', gap: 8 }}>
           <input
-            className="composer-input"
-            style={{ padding: '7px 9px', border: '1px solid var(--border)', borderRadius: 7, flex: 1 }}
+            className="field"
+            style={{ minWidth: 0, flex: 1 }}
             placeholder="new-branch-name"
             value={newBranch}
             onChange={(e) => setNewBranch(e.target.value)}

@@ -96,7 +96,7 @@ export function ReviewTab({ onOpenTab }: { onOpenTab: (id: string) => void }) {
         </button>
       </div>
       {pr && (
-        <div className="wb-subhead" style={{ color: 'var(--subtle)', fontFamily: 'var(--mono)', fontSize: 11 }}>
+        <div className="wb-subhead" style={{ color: 'var(--subtle)', fontFamily: 'var(--mono)', fontSize: 'var(--t-11)' }}>
           {pr}
         </div>
       )}

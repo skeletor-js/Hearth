@@ -47,7 +47,7 @@ export function SelfTab() {
               <div key={i} className="ftree-row" style={{ height: 'auto', padding: '9px 10px', alignItems: 'flex-start' }}>
                 <Icon name="pencil-simple" style={{ marginTop: 2 }} />
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--strong)' }}>{p}</div>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-11_5)', color: 'var(--strong)' }}>{p}</div>
                   <div style={{ fontSize: 'var(--t-12)', color: 'var(--subtle)', marginTop: 1 }}>{basename(p)}</div>
                 </div>
                 <span className="tag m" style={{ marginLeft: 'auto' }}>
@@ -84,7 +84,7 @@ export function SelfTab() {
         </>
       ) : (
         <div className="wb-empty">
-          <span className="flame" style={{ fontSize: 28, color: 'var(--accent)' }}>
+          <span className="flame" style={{ fontSize: 'var(--t-28)', color: 'var(--accent)' }}>
             <FlameMark size={28} />
           </span>
           <h3>No self-edits yet</h3>
