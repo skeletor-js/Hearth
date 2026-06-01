@@ -2,8 +2,7 @@
 
 How Hearth steps backward and forward through the changes it makes to *itself*.
 This needs to be right: it's the safety net that makes letting an AI rewrite the
-running app survivable. **Status: proposal — needs sign-off before building the
-History phase (UI-PLAN P-History).**
+running app survivable. **Status: SIGNED OFF — build per this doc (UI-PLAN P6-1).**
 
 ## What we're modeling
 
@@ -89,11 +88,11 @@ kept apart from the safe undo/redo path.
   are never in this timeline.
 - **Concurrency:** serialize undo/redo with in-flight turns (don't revert mid-turn).
 
-## Decisions needed from you
+## Decisions (signed off)
 
-1. **Model A vs B** (recommend A).
-2. **Conflict handling:** auto-hand to Hearth's agent to resolve, vs always require
-   the user to undo later edits first (recommend: offer agent-resolve, with the
-   manual path as fallback).
-3. **A literal "Restore to this point"** (checkout-style jump) as a separate later
-   feature — yes/no/later (recommend: later).
+1. **Model A** — append-only via `git revert`. ✓
+2. **Conflict handling: auto-hand to Hearth's own agent to resolve** the revert
+   (spawn a turn: "resolve this revert conflict"). The manual "undo later edits
+   first" path is the fallback if the agent can't. ✓
+3. **Literal "Restore to this point" (checkout-style jump): later** — not in this
+   build; the safe undo/redo path is the only history control for now. ✓

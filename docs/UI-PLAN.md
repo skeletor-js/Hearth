@@ -43,9 +43,15 @@ self-edit regardless of cwd. `captureTurn` always targets `REPO_ROOT`.
   is built-in and always on, not switchable.
 - **Onboarding:** trimmed to **connect-agent + choose-workspace**, first-run only.
   No personality step (set in Settings).
-- **History / undo / redo:** design-first — see
-  [SELF-EVOLUTION-HISTORY.md](SELF-EVOLUTION-HISTORY.md). Recommended **Model A
-  (append-only revert)**; the History phase is `[!]` blocked until that's signed off.
+- **History / undo / redo:** **Model A** (append-only `git revert`), revert
+  conflicts **auto-resolved by Hearth's agent**, no checkout-style "Restore" for now.
+  Signed off — see [SELF-EVOLUTION-HISTORY.md](SELF-EVOLUTION-HISTORY.md).
+- **soul.md / memory.md:** `soul.md` is generated from the Personality settings
+  (response length · directness · formatting density) and injected into every
+  session's agent context; the user tunes the toggles, not the file. `memory.md` is
+  plain markdown the agent reads at session start and appends on "remember/forget".
+  Both live under Hearth's config (`.hearth/`, gitignored runtime state). Refine the
+  exact schema at P5-2; this default unblocks it.
 - **Self tab:** keep as a distinct, always-present workbench tab.
 - **Folder-workspace config (default):** respect each folder's own `.claude`
   settings; only isolate `CLAUDE_CONFIG_DIR` where needed for auth. Don't write
@@ -170,9 +176,11 @@ Every phase must end green and be checkpoint-committed. A task is "done" only wh
 - [ ] **P5-4.** Gates + visual; checkpoint commit.
 
 ### P6 — History (design-gated) + ⌘K + onboarding + polish
-- [!] **P6-1. History — BLOCKED on [SELF-EVOLUTION-HISTORY.md](SELF-EVOLUTION-HISTORY.md)
-      sign-off.** Then build the timeline (applied/undone, current-build boundary),
-      undo/redo per the agreed model, conflict handling (agent-resolve). TDD the model.
+- [ ] **P6-1. History** — build per [SELF-EVOLUTION-HISTORY.md](SELF-EVOLUTION-HISTORY.md)
+      (signed off: **Model A** append-only revert; revert **conflicts auto-handed to
+      Hearth's agent** to resolve; no checkout-style "Restore" for now). Timeline
+      (applied/undone, current-build boundary derived from net-effect), undo/redo,
+      conflict→agent-resolve, clean-tree guard, HMR tier via `diffPaths`. TDD the model.
 - [ ] **P6-2.** ⌘K command palette (nav / skills / workspaces / theme actions).
 - [ ] **P6-3.** Onboarding (trimmed: connect-agent + choose-workspace), first-run
       only; first-run state persisted.
@@ -196,8 +204,5 @@ rather than one sweep — this build is visual and has product judgment in it.
 
 ## Open questions
 
-- **History model sign-off** — approve Model A (or B) + conflict handling in
-  [SELF-EVOLUTION-HISTORY.md](SELF-EVOLUTION-HISTORY.md). Blocks P6-1 only.
-- **soul.md / memory.md formats** — exact schema for the compiled personality and
-  the memory file (decide at P5-2; sensible default otherwise).
-- Everything else from the prior round is now locked above.
+None blocking. All decisions are locked above; the `soul.md`/`memory.md` schema has
+a working default and is refined at P5-2. The plan is ready to execute.
