@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router'
+import { BackendSwitcher } from './BackendSwitcher'
 
 // Registry of sidebar apps. The agent edits this list when it adds an app.
 // (A later version can derive it from the routes dir so there's one source.)
@@ -23,6 +24,7 @@ export function Sidebar() {
       <Link to="/micro/$name" params={{ name: 'demo' }} className={LINK_CLASS}>
         Demo
       </Link>
+      <BackendSwitcher />
     </nav>
   )
 }

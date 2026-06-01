@@ -7,6 +7,7 @@ import { registerIpc } from './ipc.js'
 import { ClaudeAgent } from './agents/claude.js'
 import { CodexAgent } from './agents/codex.js'
 import { FakeAgent } from './agents/fake.js'
+import { AgentHost } from './agents/agent-host.js'
 import type { Agent, AgentAuth, AgentKind } from './agents/agent.js'
 import { SelfModService } from './self-mod/self-mod-service.js'
 import { HmrController } from './self-mod/hmr.js'
@@ -33,19 +34,23 @@ function resolveAuth(backend: AgentKind): AgentAuth {
   return { mode: 'subscription' }
 }
 
+// Build the right backend on demand. HEARTH_FAKE_AGENT=1 forces the scripted
+// agent (UI/permission dev without a live model). Auth is resolved per kind.
+function createAgent(kind: AgentKind): Agent {
+  if (process.env.HEARTH_FAKE_AGENT) return new FakeAgent()
+  const auth = resolveAuth(kind)
+  return kind === 'codex'
+    ? new CodexAgent({ kind: 'codex', cwd: REPO_ROOT, auth })
+    : new ClaudeAgent({ kind: 'claude', cwd: REPO_ROOT, auth })
+}
+
 async function bootstrap(): Promise<void> {
   const window = createMainWindow()
 
-  // HEARTH_FAKE_AGENT=1 swaps in a scripted agent for UI/permission development
-  // without a live model. See agents/fake.ts.
-  const backend = resolveBackend()
-  const auth = resolveAuth(backend)
-  console.log(`[hearth] backend: ${backend}, auth mode: ${auth.mode}`)
-  const agent: Agent = process.env.HEARTH_FAKE_AGENT
-    ? new FakeAgent()
-    : backend === 'codex'
-      ? new CodexAgent({ kind: 'codex', cwd: REPO_ROOT, auth })
-      : new ClaudeAgent({ kind: 'claude', cwd: REPO_ROOT, auth })
+  // The host owns the current backend and swaps it at runtime; IPC talks to it,
+  // not to a fixed agent. Starts on the env-selected backend (default Claude).
+  const host = new AgentHost(createAgent, resolveBackend())
+  console.log(`[hearth] backend: ${host.kind}`)
 
   const hmr = new HmrController({
     reloadWindow: () => window.webContents.reload(),
@@ -56,11 +61,11 @@ async function bootstrap(): Promise<void> {
   })
   const selfMod = new SelfModService(REPO_ROOT, hmr)
 
-  registerIpc({ repoRoot: REPO_ROOT, agent, selfMod, window })
+  registerIpc({ repoRoot: REPO_ROOT, host, selfMod, window })
 
-  // Connect the agent in the background; the UI renders immediately and shows
-  // connection state. A failed connect must surface, not crash boot.
-  agent.connect().catch((err) => {
+  // Connect the current backend in the background; the UI renders immediately.
+  // A failed connect must surface, not crash boot.
+  host.connect().catch((err) => {
     window.webContents.send('agent:error', String(err))
   })
 }

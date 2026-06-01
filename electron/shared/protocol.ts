@@ -4,6 +4,16 @@
 // types main produces — no hand-mirrored shapes that drift. agent.ts re-exports
 // these for the main-process agent code.
 
+/** The selectable agent backends. */
+export type AgentKind = 'claude' | 'codex'
+
+/** Current-backend status (main → renderer on the backend-changed channel). */
+export interface BackendStatus {
+  kind: AgentKind
+  /** Present if the backend failed to connect after a switch. */
+  error?: string
+}
+
 /** A single streamed update from a turn — mirrors ACP `session/update`. */
 export type SessionUpdate =
   | { type: 'message'; role: 'assistant'; text: string }

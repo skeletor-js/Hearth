@@ -7,6 +7,8 @@ export const HEARTH_CHANNELS = {
   // renderer → main (invoke)
   agentPrompt: 'agent:prompt',
   agentCancel: 'agent:cancel',
+  backendGet: 'agent:backend:get',
+  backendSet: 'agent:backend:set',
   selfModHistory: 'self-mod:history',
   selfModUndo: 'self-mod:undo',
   microAppCreate: 'micro-app:create',
@@ -18,6 +20,7 @@ export const HEARTH_CHANNELS = {
   agentUpdate: 'agent:update',
   agentError: 'agent:error',
   permissionRequest: 'permission:request',
+  backendChanged: 'agent:backend:changed',
 } as const
 
 export type HearthChannel = (typeof HEARTH_CHANNELS)[keyof typeof HEARTH_CHANNELS]

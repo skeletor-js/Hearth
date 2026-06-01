@@ -3,21 +3,28 @@
 
 import { contextBridge, ipcRenderer } from 'electron'
 import { HEARTH_CHANNELS as CH } from '../shared/channels.js'
-import type { AgentUpdatePayload, PermissionRequestPayload } from '../shared/protocol.js'
+import type { AgentKind, AgentUpdatePayload, BackendStatus, PermissionRequestPayload } from '../shared/protocol.js'
 
 const api = {
   agent: {
     prompt: (text: string) => ipcRenderer.invoke(CH.agentPrompt, text),
     cancel: () => ipcRenderer.invoke(CH.agentCancel),
+    getBackend: (): Promise<AgentKind> => ipcRenderer.invoke(CH.backendGet),
+    setBackend: (kind: AgentKind): Promise<BackendStatus> => ipcRenderer.invoke(CH.backendSet, kind),
+    onBackendChanged: (cb: (status: BackendStatus) => void) => {
+      const handler = (_e: unknown, status: BackendStatus) => cb(status)
+      ipcRenderer.on(CH.backendChanged, handler)
+      return () => void ipcRenderer.off(CH.backendChanged, handler)
+    },
     onUpdate: (cb: (payload: AgentUpdatePayload) => void) => {
       const handler = (_e: unknown, payload: AgentUpdatePayload) => cb(payload)
       ipcRenderer.on(CH.agentUpdate, handler)
-      return () => ipcRenderer.off(CH.agentUpdate, handler)
+      return () => void ipcRenderer.off(CH.agentUpdate, handler)
     },
     onError: (cb: (message: string) => void) => {
       const handler = (_e: unknown, message: string) => cb(message)
       ipcRenderer.on(CH.agentError, handler)
-      return () => ipcRenderer.off(CH.agentError, handler)
+      return () => void ipcRenderer.off(CH.agentError, handler)
     },
   },
   permission: {
@@ -25,7 +32,7 @@ const api = {
     onRequest: (cb: (payload: PermissionRequestPayload) => void) => {
       const handler = (_e: unknown, payload: PermissionRequestPayload) => cb(payload)
       ipcRenderer.on(CH.permissionRequest, handler)
-      return () => ipcRenderer.off(CH.permissionRequest, handler)
+      return () => void ipcRenderer.off(CH.permissionRequest, handler)
     },
     // Answer it by option id; fire-and-forget (main holds the resolver).
     respond: (id: string, optionId: string) => ipcRenderer.send(CH.permissionRespond, { id, optionId }),

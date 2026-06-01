@@ -1,7 +1,8 @@
 // The backend-agnostic agent contract. The renderer talks to this shape; it
 // never knows whether Claude Code or Codex is behind it.
 
-export type AgentKind = 'claude' | 'codex'
+export type { AgentKind } from '../../shared/protocol.js'
+import type { AgentKind } from '../../shared/protocol.js'
 
 export type AgentAuth =
   | { mode: 'subscription' } // user already ran `claude login`; we inherit it
