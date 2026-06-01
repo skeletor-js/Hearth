@@ -98,7 +98,8 @@ Every phase must end green and be checkpoint-committed. A task is "done" only wh
   not over-unit-tested.
 - **Checkpoint commit per phase** (and per meaningful task); never commit red.
 - **Match the existing codebase** (style, patterns, deps). No new frameworks unless
-  the plan calls for it (Phosphor, node-pty, xterm are sanctioned here).
+  the plan calls for it (Phosphor, node-pty, xterm, CodeMirror 6 are sanctioned here;
+  the Browser uses Electron's built-in `WebContentsView`, no dep).
 
 ---
 
@@ -182,16 +183,26 @@ Terminal/Browser land in P4).
       to change itself → **self-mod commit + HMR fires**; restart → sessions +
       transcripts restored. Checkpoint commit.
 
-### P4 — Files / Terminal / Browser  ∥
-- [ ] **P4-1.** ∥ **Files:** sandboxed `fs` IPC (dir tree + read) rooted at active
-      workspace cwd; Files tab.
+### P4 — Files+Editor / Terminal / Browser  ∥
+- [ ] **P4-1.** ∥ **Files + editor:** `fs` IPC (dir tree + read **and write**) rooted
+      at the active workspace cwd. Files tab = tree → open a file in an in-app
+      **CodeMirror 6** editor: syntax highlighting for code, **markdown editing with a
+      preview toggle**, dirty/save state, save to disk. Add CodeMirror deps. *Accept:*
+      open/edit/save a code file and a markdown file. *(Note: editing a Hearth source
+      file HMRs live but is NOT auto-committed — History is agent self-mods, not the
+      user's manual editor edits.)*
 - [ ] **P4-2.** ∥ **Terminal:** `node-pty` PTY per panel (cwd = workspace) streamed
       to `xterm.js`. Add deps. *Accept:* a real shell runs in the panel.
-- [ ] **P4-3.** ∥ **Browser:** `WebContentsView` + back/reload/editable URL bar/
-      open-external. **URL source:** manual entry always; plus auto-detect a dev-server
-      URL from the workspace's terminal output (the `Local: http://localhost:NNNN`
-      line — we already parse this for micro-apps in `extractDevUrl`), and default the
-      Hearth workspace to its own renderer URL. Per-workspace last-URL remembered.
+- [ ] **P4-3.** ∥ **Browser (real, persistent):** an embedded Chromium pane
+      (`WebContentsView`) the user can navigate **anywhere** and **log into** — backed
+      by a persistent session partition (`persist:hearth-browser`) so cookies/logins
+      survive restarts. Full chrome: editable URL bar, back/forward/reload, loading
+      state, open-external. Main positions the view over the panel region and **syncs
+      bounds** on resize/layout/route/panel-toggle (hide it when the panel/route is
+      hidden — the view floats above the renderer). Convenience: auto-fill a detected
+      dev-server URL (via `extractDevUrl`) and default Hearth to its renderer URL — but
+      it's a general browser, not just a preview. Per-workspace last-URL remembered.
+      *Accept:* browse to a site, log in, restart, still logged in.
 - [ ] **P4-4.** Gates + visual; checkpoint commit.
 
 ### P5 — Settings + Personality/Memory + Agents  ∥
