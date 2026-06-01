@@ -3,7 +3,7 @@
 How Hearth's **Personality** settings and **Memory** ("remember this / forget
 that") reach the agent. The rule: drive each backend's **native** instruction +
 memory surface so the agent actually reads it — never a bespoke file the agent
-ignores. **Status: proposal — needs sign-off before building UI-PLAN P5-2.**
+ignores. **Status: SIGNED OFF — build per this doc (UI-PLAN P5-2).**
 
 ## How the backends natively handle it
 
@@ -46,44 +46,57 @@ backend's **native global instructions file**, structured as managed sections:
 <!-- /HEARTH:managed -->
 ```
 
-- **Claude:** write the whole file to `$CLAUDE_CONFIG_DIR/CLAUDE.md` (Hearth owns
-  the isolated `.hearth/claude-config`; auth = keychain, unaffected). Clean, global,
-  zero user-file clobbering.
-- **Codex:** can't isolate `CODEX_HOME` without breaking auth. Two options:
-  - **(A) Managed block in `~/.codex/AGENTS.md`.** Insert/update only the delimited
-    `HEARTH:managed` block; leave the user's own content intact and reversible.
-    Touches a user file, but surgically.
-  - **(B) Isolate `CODEX_HOME` + symlink auth.** Point `CODEX_HOME` at
-    `.hearth/codex-config`, write `AGENTS.md` there, and **symlink** `~/.codex/auth.json`
-    (and a minimal `config.toml`) so login still resolves. Mirrors the Claude
-    approach; keeps the user's `~/.codex` pristine. Nuance: a symlink isn't reading
-    or storing the token (codex reads its own credential through the link), but it's
-    credential-adjacent — flagging per COMPLIANCE.
+**One mechanism, both backends ("A" everywhere).** The same idempotent
+managed-block writer targets whichever file the backend actually reads as global
+instructions:
+- **Claude:** the `CLAUDE.md` in Hearth's isolated `.hearth/claude-config`
+  (CLAUDE_CONFIG_DIR). Hearth owns the dir, so there's no user content to preserve —
+  but we still structure it as the managed block for consistency. Keychain auth
+  unaffected.
+- **Codex:** `~/.codex/AGENTS.md`. We do **not** isolate `CODEX_HOME` (file-based
+  auth lives there and just works), and write **only** the delimited `HEARTH:managed`
+  block, leaving the user's own content intact and reversible.
 
-**Memory** is the `## Memory` section above (so it's read natively every session,
-no special tool needed). "Remember/forget" = the agent edits that section via its
-normal file tools; Settings → "Open memory" reveals it. One global memory to start
-(per-workspace memory can come later). *(Optional augmentation: also surface
-Claude's native per-project `MEMORY.md` when on Claude — but the unified Hearth
-section is the cross-backend source of truth.)*
+This avoids the symlink-auth nuance entirely and is a single code path.
+
+**Memory — global + per-workspace.** Single source of truth is Hearth's managed
+blocks (we do NOT also drive Claude's native `MEMORY.md` tool):
+- **Global memory** → the `## Memory` section of the global instruction file above
+  (read in every session).
+- **Per-workspace memory** → a `HEARTH:memory` managed block in *that workspace's*
+  project instruction file (`<cwd>/CLAUDE.md` / `<cwd>/AGENTS.md`), composing
+  natively with the global one and applying only in that workspace. For the Hearth
+  repo it's the repo's own file (committed); for a folder workspace it's a surgical
+  block in that folder.
+- "Remember/forget" edits the right block (this-workspace by default, or global if
+  the user says so) via the agent's normal file tools; Settings → Memory reveals them.
 
 **Soul** is regenerated whenever Personality settings change; the user never
-hand-edits it (matches the handoff's "compiles to a soul Hearth reads").
+hand-edits it.
 
-Because these are just instruction files under Hearth's control, **Hearth can
-self-edit its own soul/ops** — on-brand, and they can be versioned with the repo
-or kept as runtime state (decision 3).
+**Versioning + IA (decision 3).** Hearth's **global soul + global memory are
+committed** in the Hearth repo, so changes are versioned. But they are conceptually
+distinct from code self-edits, so each self-mod commit is **categorized**
+(`Hearth-Kind: code | soul | memory`, derived from which managed files changed) and
+routed to a distinct surface:
+- **Evolve** — the timeline of *code/UI/skill* self-modifications (the renamed
+  "History"; undo/redo per [SELF-EVOLUTION-HISTORY.md](SELF-EVOLUTION-HISTORY.md)).
+- **Personality** — soul changes (their own versioned history).
+- **Memory** — memory changes (their own versioned history).
 
-## Decisions needed from you
+So "Hearth changed its own personality/memory" shows up under Personality/Memory,
+not mixed into the code Evolve timeline. (Per-workspace memory for folder workspaces
+lives with that folder, not in the Hearth repo's history.)
 
-1. **Codex delivery: (A) managed block in `~/.codex/AGENTS.md`, or (B) isolated
-   `CODEX_HOME` + symlinked auth?** (Recommend **B** — symmetric with Claude, keeps
-   the user's `~/.codex` untouched; accept the symlink nuance. Pick **A** if you'd
-   rather not touch anything auth-adjacent.)
-2. **Memory scope:** one global memory now (recommend), with per-workspace memory
-   later — yes? And do we also feed Claude's native `MEMORY.md` when on Claude, or
-   keep the single Hearth section as the only source of truth (recommend single)?
-3. **Soul/memory storage:** runtime state under `.hearth/` (gitignored), or
-   committed into the repo so self-edits to the soul are versioned in History?
-   (Recommend: memory = runtime/gitignored; soul = your call — versioning it makes
-   "Hearth changed its own personality" show up in History, which is kind of great.)
+## Decisions (signed off)
+
+1. **Delivery: "A" (managed block) for BOTH backends** — one writer, targeting each
+   backend's effective global instructions file (Claude's isolated
+   `CLAUDE_CONFIG_DIR/CLAUDE.md`; the user's `~/.codex/AGENTS.md` with a surgical
+   block). No `CODEX_HOME` isolation, no symlink. ✓
+2. **Memory: global AND per-workspace, both now.** Single source of truth = Hearth's
+   managed blocks; do NOT also drive Claude's native `MEMORY.md`. ✓
+3. **Versioned + split IA:** global soul + global memory are **committed** in the
+   Hearth repo. Self-mod commits are **categorized** (`Hearth-Kind: code|soul|memory`)
+   and shown under three distinct surfaces — **Evolve** (code), **Personality**
+   (soul), **Memory** (memory) — never mixed. ✓

@@ -17,14 +17,14 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[!]` blocked
 **global capability available from every session** — from any session, whatever
 folder it's working in, the user can ask Hearth to change itself; that edits
 Hearth's own repo, commits a `Hearth-SelfMod`, and HMR-reloads. The Self-edit chip,
-the **Self** tab, and **History** are always present.
+the **Self** tab, and **Evolve** (self-mod history) are always present.
 
 **"Workspaces" are other local folders** the user opens. A workspace only sets the
 **task cwd** for a session. Two file scopes per turn, tracked independently:
 
 | Scope | What | Edits |
 |---|---|---|
-| **Hearth repo** (`REPO_ROOT`) | the running app's source | self-mod commit → **HMR**, lands in History. Watched after *every* turn, any session. |
+| **Hearth repo** (`REPO_ROOT`) | the running app's source | self-mod commit → **HMR**, lands in Evolve (or Personality/Memory by kind). Watched after *every* turn, any session. |
 | **Session workspace** (`cwd`) | the task folder (may equal `REPO_ROOT`) | normal git working-tree edits, shown in Review. No auto-commit, no HMR. |
 
 The agent is told `REPO_ROOT` (+ self-edit instructions) in every session so it can
@@ -38,19 +38,26 @@ self-edit regardless of cwd. `captureTurn` always targets `REPO_ROOT`.
   a JSON index (id/title/workspace/timestamps/self-flag). Matches the ecosystem
   (Claude Code `~/.claude/projects/*.jsonl`, Codex `~/.codex/sessions`, Zed
   threads). Survives restarts; powers Recents/Search/resume.
-- **Settings scope:** Account (display), **Appearance**, **Agent**,
-  **Personality→soul.md + Memory**. **No self-evolution toggles** — self-evolution
-  is built-in and always on, not switchable.
+- **Settings scope:** Account (display), **Appearance**, **Agent**, **Personality +
+  Memory**. **No self-evolution toggles** — self-evolution is built-in and always
+  on, not switchable.
 - **Onboarding:** trimmed to **connect-agent + choose-workspace**, first-run only.
   No personality step (set in Settings).
-- **History / undo / redo:** **Model A** (append-only `git revert`), revert
-  conflicts **auto-resolved by Hearth's agent**, no checkout-style "Restore" for now.
-  Signed off — see [SELF-EVOLUTION-HISTORY.md](SELF-EVOLUTION-HISTORY.md).
-- **Soul (personality) + Memory:** design-first — deliver through each backend's
-  **native** instruction/memory surface (`$CLAUDE_CONFIG_DIR/CLAUDE.md` for Claude;
-  `$CODEX_HOME/AGENTS.md` for Codex), as a Hearth-managed section, applied globally
-  to every session/workspace. See [SOUL-AND-MEMORY.md](SOUL-AND-MEMORY.md). 3
-  decisions pending sign-off (blocks P5-2 only).
+- **Evolve / Memory / Personality are three distinct surfaces.** Self-mod commits
+  are categorized via a `Hearth-Kind: code|soul|memory` trailer (derived from which
+  managed files changed) and routed: **Evolve** = code/UI/skill history (the
+  former "History"); **Personality** = soul changes; **Memory** = memory changes.
+  Never mixed.
+- **Evolve undo / redo:** **Model A** (append-only `git revert`), revert conflicts
+  **auto-resolved by Hearth's agent**, no checkout-style "Restore" for now. Signed
+  off — see [SELF-EVOLUTION-HISTORY.md](SELF-EVOLUTION-HISTORY.md).
+- **Soul (personality) + Memory** (signed off — [SOUL-AND-MEMORY.md](SOUL-AND-MEMORY.md)):
+  one managed-block writer for **both** backends, targeting each one's native global
+  instructions (Claude's isolated `CLAUDE_CONFIG_DIR/CLAUDE.md`; the user's
+  `~/.codex/AGENTS.md`, surgical block). Memory is **global + per-workspace**
+  (per-workspace = a managed block in that workspace's project instructions); single
+  source of truth = Hearth's blocks. Global soul + memory are committed (categorized;
+  surface under Personality/Memory).
 - **Self tab:** keep as a distinct, always-present workbench tab.
 - **Folder-workspace config (default):** respect each folder's own `.claude`
   settings; only isolate `CLAUDE_CONFIG_DIR` where needed for auth. Don't write
@@ -168,22 +175,28 @@ Every phase must end green and be checkpoint-committed. A task is "done" only wh
 - [ ] **P5-1.** ∥ Settings screen: Account (display), Appearance (✅ wire),
       Agent (default backend/model, command-approval → `HEARTH_PERMISSION_MODE`).
       **No self-evolution toggles.**
-- [ ] **P5-2.** ∥ Personality + Memory per [SOUL-AND-MEMORY.md](SOUL-AND-MEMORY.md):
-      compile personality → a Hearth-managed section in each backend's native global
-      instructions; move Hearth operating instructions there too (so they apply in
-      folder workspaces); Memory section read/updated via chat. *(Pending sign-off.)*
-      Also fixes: today's repo-cwd `CLAUDE.md`/`AGENTS.md` ops guidance doesn't apply
-      when cwd is a folder workspace.
+- [ ] **P5-2.** ∥ Personality + Memory per [SOUL-AND-MEMORY.md](SOUL-AND-MEMORY.md)
+      (signed off): one managed-block writer → each backend's native global
+      instructions (Claude's isolated `CLAUDE_CONFIG_DIR/CLAUDE.md`; surgical block in
+      `~/.codex/AGENTS.md`). Move Hearth's operating instructions there too (so they
+      apply in folder workspaces — fixes today's repo-cwd-only gap). Compile
+      Personality → Soul block; Memory = global block + per-workspace block (in the
+      workspace's project instructions); read/updated via chat. Commit + categorize
+      (`Hearth-Kind`) so soul/memory edits surface under Personality/Memory, not Evolve.
 - [ ] **P5-3.** ∥ Agents screen: per-model select; connect an arbitrary ACP server
       (generalize beyond claude/codex). 
 - [ ] **P5-4.** Gates + visual; checkpoint commit.
 
-### P6 — History (design-gated) + ⌘K + onboarding + polish
-- [ ] **P6-1. History** — build per [SELF-EVOLUTION-HISTORY.md](SELF-EVOLUTION-HISTORY.md)
-      (signed off: **Model A** append-only revert; revert **conflicts auto-handed to
-      Hearth's agent** to resolve; no checkout-style "Restore" for now). Timeline
-      (applied/undone, current-build boundary derived from net-effect), undo/redo,
-      conflict→agent-resolve, clean-tree guard, HMR tier via `diffPaths`. TDD the model.
+### P6 — Evolve/Personality/Memory + ⌘K + onboarding + polish
+- [ ] **P6-1. Evolve** (the code self-mod timeline; renamed from "History") — build
+      per [SELF-EVOLUTION-HISTORY.md](SELF-EVOLUTION-HISTORY.md) (signed off: **Model A**
+      append-only revert; revert **conflicts auto-handed to Hearth's agent**; no
+      checkout-style "Restore" for now). Timeline (applied/undone, current-build
+      boundary derived from net-effect), undo/redo, conflict→agent-resolve, clean-tree
+      guard, HMR tier via `diffPaths`. Filter to `Hearth-Kind: code`. TDD the model.
+- [ ] **P6-1b. Personality + Memory surfaces** — the soul-change and memory-change
+      histories (commits filtered by `Hearth-Kind: soul` / `memory`), distinct from
+      Evolve. (Settings hosts the editors; these are the change views.)
 - [ ] **P6-2.** ⌘K command palette (nav / skills / workspaces / theme actions).
 - [ ] **P6-3.** Onboarding (trimmed: connect-agent + choose-workspace), first-run
       only; first-run state persisted.
@@ -207,8 +220,7 @@ rather than one sweep — this build is visual and has product judgment in it.
 
 ## Open questions
 
-- **Soul + Memory** — 3 decisions in [SOUL-AND-MEMORY.md](SOUL-AND-MEMORY.md)
-  (Codex delivery, memory scope, soul/memory storage). Blocks **P5-2 only** — late
-  in the build, so P0–P4 and the rest of P5/P6 are fully unblocked.
-
-Everything else is locked. P0 is ready to start.
+None blocking — every design decision (sessions, settings, onboarding, History/Evolve
+model, Soul + Memory, the Evolve/Personality/Memory split) is signed off. The
+`soul`/`memory` managed-block schema is finalized at P5-2 against
+[SOUL-AND-MEMORY.md](SOUL-AND-MEMORY.md). **P0 is ready to start.**

@@ -1,4 +1,10 @@
-# Self-evolution history — undo / redo / timeline (design)
+# Evolve — self-evolution history: undo / redo / timeline (design)
+
+This is the **Evolve** surface: how Hearth steps backward and forward through the
+*code/UI/skill* changes it makes to itself. Self-mod commits tagged
+`Hearth-Kind: soul` or `memory` are categorized out to the separate **Personality**
+and **Memory** surfaces (see [SOUL-AND-MEMORY.md](SOUL-AND-MEMORY.md)); Evolve filters
+to `Hearth-Kind: code`. The undo/redo model below applies to all three the same way.
 
 How Hearth steps backward and forward through the changes it makes to *itself*.
 This needs to be right: it's the safety net that makes letting an AI rewrite the
@@ -85,7 +91,8 @@ kept apart from the safe undo/redo path.
 - **HMR tier:** reload based on the revert commit's `diffPaths` (we already do this
   in `undo()`); `process-restart` tier uses the dev-aware restart.
 - **Scope:** history is `REPO_ROOT`-only (self-evolution). Folder-workspace edits
-  are never in this timeline.
+  are never in this timeline. Commits are categorized by `Hearth-Kind`
+  (code → Evolve, soul → Personality, memory → Memory).
 - **Concurrency:** serialize undo/redo with in-flight turns (don't revert mid-turn).
 
 ## Decisions (signed off)
