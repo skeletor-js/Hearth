@@ -655,3 +655,20 @@ live: branch matched `git status` (↑8), both popovers open, both themes.
   Verified live (Claude, subscription): session create succeeds; modes render +
   switch live (`setMode('plan')` → mode pill updates); model switch; usage shows
   `18.3k / 1.0M context · $0.11` with the compliance note; both themes.
+
+### Phase 2 — W1 images + W6 commands (done, commit `de…`)
+
+- **W1** (`protocol`/`agent`/`acp-agent`/`acp-client`/`agent-host`/`ipc`/`preload`/
+  `ChatView`/`Composer`/`hearth.css`): capture `promptCapabilities` from
+  `agentCapabilities` at initialize; composer accepts pasted/dropped images and
+  sends them as ACP image blocks alongside text, gated per-backend on
+  `promptCapabilities.image` (defense-in-depth gate also in acp-client). Pending
+  images render as removable thumbnails; sent images show in the user bubble.
+  Verified live: a solid-red PNG sent to Claude returned **"Red"**; caps report
+  `image:true, embeddedContext:true` for Claude.
+- **W6**: advertised commands flow through the host (cache + `commandsChanged`
+  event) instead of being swallowed; composer shows a `/`-triggered autocomplete
+  palette (prefix filter, arrow/Tab/Enter nav), updating live. Verified: 27
+  commands captured; `/de` → `/debug`; palette renders above the composer.
+- Note: image attachments aren't persisted in the transcript (text-only entries);
+  they're live-session only, which is sufficient for the screenshot→agent loop.
