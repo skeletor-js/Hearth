@@ -131,21 +131,27 @@ async function bootstrap(): Promise<void> {
   const host = new AgentHost(makeAgentFactory(secrets, mcp, REPO_ROOT), resolveBackend())
   console.log(`[hearth] backend: ${host.kind}`)
 
-  const hmr = new HmrController({
-    reloadWindow: () => window.webContents.reload(),
-    restartApp: () => {
-      // In dev, electron-vite owns the process lifecycle and restarts the app
-      // when a main-process file is *written* — self-relaunching here would kill
-      // the dev session (and its Vite server), leaving a blank window. Only
-      // relaunch in a packaged build; in dev a window reload is the safe fallback.
-      if (app.isPackaged) {
-        app.relaunch()
-        app.exit(0)
-      } else {
-        window.webContents.reload()
-      }
+  const hmr = new HmrController(
+    {
+      reloadWindow: () => window.webContents.reload(),
+      restartApp: () => {
+        // In dev, electron-vite owns the process lifecycle and restarts the app
+        // when a main-process file is *written* — self-relaunching here would kill
+        // the dev session (and its Vite server), leaving a blank window. Only
+        // relaunch in a packaged build; in dev a window reload is the safe fallback.
+        if (app.isPackaged) {
+          app.relaunch()
+          app.exit(0)
+        } else {
+          window.webContents.reload()
+        }
+      },
     },
-  })
+    // Vite serves the renderer whenever we loaded a URL (dev + packaged self-
+    // evolving); only the static-bundle fallback loads a file. When Vite serves,
+    // it reloads full-reload-tier edits itself — don't double-reload.
+    Boolean(renderer.target.url),
+  )
   const selfMod = new SelfModService(
     REPO_ROOT,
     hmr,

@@ -16,7 +16,18 @@ export interface ReloadDriver {
 }
 
 export class HmrController {
-  constructor(private readonly driver: ReloadDriver) {}
+  /**
+   * @param viteServed True when the renderer is served by a live Vite server
+   *   (dev, and the packaged self-evolving build). In that mode Vite ALREADY
+   *   reloads the page itself when a full-reload-tier file (route tree, index.html)
+   *   changes on disk, so a second hard `webContents.reload()` only doubles the
+   *   black flash. We skip it and let Vite's lighter reload stand. Only the static
+   *   fallback (no Vite/HMR) needs the forced reload.
+   */
+  constructor(
+    private readonly driver: ReloadDriver,
+    private readonly viteServed = false,
+  ) {}
 
   /**
    * React to a committed batch of edits. Returns the tier that was applied so
@@ -29,7 +40,9 @@ export class HmrController {
         // Vite already hot-swapped on file write. Nothing to do.
         break
       case 'full-reload':
-        this.driver.reloadWindow()
+        // Under Vite, the page already reloaded on save — a hard reload here just
+        // adds a second, longer blank. Force it only without Vite (static build).
+        if (!this.viteServed) this.driver.reloadWindow()
         break
       case 'process-restart':
         this.driver.restartApp()

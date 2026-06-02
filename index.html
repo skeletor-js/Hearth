@@ -8,6 +8,18 @@
       content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws:; frame-src http://localhost:* http://127.0.0.1:*; object-src 'none'; base-uri 'self'"
     />
     <title>Hearth</title>
+    <!-- Paint the app's dark background from the very first frame so a reload
+         (e.g. after a structural self-mod) flashes the app color, not a white/void
+         gap, before the CSS bundle loads. Matches BrowserWindow backgroundColor. -->
+    <style>
+      html,
+      body,
+      #root {
+        margin: 0;
+        height: 100%;
+        background: #0b0b0e;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

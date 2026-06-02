@@ -80,6 +80,22 @@ describe('SelfModService.captureTurn', () => {
     expect(calls).toEqual(['reload'])
   })
 
+  test('under Vite, a route edit does NOT force a second hard reload', async () => {
+    // Vite already reloads the page on save; a hard webContents.reload() would
+    // just double the black flash. The tier is still reported as full-reload.
+    const calls: string[] = []
+    const hmr = new HmrController(
+      { reloadWindow: () => calls.push('reload'), restartApp: () => calls.push('restart') },
+      true, // viteServed
+    )
+    const svc = new SelfModService(repo, hmr)
+    write(repo, 'src/routes/settings.tsx', 'export const Route = {}\n')
+
+    const result = await svc.captureTurn('conv-7b', 'add settings route')
+    expect(result!.reload).toBe<ReloadKind>('full-reload')
+    expect(calls).toEqual([]) // Vite handles it — no extra reload
+  })
+
   test('commits ONLY what changed during the turn, not pre-existing dirty files', async () => {
     const { hmr } = recordingHmr()
     const svc = new SelfModService(repo, hmr)
