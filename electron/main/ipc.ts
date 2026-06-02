@@ -209,22 +209,14 @@ export function registerIpc(services: MainServices): void {
   ipcMain.handle(HEARTH_CHANNELS.agentSetModel, (_e, modelId: string) => host.setModel(modelId))
 
   ipcMain.handle(HEARTH_CHANNELS.selfModHistory, () => selfMod.history())
-  // Undo/redo revert files, which (like an agent turn) can be full-reload-tier and
-  // should morph instead of flashing. Bracket with the same reload-suppression: a
-  // revert writes files immediately before returning, so its autonomous Vite reload
-  // is still pending — keep suppression on past that (delayed turn-end) so only the
-  // morph's explicit covered reload (fired inside undo via HmrController.apply) shows.
-  const REVERT_TURN_END_DELAY_MS = 2500
-  const morphStep = async <T>(fn: () => Promise<T>): Promise<T> => {
-    void overlay.turnStart()
-    try {
-      return await fn()
-    } finally {
-      setTimeout(() => void overlay.turnEnd(), REVERT_TURN_END_DELAY_MS)
-    }
-  }
-  ipcMain.handle(HEARTH_CHANNELS.selfModUndo, (_e, hash: string) => morphStep(() => selfMod.undo(hash)))
-  ipcMain.handle(HEARTH_CHANNELS.selfModRedo, (_e, hash: string) => morphStep(() => selfMod.redo(hash)))
+  // Plain undo/redo: let Vite's autonomous reloads apply the revert. They self-heal
+  // through the transient broken state a revert creates (a file is deleted while a
+  // sibling still imports it for a beat), retrying until the files settle. Morph-
+  // covering undo was attempted and reverted: suppressing those autonomous reloads
+  // to force one explicit covered reload landed in that broken window and left the
+  // renderer blank. Covering undo seamlessly needs revert-settle handling — deferred.
+  ipcMain.handle(HEARTH_CHANNELS.selfModUndo, (_e, hash: string) => selfMod.undo(hash))
+  ipcMain.handle(HEARTH_CHANNELS.selfModRedo, (_e, hash: string) => selfMod.redo(hash))
 
   // Workbench git surface. `cwd` defaults to the Hearth repo until workspaces
   // (P3) thread a real per-session cwd.
