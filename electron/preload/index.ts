@@ -232,8 +232,8 @@ const api = {
   // Morph cover — used only by the overlay renderer (src/overlay). Main pushes the
   // before/after screenshots; the overlay signals progress back.
   morph: {
-    onCover: (cb: (oldFrame: string) => void) => {
-      const h = (_e: unknown, p: { oldFrame: string }) => cb(p.oldFrame)
+    onCover: (cb: (oldFrame: string, rect: { x: number; y: number; width: number; height: number }) => void) => {
+      const h = (_e: unknown, p: { oldFrame: string; rect: { x: number; y: number; width: number; height: number } }) => cb(p.oldFrame, p.rect)
       ipcRenderer.on(CH.morphCover, h)
       return () => void ipcRenderer.off(CH.morphCover, h)
     },
@@ -243,6 +243,8 @@ const api = {
       return () => void ipcRenderer.off(CH.morphHandoff, h)
     },
     signal: (type: 'ready' | 'cover-painted' | 'done') => ipcRenderer.send(CH.morphSignal, { type }),
+    /** TEMP dev-only: drive a full morph over a plain window reload, to verify the pipeline. */
+    devTest: (): Promise<void> => ipcRenderer.invoke(CH.morphDevTest),
   },
 }
 

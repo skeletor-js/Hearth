@@ -1,7 +1,7 @@
 // App entry. Wires services and opens the window. Thin by design — all feature
 // logic lives in the renderer (which is self-editable) or in the named services.
 
-import { app, safeStorage, session, BrowserWindow } from 'electron'
+import { app, safeStorage, session, ipcMain, BrowserWindow } from 'electron'
 import { createMainWindow, createSnapshotWindow } from './window.js'
 import { prepareRenderer } from './dev-server.js'
 import { registerIpc } from './ipc.js'
@@ -26,6 +26,7 @@ import { HEARTH_CHANNELS } from '../shared/channels.js'
 import { join } from 'node:path'
 import { stopAllMicroApps } from './micro-apps/server.js'
 import { OverlayWindow } from './windows/overlay-window.js'
+import { runMorph } from './self-mod/hmr-morph.js'
 import { CapabilityStore } from './micro-apps/capabilities.js'
 import { CredentialBroker } from './micro-apps/broker.js'
 import { installSessionPolicy } from './micro-apps/session-policy.js'
@@ -112,6 +113,10 @@ async function bootstrap(): Promise<void> {
   const overlay = new OverlayWindow(renderer.target)
   overlay.webContents().once('did-finish-load', () => console.log('[hearth] morph overlay ready'))
   app.once('before-quit', () => overlay.destroy())
+  // TEMP (B4 verification): drive a full morph over a plain reload on demand.
+  ipcMain.handle(HEARTH_CHANNELS.morphDevTest, () =>
+    runMorph({ overlay, mainWindow: window }, () => window.webContents.reload()),
+  )
 
   // Encrypted secret store (BYO API keys + MCP env) and the user's MCP server
   // registry. Both live under userData. Created before the host because the agent

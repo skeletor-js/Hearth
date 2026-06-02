@@ -12,6 +12,12 @@ import { HEARTH_CHANNELS } from '../../shared/channels.js'
 import type { RendererTarget } from '../dev-server.js'
 
 export type MorphSignal = 'ready' | 'cover-painted' | 'done'
+export interface Rect {
+  x: number
+  y: number
+  width: number
+  height: number
+}
 
 // Union bounds of all displays, so one window covers the whole desktop.
 function allDisplaysBounds(): { x: number; y: number; width: number; height: number } {
@@ -63,9 +69,17 @@ export class OverlayWindow {
     })
   }
 
-  /** Push a screenshot to the overlay to paint as the cover. */
-  sendCover(oldFrame: string): void {
-    this.ensure().webContents.send(HEARTH_CHANNELS.morphCover, { oldFrame })
+  /** The overlay's top-left in global screen coords (union of all displays). */
+  originOffset(): { x: number; y: number } {
+    const b = allDisplaysBounds()
+    return { x: b.x, y: b.y }
+  }
+
+  /** Push a screenshot to the overlay to paint as the cover, positioned at `rect`
+   *  (overlay-local px) so it sits exactly where the window is — a seamless freeze,
+   *  not a fullscreen stretch. */
+  sendCover(oldFrame: string, rect: Rect): void {
+    this.ensure().webContents.send(HEARTH_CHANNELS.morphCover, { oldFrame, rect })
   }
 
   /** Hand the overlay the post-reload screenshot to morph to. */

@@ -71,9 +71,14 @@ export async function runMorph(
 
   try {
     const oldFrame = await captureFrame(mainWindow)
+    // Paint the cover exactly where the window is (overlay-local coords) so it
+    // looks like the UI froze, not like it jumped to fullscreen.
+    const mb = mainWindow.getBounds()
+    const origin = overlay.originOffset()
+    const rect = { x: mb.x - origin.x, y: mb.y - origin.y, width: mb.width, height: mb.height }
     await overlay.whenReady(1500)
     overlay.show()
-    overlay.sendCover(oldFrame)
+    overlay.sendCover(oldFrame, rect)
     await overlay.awaitSignal('cover-painted', 1500)
 
     await apply() // reload behind the cover

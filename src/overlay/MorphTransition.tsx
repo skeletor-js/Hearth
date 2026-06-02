@@ -11,17 +11,28 @@ import { RELOAD_TIER } from '@/shared/contracts/morph-timing'
 // stray clicks/scrolls don't hit the app mid-reload (the overlay window also
 // captures the mouse at the OS level while shown — this is belt-and-suspenders).
 
+interface Rect {
+  x: number
+  y: number
+  width: number
+  height: number
+}
 type Phase =
   | { kind: 'idle' }
-  | { kind: 'cover'; old: string }
-  | { kind: 'morph'; old: string; next: string }
+  | { kind: 'cover'; old: string; rect: Rect }
+  | { kind: 'morph'; old: string; next: string; rect: Rect }
 
-const FRAME: React.CSSProperties = {
-  position: 'absolute',
-  inset: 0,
-  width: '100%',
-  height: '100%',
-  objectFit: 'cover',
+// Position the frame exactly where the window is (overlay-local px), so the cover
+// is a seamless freeze of the window — not a fullscreen stretch.
+function frameStyle(rect: Rect): React.CSSProperties {
+  return {
+    position: 'absolute',
+    left: rect.x,
+    top: rect.y,
+    width: rect.width,
+    height: rect.height,
+    objectFit: 'fill',
+  }
 }
 
 export function MorphTransition() {
@@ -30,12 +41,16 @@ export function MorphTransition() {
   const t = RELOAD_TIER
 
   useEffect(() => {
-    const offCover = window.hearth?.morph?.onCover((oldFrame) => {
+    const offCover = window.hearth?.morph?.onCover((oldFrame, rect) => {
       setFadeNew(false)
-      setPhase({ kind: 'cover', old: oldFrame })
+      setPhase({ kind: 'cover', old: oldFrame, rect })
     })
     const offHandoff = window.hearth?.morph?.onHandoff((newFrame) => {
-      setPhase((p) => (p.kind === 'cover' ? { kind: 'morph', old: p.old, next: newFrame } : { kind: 'morph', old: newFrame, next: newFrame }))
+      setPhase((p) =>
+        p.kind === 'idle'
+          ? p // no cover yet — ignore stray handoff
+          : { kind: 'morph', old: p.old, next: newFrame, rect: p.rect },
+      )
     })
     return () => {
       offCover?.()
@@ -76,17 +91,21 @@ export function MorphTransition() {
 
   if (phase.kind === 'idle') return null
 
+  const rect = phase.rect
   const oldSrc = phase.old
   const newSrc = phase.kind === 'morph' ? phase.next : null
+  const base = frameStyle(rect)
 
+  // Transparent backdrop (so only the window-rect frame shows — outside stays the
+  // real desktop); pointer-events auto absorbs stray input during the transition.
   return (
-    <div style={{ position: 'fixed', inset: 0, pointerEvents: 'auto', background: '#0b0b0e' }}>
-      <img src={oldSrc} alt="" style={{ ...FRAME, opacity: 1 }} />
+    <div style={{ position: 'fixed', inset: 0, pointerEvents: 'auto', background: 'transparent' }}>
+      <img src={oldSrc} alt="" style={{ ...base, opacity: 1 }} />
       {newSrc && (
         <img
           src={newSrc}
           alt=""
-          style={{ ...FRAME, opacity: fadeNew ? 1 : 0, transition: `opacity ${t.handoffFadeMs}ms ease` }}
+          style={{ ...base, opacity: fadeNew ? 1 : 0, transition: `opacity ${t.handoffFadeMs}ms ease` }}
         />
       )}
     </div>
