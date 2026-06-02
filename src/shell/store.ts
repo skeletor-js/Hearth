@@ -104,5 +104,6 @@ export function applyTheme(theme: Theme, accent: Accent, reduceMotion: boolean):
   r.style.setProperty('--accent', accent)
   r.style.setProperty('--accent-soft', `color-mix(in srgb, ${accent} 12%, transparent)`)
   r.style.setProperty('--accent-fg', '#FFFFFF')
-  r.style.setProperty('--reduce-motion', reduceMotion ? '1' : '0')
+  // Drives the CSS below in hearth.css that neutralizes ambient animation.
+  r.setAttribute('data-reduce-motion', reduceMotion ? '1' : '0')
 }

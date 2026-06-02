@@ -119,6 +119,12 @@ export function translatePermission(req: RequestPermissionRequest): PermissionRe
   // auto-reject source-mutating shell. ACP carries it in the tool call's raw input.
   const rawInput = (req.toolCall as { rawInput?: { command?: unknown } }).rawInput
   const command = typeof rawInput?.command === 'string' ? rawInput.command : undefined
+  // Coarse category for the renderer's Command-approval tiers. A present raw
+  // command means shell regardless of how the kind is labelled; otherwise map the
+  // ACP tool kind. Unknown/missing kinds fall to 'other' (auto-approvable).
+  const kind = (req.toolCall as { kind?: string }).kind
+  const category: PermissionRequest['category'] =
+    command || kind === 'execute' ? 'execute' : kind === 'edit' || kind === 'delete' || kind === 'move' ? 'edit' : 'other'
   return {
     id: req.toolCall.toolCallId,
     title: req.toolCall.title ?? 'Permission requested',
@@ -127,6 +133,7 @@ export function translatePermission(req: RequestPermissionRequest): PermissionRe
       label: o.name,
       kind: mapPermissionKind(o.kind),
     })),
+    category,
     ...(command ? { command } : {}),
   }
 }

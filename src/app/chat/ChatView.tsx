@@ -255,7 +255,19 @@ export function ChatView() {
       setMsgs((p) => [...p, { id: id(), role: 'system', text: `agent error: ${message}` }])
       setBusy(false)
     })
-    const offPermission = window.hearth.permission.onRequest(({ req }) => setPermission(req))
+    const offPermission = window.hearth.permission.onRequest(({ req }) => {
+      // Command-approval tiers (Settings → Agent). 'always' prompts for every ask;
+      // 'commands' prompts only for shell/edit and silently approves reads/MCP;
+      // 'auto' approves everything. Source-mutating shell is already auto-rejected
+      // upstream in main, so it never reaches here. When we can't pick a non-reject
+      // option, fall back to prompting rather than guess.
+      const mode = useShell.getState().approval
+      const mustPrompt = mode === 'always' || (mode === 'commands' && req.category !== 'other')
+      if (mustPrompt) return setPermission(req)
+      const allow = req.options.find((o) => o.kind === 'allow') ?? req.options.find((o) => o.kind === 'allow-always')
+      if (allow) window.hearth.permission.respond(req.id, allow.id)
+      else setPermission(req)
+    })
     return () => {
       offBe()
       offUpdate()

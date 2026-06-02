@@ -756,6 +756,18 @@ kbd{ display:inline-flex;align-items:center;justify-content:center;min-width:17p
 .typing span:nth-child(3){ animation-delay:.3s; }
 @keyframes tb{ 0%,80%,100%{ transform:scale(.6);opacity:.4; } 40%{ transform:scale(1);opacity:1; } }
 
+/* Reduce motion (Settings → Appearance). Neutralizes ambient animation — the
+ * ember flicker, pulses, blink, spinners — and makes transitions effectively
+ * instant. Driven by the data attribute set in applyTheme (shell/store.ts). */
+html[data-reduce-motion="1"] *,
+html[data-reduce-motion="1"] *::before,
+html[data-reduce-motion="1"] *::after{
+  animation-duration:.001ms !important;
+  animation-iteration-count:1 !important;
+  transition-duration:.001ms !important;
+}
+html[data-reduce-motion="1"] .ember .glow{ filter:none; }
+
 /* Context menu */
 .ctxmenu{ position:fixed;z-index:300;min-width:210px;background:var(--bg-panel);
   border:1px solid var(--border-strong);border-radius:9px;box-shadow:var(--shadow-lg);

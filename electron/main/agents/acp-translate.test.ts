@@ -157,6 +157,7 @@ describe('translatePermission', () => {
     expect(translatePermission(req)).toEqual({
       id: 'tc-7',
       title: 'Write file foo.ts',
+      category: 'other',
       options: [
         { id: 'o1', label: 'Allow', kind: 'allow' },
         { id: 'o2', label: 'Always allow', kind: 'allow-always' },
@@ -169,6 +170,20 @@ describe('translatePermission', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const req = { sessionId: 's', toolCall: { toolCallId: 'tc' }, options: [] } as any
     expect(translatePermission(req).title).toBe('Permission requested')
+  })
+
+  test('categorizes by tool kind, and treats a raw command as execute', () => {
+    const cat = (toolCall: object) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      translatePermission({ sessionId: 's', toolCall, options: [] } as any).category
+    expect(cat({ toolCallId: 'a', kind: 'execute' })).toBe('execute')
+    expect(cat({ toolCallId: 'b', kind: 'edit' })).toBe('edit')
+    expect(cat({ toolCallId: 'c', kind: 'delete' })).toBe('edit')
+    expect(cat({ toolCallId: 'd', kind: 'read' })).toBe('other')
+    expect(cat({ toolCallId: 'e' })).toBe('other')
+    // A raw command wins even when the kind says otherwise (defensive for adapters
+    // that mislabel shell tools).
+    expect(cat({ toolCallId: 'f', kind: 'other', rawInput: { command: 'rm -rf x' } })).toBe('execute')
   })
 })
 

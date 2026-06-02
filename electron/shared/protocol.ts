@@ -196,6 +196,10 @@ export interface PermissionRequest {
   /** Raw shell command when this is an execute ask — used to auto-reject
    * source-mutating shell so writes are forced onto the mediated path (W0b). */
   command?: string
+  /** Coarse tool category derived from the ACP tool kind, used by the renderer's
+   * Command-approval tiers: 'execute' (shell) and 'edit' (write/delete/move)
+   * prompt under "Ask on commands"; 'other' (reads/search/MCP) auto-approves. */
+  category?: 'execute' | 'edit' | 'other'
 }
 
 /** Payload shape for the `agent:update` channel (main → renderer). */
