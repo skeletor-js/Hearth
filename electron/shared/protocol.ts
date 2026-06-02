@@ -120,6 +120,7 @@ export type SessionUpdate =
   | { type: 'mode'; current: string }
   | { type: 'config'; options: ConfigOption[] }
   | { type: 'usage'; usage: Usage }
+  | { type: 'info'; title: string }
   | { type: 'end'; stopReason: string }
 
 /** A slash command / skill the agent advertises (mirrors ACP `AvailableCommand`). */

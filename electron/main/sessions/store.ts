@@ -20,6 +20,10 @@ export interface SessionMeta {
   cwd: string
   /** True when this session targets the Hearth repo itself. */
   self: boolean
+  /** The ACP adapter's session id for this conversation, captured on first prompt.
+   * Lets a reopened session resume real agent context via ACP `loadSession`
+   * instead of starting cold. Absent until the first turn. */
+  acpSessionId?: string
   createdAt: number
   updatedAt: number
   archived: boolean
@@ -97,6 +101,16 @@ export class SessionStore {
     await mkdir(join(this.baseDir, 'transcripts'), { recursive: true })
     await writeFile(this.transcriptPath(meta.id), '')
     return meta
+  }
+
+  /** Metadata only (no transcript read) — used to look up the ACP session id. */
+  async getMeta(id: string): Promise<SessionMeta | null> {
+    return (await this.readIndex()).find((m) => m.id === id) ?? null
+  }
+
+  /** Record the ACP adapter's session id so the session can later be resumed. */
+  async setAcpSessionId(id: string, acpSessionId: string): Promise<SessionMeta | null> {
+    return this.patch(id, (m) => ({ ...m, acpSessionId }))
   }
 
   async get(id: string): Promise<SessionDetail | null> {

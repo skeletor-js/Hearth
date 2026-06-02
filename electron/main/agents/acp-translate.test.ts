@@ -286,9 +286,15 @@ describe('translateUpdate', () => {
     expect(out).toEqual([{ type: 'tool-call', id: 't4', title: 'Run', status: 'running' }])
   })
 
-  test('user_message_chunk and session_info_update are dropped', () => {
+  test('user_message_chunk and title-less session_info_update are dropped', () => {
     expect(translateUpdate(u({ sessionUpdate: 'user_message_chunk', content: { type: 'text', text: 'me' } }), titles())).toEqual([])
     expect(translateUpdate(u({ sessionUpdate: 'session_info_update' }), titles())).toEqual([])
+  })
+
+  test('session_info_update with a title -> info update (W9)', () => {
+    expect(translateUpdate(u({ sessionUpdate: 'session_info_update', title: 'Refactor auth' }), titles())).toEqual([
+      { type: 'info', title: 'Refactor auth' },
+    ])
   })
 
   test('current_mode_update -> mode update', () => {

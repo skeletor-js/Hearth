@@ -152,9 +152,19 @@ export function registerIpc(services: MainServices): void {
       // Suppress Vite's autonomous full-reload for full-reload-tier files during the
       // turn (B6); the change is applied at turn end under the morph cover (B5).
       void overlay.turnStart()
+      // Resume real agent context for a reopened session: pass its stored ACP id
+      // (if any) so the host can loadSession instead of starting cold (W3).
+      const meta = await sessions.getMeta(key)
       let result
       try {
-        await host.prompt(payload.text, { key, cwd: payload.cwd || repoRoot, images: payload.images })
+        const acpId = await host.prompt(payload.text, {
+          key,
+          cwd: payload.cwd || repoRoot,
+          images: payload.images,
+          resumeId: meta?.acpSessionId,
+        })
+        // Persist the ACP session id on first turn so later reopens can resume it.
+        if (acpId && acpId !== meta?.acpSessionId) await sessions.setAcpSessionId(key, acpId)
       } catch (err) {
         // Adapters can reject with a JSON-RPC error object (not an Error), which
         // serializes across IPC as "[object Object]". Normalize to a real Error

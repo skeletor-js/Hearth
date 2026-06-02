@@ -229,8 +229,12 @@ export function translateUpdate(
         },
       ]
 
-    // The echo of the user's own message and session_info aren't part of the
-    // surfaces Hearth drives today.
+    case 'session_info_update':
+      // Agent-supplied session title (W9). Only emit when a non-empty title is set;
+      // the renderer uses it to auto-title the session.
+      return update.title ? [{ type: 'info', title: update.title }] : []
+
+    // The echo of the user's own message isn't part of the surfaces Hearth drives.
     default:
       return []
   }

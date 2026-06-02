@@ -51,6 +51,10 @@ export interface Agent {
   /** Spawn the ACP adapter subprocess and complete the ACP handshake. */
   connect(): Promise<void>
   newSession(opts?: NewSessionOptions): Promise<AgentSession>
+  /** Resume a prior conversation by its ACP session id (restores agent context via
+   * ACP `loadSession`). Rejects if the backend can't load it; the caller falls back
+   * to a fresh session. Optional — only backends advertising loadSession implement it. */
+  resumeSession?(acpSessionId: string, opts?: NewSessionOptions): Promise<AgentSession>
   /** Streamed updates for a session id. */
   onUpdate(cb: (sessionId: string, update: SessionUpdate) => void): () => void
   /** Resolve a permission request by option id. */

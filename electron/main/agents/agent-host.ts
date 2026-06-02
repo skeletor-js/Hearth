@@ -104,27 +104,42 @@ export class AgentHost {
    * Prompt within a renderer session. `key` is the renderer's session id (one
    * ACP session per key); `cwd` sets that session's task working directory.
    */
-  async prompt(text: string, opts?: { key?: string; cwd?: string; images?: PromptImage[] }): Promise<string> {
+  async prompt(text: string, opts?: { key?: string; cwd?: string; images?: PromptImage[]; resumeId?: string }): Promise<string> {
     const agent = await this.connect()
     const key = opts?.key ?? 'default'
     let session = this.sessions.get(key)
     if (!session) {
-      session = await agent.newSession({ cwd: opts?.cwd })
-      this.sessions.set(key, session)
-      // Cache the models this backend offered; apply the user's preferred model
-      // (chosen for this kind) if it differs from the session's default.
-      let state = session.models
-      const preferred = this.preferredModel.get(this.currentKind)
-      if (preferred && preferred !== state.current && state.available.some((m) => m.id === preferred)) {
-        await session.setModel(preferred)
-        state = { ...state, current: preferred }
+      // Resume real agent context when this renderer session has a prior ACP id and
+      // the backend supports loadSession; fall back to a fresh session on failure
+      // (e.g. the persisted session isn't on disk for this backend/machine).
+      let resumed = false
+      if (opts?.resumeId && agent.resumeSession) {
+        try {
+          session = await agent.resumeSession(opts.resumeId, { cwd: opts?.cwd })
+          resumed = true
+        } catch {
+          session = undefined
+        }
       }
-      this.setModelCache(state)
-      await this.initModes(session)
+      if (!session) session = await agent.newSession({ cwd: opts?.cwd })
+      this.sessions.set(key, session)
+      this.setModelCache(session.models)
       this.setConfigCache(session.configOptions)
-      // A fresh ACP session starts usage from zero; drop the prior session's
-      // figure so the UI doesn't show stale cost until the first turn reports.
-      this.usageByKind.delete(this.currentKind)
+      if (resumed) {
+        // A resumed session keeps its persisted model/mode; don't reset to defaults.
+        this.setModeCache(session.modes)
+      } else {
+        // Fresh session: apply the user's preferred model + the Default mode baseline.
+        const preferred = this.preferredModel.get(this.currentKind)
+        if (preferred && preferred !== session.models.current && session.models.available.some((m) => m.id === preferred)) {
+          await session.setModel(preferred)
+          this.setModelCache({ ...session.models, current: preferred })
+        }
+        await this.initModes(session)
+        // A fresh ACP session starts usage from zero; drop the prior session's
+        // figure so the UI doesn't show stale cost until the first turn reports.
+        this.usageByKind.delete(this.currentKind)
+      }
     }
     this.activeKey = key
     await session.prompt(text, opts?.images)

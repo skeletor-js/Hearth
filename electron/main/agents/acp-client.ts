@@ -39,6 +39,10 @@ export interface AdapterSpec {
   env?: Record<string, string>
 }
 
+// Update kinds that are chat transcript content (suppressed during loadSession
+// replay, since Hearth renders the transcript from its own store).
+const CHAT_CONTENT_UPDATES = new Set<SessionUpdate['type']>(['message', 'thought', 'tool-call', 'diff', 'plan', 'end'])
+
 export type UpdateHandler = (sessionId: string, update: SessionUpdate) => void
 export type PermissionHandler = (sessionId: string, req: PermissionRequest) => Promise<string>
 /** Supplies the user's configured MCP servers, resolved (secrets injected) at
@@ -61,6 +65,10 @@ export class AcpClient {
   // Prompt input the adapter accepts beyond text (image / embedded context),
   // captured from initialize. Defaults to text-only until proven otherwise.
   private promptCaps: PromptCapabilities = { image: false, embeddedContext: false }
+  // True while a loadSession() replays prior history — chat-content updates are
+  // dropped (Hearth's store already renders the transcript); config/mode/usage/
+  // commands still flow so restored session state reaches the UI.
+  private replaying = false
 
   // A factory, not a resolved spec: resolution (which can throw — missing bin,
   // missing API key) is deferred to connect() so it fails through the connect
@@ -114,6 +122,9 @@ export class AcpClient {
           // also forward so the host can fire its commands-changed event (the chat
           // surface ignores this update type). Not streamed into the transcript.
           if (update.type === 'commands') this.commands = update.commands
+          // During a loadSession replay, drop chat-content updates (the transcript
+          // is already on screen from Hearth's store); let session-state updates pass.
+          if (this.replaying && CHAT_CONTENT_UPDATES.has(update.type)) continue
           this.emit(params.sessionId, update)
         }
       },
@@ -201,28 +212,52 @@ export class AcpClient {
     ]
   }
 
+  // Built-in bridge + the user's configured servers (secrets resolved here, at
+  // session creation, so tokens never sit in a config file).
+  private async mcpServersFor(): Promise<McpServer[]> {
+    const userServers = this.userMcpServers ? await this.userMcpServers().catch(() => []) : []
+    return [...this.bridgeMcpServers(), ...userServers]
+  }
+
   async newSession(opts?: { cwd?: string }): Promise<AgentSession> {
     const connection = this.connection
     if (!connection) throw new Error('not connected — call connect() first')
-
     // The session's task cwd (the workspace) may differ from the connect-time
     // cwd (REPO_ROOT). The MCP bridge stays anchored at REPO_ROOT (this.cwd).
     const sessionCwd = opts?.cwd ?? this.cwd
-    // Built-in bridge + the user's configured servers (secrets resolved here, at
-    // session creation, so tokens never sit in a config file).
-    const userServers = this.userMcpServers ? await this.userMcpServers().catch(() => []) : []
-    const mcpServers: McpServer[] = [...this.bridgeMcpServers(), ...userServers]
-    const res = await connection.newSession({ cwd: sessionCwd, mcpServers })
-    const sessionId = res.sessionId
-    const models = normalizeModels(res.models)
-    const modes = normalizeModes(res.modes)
-    const configOptions = normalizeConfigOptions(res.configOptions)
+    const res = await connection.newSession({ cwd: sessionCwd, mcpServers: await this.mcpServersFor() })
+    return this.buildSession(res.sessionId, res)
+  }
 
+  async resumeSession(acpSessionId: string, opts?: { cwd?: string }): Promise<AgentSession> {
+    const connection = this.connection
+    if (!connection) throw new Error('not connected — call connect() first')
+    if (!connection.loadSession) throw new Error('backend does not support loadSession')
+    const sessionCwd = opts?.cwd ?? this.cwd
+    // loadSession replays the prior conversation as session/update notifications so
+    // the AGENT regains context. Hearth already renders the transcript from its own
+    // store, so suppress those replayed chat updates (config/mode/usage/commands
+    // still flow). The RPC resolves only after the adapter finishes replaying, so
+    // this flag brackets exactly the replay notifications.
+    this.replaying = true
+    try {
+      const res = await connection.loadSession({ sessionId: acpSessionId, cwd: sessionCwd, mcpServers: await this.mcpServersFor() })
+      return this.buildSession(acpSessionId, res)
+    } finally {
+      this.replaying = false
+    }
+  }
+
+  /** Build the backend-agnostic AgentSession over an ACP session id + its initial
+   * state (newSession and loadSession return the same model/mode/config shape). */
+  private buildSession(sessionId: string, res: { models?: unknown; modes?: unknown; configOptions?: unknown }): AgentSession {
+    const connection = this.connection
+    if (!connection) throw new Error('not connected')
     return {
       id: sessionId,
-      models,
-      modes,
-      configOptions,
+      models: normalizeModels(res.models as Parameters<typeof normalizeModels>[0]),
+      modes: normalizeModes(res.modes as Parameters<typeof normalizeModes>[0]),
+      configOptions: normalizeConfigOptions(res.configOptions as Parameters<typeof normalizeConfigOptions>[0]),
       prompt: async (text: string, images?: PromptImage[]) => {
         // text + any image blocks the backend advertised support for. Gate here too
         // (defense in depth): never send an image to a backend that didn't advertise

@@ -198,8 +198,10 @@ export function ChatView() {
         case 'mode':
         case 'config':
         case 'usage':
-          // Session mode / config-option / usage updates aren't chat content —
-          // the composer's agent-settings popover consumes them. Ignore here.
+        case 'info':
+          // Session mode / config / usage / info updates aren't chat content — the
+          // composer popover (mode/config/usage) and the onUpdate effect (info →
+          // session title) consume them. Ignore in the transcript reducer.
           return prev
         case 'end': {
           openText.current = false
@@ -234,6 +236,14 @@ export function ChatView() {
       // Persist this update immediately so a mid-turn renderer reload (e.g. a
       // self-mod that touches routes) can't lose the turn.
       const a = useSession.getState().active
+      // W9: agent-supplied session title — rename the active session + refresh the
+      // rail. Not persisted as a transcript entry (it's metadata, not chat content).
+      if (update.type === 'info') {
+        if (a) {
+          void window.hearth.sessions.rename(a.id, update.title).then(() => useSession.getState().bumpSessions())
+        }
+        return
+      }
       if (a) persist(a.id, [{ kind: 'update', update }])
       if (update.type === 'end') {
         setBusy(false)
