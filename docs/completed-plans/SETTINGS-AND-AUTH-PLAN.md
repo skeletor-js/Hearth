@@ -1,9 +1,13 @@
 # Settings, Auth, MCP, Skills & Secrets — implementation plan
 
-Status: proposed. Covers the Settings rebuild plus the four systems it depends
-on: an ACP-native **auth experience**, a **secrets store**, **MCP server
-management**, and **skills**. Read [COMPLIANCE.md](../COMPLIANCE.md) first — it
-constrains the auth design hard.
+Status: **IMPLEMENTED** — the Settings rebuild and all four systems shipped:
+Account/Auth ([AuthSection](../../src/app/settings/sections/AuthSection.tsx)),
+Secrets ([secret-store.ts](../../electron/main/secrets/secret-store.ts)),
+MCP/Connectors ([mcp/](../../electron/main/mcp), [ConnectorsSection](../../src/app/settings/sections/ConnectorsSection.tsx)),
+and Skills ([skills/](../../electron/main/skills)). Covers the Settings rebuild
+plus the four systems it depends on: an ACP-native **auth experience**, a
+**secrets store**, **MCP server management**, and **skills**. Read
+[COMPLIANCE.md](../COMPLIANCE.md) first — it constrains the auth design hard.
 
 ## Why
 
