@@ -84,9 +84,7 @@ export function SelfTab() {
         </>
       ) : (
         <div className="wb-empty">
-          <span className="flame" style={{ fontSize: 'var(--t-28)', color: 'var(--accent)' }}>
-            <FlameMark size={28} />
-          </span>
+          <Icon name="pencil-simple" />
           <h3>No self-edits yet</h3>
           <p>Ask Hearth to change itself — the latest edit and an Undo will appear here.</p>
         </div>

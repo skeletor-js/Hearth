@@ -86,7 +86,7 @@ export function Rail() {
           </div>
           {workspaces.map((w) => (
             <button key={w.id} className="rail-item" onClick={() => newInWorkspace(w)} title={w.path}>
-              <Icon name={w.isHearth ? 'flame' : 'folder'} fill={w.isHearth} />
+              <Icon name="folder" />
               <span className="ri-label">{w.name}</span>
             </button>
           ))}
@@ -103,7 +103,7 @@ export function Rail() {
           ) : (
             recent.map((m) => (
               <button key={m.id} className={itemClass(m.id === activeId && pathname === '/chat')} onClick={() => resume(m)}>
-                <Icon name={m.self ? 'flame' : 'chat-circle'} fill={m.self} />
+                <Icon name="chat-circle" />
                 <span className="ri-label">{m.title}</span>
               </button>
             ))
@@ -112,10 +112,15 @@ export function Rail() {
       </div>
 
       <div className="rail-foot">
-        <Link to="/settings" className={footClass(pathname === '/settings')}>
+        <button
+          className={footClass(pathname === '/settings')}
+          onClick={() =>
+            navigate({ to: pathname === '/settings' ? (activeId ? '/chat' : '/new') : '/settings' })
+          }
+        >
           <Icon name="gear" />
           <span>Settings</span>
-        </Link>
+        </button>
         <button className="ricon" title={theme === 'dark' ? 'Light mode' : 'Dark mode'} onClick={toggleTheme}>
           <Icon name={theme === 'dark' ? 'sun' : 'moon-stars'} />
         </button>

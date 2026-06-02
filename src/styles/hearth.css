@@ -206,7 +206,7 @@ button.rail-item{ width:100%;border:0;background:transparent;font:inherit;text-a
 /* Rail footer — settings row + theme toggle */
 .rail-foot{ border-top:1px solid var(--border);padding:8px;display:flex;align-items:center;gap:5px; }
 .foot-settings{ flex:1;min-width:0;display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;
-  border-radius:var(--r-md);color:var(--default);font-size:var(--t-13);white-space:nowrap; }
+  border-radius:var(--r-md);color:var(--default);font-size:var(--t-13);white-space:nowrap;cursor:pointer;text-align:left; }
 .foot-settings .ph-thin{ color:var(--subtle);font-size:15px; }
 .foot-settings:hover{ background:var(--hover);color:var(--strong); }
 .foot-settings.is-selected{ background:var(--selected);color:var(--strong);font-weight:500; }

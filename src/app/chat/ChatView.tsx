@@ -421,9 +421,6 @@ function MessageView({
   return (
     <div className="msg hearth">
       <div className="msg-role">
-        <span className="flame">
-          <FlameMark size={14} />
-        </span>
         <span className="who">Hearth</span>
         <span className="spacer" />
         {m.blocks.length > 0 && (
