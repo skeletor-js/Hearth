@@ -243,8 +243,6 @@ const api = {
       return () => void ipcRenderer.off(CH.morphHandoff, h)
     },
     signal: (type: 'ready' | 'cover-painted' | 'done') => ipcRenderer.send(CH.morphSignal, { type }),
-    /** TEMP dev-only: drive a full morph over a plain window reload, to verify the pipeline. */
-    devTest: (): Promise<void> => ipcRenderer.invoke(CH.morphDevTest),
   },
 }
 

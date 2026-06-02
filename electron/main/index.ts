@@ -1,7 +1,7 @@
 // App entry. Wires services and opens the window. Thin by design — all feature
 // logic lives in the renderer (which is self-editable) or in the named services.
 
-import { app, safeStorage, session, ipcMain, BrowserWindow } from 'electron'
+import { app, safeStorage, session, BrowserWindow } from 'electron'
 import { createMainWindow, createSnapshotWindow } from './window.js'
 import { prepareRenderer } from './dev-server.js'
 import { registerIpc } from './ipc.js'
@@ -113,10 +113,6 @@ async function bootstrap(): Promise<void> {
   const overlay = new OverlayWindow(renderer.target)
   overlay.webContents().once('did-finish-load', () => console.log('[hearth] morph overlay ready'))
   app.once('before-quit', () => overlay.destroy())
-  // TEMP (B4 verification): drive a full morph over a plain reload on demand.
-  ipcMain.handle(HEARTH_CHANNELS.morphDevTest, () =>
-    runMorph({ overlay, mainWindow: window }, () => window.webContents.reload()),
-  )
 
   // Encrypted secret store (BYO API keys + MCP env) and the user's MCP server
   // registry. Both live under userData. Created before the host because the agent
@@ -159,6 +155,9 @@ async function bootstrap(): Promise<void> {
           window.webContents.reload()
         }
       },
+      // Full-reload-tier self-mods reload behind the morph cover — no black flash.
+      // runMorph captures the UI, covers, reloads, then crossfades to the new UI.
+      coveredReload: () => runMorph({ overlay, mainWindow: window }, () => window.webContents.reload()),
     },
     // Vite serves the renderer whenever we loaded a URL (dev + packaged self-
     // evolving); only the static-bundle fallback loads a file. When Vite serves,

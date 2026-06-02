@@ -15,6 +15,10 @@ import path from 'node:path'
 
 const ENDPOINT = '/__hearth/self-mod'
 
+// If a turn-end is never posted (e.g. a crash mid-turn), don't suppress reloads
+// forever — auto-clear the turn flag after this long.
+const TURN_AUTOCLEAR_MS = 60_000
+
 const toPosix = (v: string): string => v.replace(/\\/g, '/')
 const stripQuery = (id: string): string => id.split('?')[0]
 
@@ -90,6 +94,33 @@ async function readJsonBody(req: import('node:http').IncomingMessage): Promise<u
 export function selfModOverlay(repoRoot: string): Plugin {
   const state = new OverlayState(repoRoot)
   let server: ViteDevServer | null = null
+  // While a self-mod turn is active, Vite's autonomous full-reload is suppressed so
+  // the structural change can be applied at turn end under the morph cover (B6).
+  // We drop the outgoing `full-reload` HMR message at the websocket level — this
+  // catches every source (index.html, new route files, route-tree regen, change),
+  // unlike handleHotUpdate which misses HTML and file-add reloads. hmr `update`
+  // messages still pass through, so component edits keep hot-swapping live.
+  let turnActive = false
+  let turnTimer: ReturnType<typeof setTimeout> | null = null
+  const setTurn = (active: boolean) => {
+    turnActive = active
+    if (turnTimer) clearTimeout(turnTimer)
+    turnTimer = null
+    if (active) turnTimer = setTimeout(() => { turnActive = false }, TURN_AUTOCLEAR_MS)
+  }
+
+  // Wrap an HMR channel's `send` so `full-reload` messages are dropped while a turn
+  // is active. Idempotent. Best-effort: if the shape changes, we just don't suppress.
+  const wrapChannel = (ch: { send?: (...a: unknown[]) => void; __hearthWrapped?: boolean } | undefined) => {
+    if (!ch || typeof ch.send !== 'function' || ch.__hearthWrapped) return
+    const orig = ch.send.bind(ch)
+    ch.send = (...args: unknown[]) => {
+      const msg = args[0] as { type?: string } | undefined
+      if (turnActive && msg && typeof msg === 'object' && msg.type === 'full-reload') return
+      return orig(...args)
+    }
+    ch.__hearthWrapped = true
+  }
 
   const reload = (ids: string[]) => {
     if (!server) return
@@ -105,6 +136,17 @@ export function selfModOverlay(repoRoot: string): Plugin {
 
     configureServer(s) {
       server = s
+      // Intercept outgoing full-reload messages so a turn can suppress them. Vite 6
+      // may route through the legacy ws, the back-compat hot, or the per-environment
+      // client channel — wrap whichever exist.
+      const sv = s as unknown as {
+        ws?: { send?: (...a: unknown[]) => void }
+        hot?: { send?: (...a: unknown[]) => void }
+        environments?: { client?: { hot?: { send?: (...a: unknown[]) => void } } }
+      }
+      wrapChannel(sv.ws)
+      wrapChannel(sv.hot)
+      wrapChannel(sv.environments?.client?.hot)
       s.middlewares.use(ENDPOINT, (req, res) => {
         void (async () => {
           const body = (await readJsonBody(req)) as {
@@ -119,6 +161,10 @@ export function selfModOverlay(repoRoot: string): Plugin {
             reload(state.apply(body.paths))
           } else if (body.op === 'release' && Array.isArray(body.paths)) {
             state.release(body.paths)
+          } else if (body.op === 'turn-start') {
+            setTurn(true)
+          } else if (body.op === 'turn-end') {
+            setTurn(false)
           }
           res.statusCode = 200
           res.setHeader('content-type', 'application/json')
@@ -135,7 +181,8 @@ export function selfModOverlay(repoRoot: string): Plugin {
 
     handleHotUpdate(ctx) {
       // While a module is pinned, suppress its HMR — the swap happens atomically
-      // on `apply`, not per write.
+      // on `apply`, not per write. (Turn-scoped full-reload suppression happens at
+      // the websocket level in configureServer, not here.)
       if (state.isPinnedId(ctx.file)) return []
       return ctx.modules
     },

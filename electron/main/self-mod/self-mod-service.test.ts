@@ -28,6 +28,7 @@ function recordingHmr() {
   const hmr = new HmrController({
     reloadWindow: () => calls.push('reload'),
     restartApp: () => calls.push('restart'),
+    coveredReload: () => calls.push('covered'),
   })
   return { hmr, calls }
 }
@@ -80,12 +81,16 @@ describe('SelfModService.captureTurn', () => {
     expect(calls).toEqual(['reload'])
   })
 
-  test('under Vite, a route edit does NOT force a second hard reload', async () => {
-    // Vite already reloads the page on save; a hard webContents.reload() would
-    // just double the black flash. The tier is still reported as full-reload.
+  test('under Vite, a full-reload edit goes through the covered (morph) reload', async () => {
+    // The autonomous Vite reload is suppressed during a turn (B6), so the controller
+    // triggers the reload behind the morph cover (B5) — not a bare reloadWindow.
     const calls: string[] = []
     const hmr = new HmrController(
-      { reloadWindow: () => calls.push('reload'), restartApp: () => calls.push('restart') },
+      {
+        reloadWindow: () => calls.push('reload'),
+        restartApp: () => calls.push('restart'),
+        coveredReload: () => calls.push('covered'),
+      },
       true, // viteServed
     )
     const svc = new SelfModService(repo, hmr)
@@ -93,7 +98,7 @@ describe('SelfModService.captureTurn', () => {
 
     const result = await svc.captureTurn('conv-7b', 'add settings route')
     expect(result!.reload).toBe<ReloadKind>('full-reload')
-    expect(calls).toEqual([]) // Vite handles it — no extra reload
+    expect(calls).toEqual(['covered']) // morph cover + reload, not a bare reload
   })
 
   test('commits ONLY what changed during the turn, not pre-existing dirty files', async () => {

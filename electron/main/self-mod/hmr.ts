@@ -13,6 +13,10 @@ import { classifyBatch, type ReloadKind } from './path-relevance.js'
 export interface ReloadDriver {
   reloadWindow(): void
   restartApp(): void
+  /** Reload the window behind the morph cover (no black flash). Used for the
+   *  full-reload tier when Vite serves the renderer. If absent, falls back to a
+   *  plain reload. Fire-and-forget — the morph plays out asynchronously. */
+  coveredReload?: () => void | Promise<void>
 }
 
 export class HmrController {
@@ -40,9 +44,11 @@ export class HmrController {
         // Vite already hot-swapped on file write. Nothing to do.
         break
       case 'full-reload':
-        // Under Vite, the page already reloaded on save — a hard reload here just
-        // adds a second, longer blank. Force it only without Vite (static build).
-        if (!this.viteServed) this.driver.reloadWindow()
+        // The autonomous Vite reload is suppressed during the turn (B6), so we
+        // trigger the reload here — behind the morph cover when Vite serves the
+        // renderer (no black flash), or a plain reload for the static fallback.
+        if (this.viteServed && this.driver.coveredReload) void this.driver.coveredReload()
+        else this.driver.reloadWindow()
         break
       case 'process-restart':
         this.driver.restartApp()

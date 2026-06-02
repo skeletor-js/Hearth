@@ -108,7 +108,6 @@ export const HEARTH_CHANNELS = {
   morphCover: 'morph:cover', // main → overlay: { oldFrame }
   morphHandoff: 'morph:handoff', // main → overlay: { newFrame }
   morphSignal: 'morph:signal', // overlay → main: { type: 'ready'|'cover-painted'|'done' }
-  morphDevTest: 'morph:_dev-test', // TEMP: drive a morph over a plain reload to verify the pipeline
 
   // main → renderer (send/broadcast)
   agentUpdate: 'agent:update',

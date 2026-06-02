@@ -24,6 +24,11 @@ export interface OverlayClient {
   pin(repoRelPath: string, baseline: string): Promise<void>
   apply(repoRelPaths: string[]): Promise<void>
   release(repoRelPaths: string[]): Promise<void>
+  /** Mark a self-mod turn active/inactive. While active, the overlay plugin
+   *  suppresses Vite's autonomous full-reload for full-reload-tier files so a
+   *  structural edit can be applied under the morph cover at turn end (B6). */
+  turnStart(): Promise<void>
+  turnEnd(): Promise<void>
 }
 
 export function createOverlayClient(getDevUrl: () => string | null): OverlayClient {
@@ -31,5 +36,7 @@ export function createOverlayClient(getDevUrl: () => string | null): OverlayClie
     pin: (path, baseline) => post(getDevUrl(), { op: 'pin', path, baseline }),
     apply: (paths) => post(getDevUrl(), { op: 'apply', paths }),
     release: (paths) => post(getDevUrl(), { op: 'release', paths }),
+    turnStart: () => post(getDevUrl(), { op: 'turn-start' }),
+    turnEnd: () => post(getDevUrl(), { op: 'turn-end' }),
   }
 }

@@ -147,6 +147,9 @@ export function registerIpc(services: MainServices): void {
       const runId = `run-${++runSeq}-${Date.now()}`
       runTracker.beginRun(runId, key)
       selfMod.beginTurn()
+      // Suppress Vite's autonomous full-reload for full-reload-tier files during the
+      // turn (B6); the change is applied at turn end under the morph cover (B5).
+      void overlay.turnStart()
       let result
       try {
         await host.prompt(payload.text, { key, cwd: payload.cwd || repoRoot })
@@ -155,7 +158,11 @@ export function registerIpc(services: MainServices): void {
         // Apply the overlay batch (no-op for unpinned paths / single-writer turns).
         void overlay.apply((ended?.groups ?? []).flatMap((g) => g.paths).filter(isViteTrackablePath))
         window.webContents.send(HEARTH_CHANNELS.selfModActivity, { runId, sessionId: key, lanes: [], collisions: [] })
+        // captureTurn → HmrController.apply fires the morph for full-reload-tier
+        // edits. turnEnd lifts suppression after (the morph's own reload is explicit,
+        // not a Vite file-watch reload, so it isn't affected by the flag).
         result = await selfMod.captureTurn(key, payload.text.slice(0, 72), before, ended ? { runId, groups: ended.groups } : undefined)
+        void overlay.turnEnd()
       }
       // W7: surface any writes the scope guard rejected (protected island / secrets)
       // so the user knows the agent's edit there was undone, not silently dropped.
