@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { BrowserWindow, shell, type WebContents } from 'electron'
+import { BrowserWindow, type WebContents } from 'electron'
 import type { RendererTarget } from './dev-server.js'
 
 const WEB_PREFERENCES = {
@@ -35,12 +35,12 @@ function targetOrigin(target: RendererTarget): string | null {
 // in-app browser is a separate WebContentsView with its own (already-guarded)
 // handlers — this only governs the main window's own webContents.
 function applyNavigationGuards(wc: WebContents, target: RendererTarget): void {
-  // Never spawn child windows; route any window.open / target=_blank to the OS
-  // browser instead of an unguarded Electron window.
-  wc.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//.test(url)) void shell.openExternal(url)
-    return { action: 'deny' }
-  })
+  // Deny every window.open / target=_blank outright. We deliberately do NOT
+  // forward to shell.openExternal: under the malicious-agent / compromised-renderer
+  // threat model, auto-opening arbitrary URLs in the user's real browser is an
+  // abuse vector (spam, phishing). Legitimate "open in browser" actions must go
+  // through an explicit, vetted affordance, not a blanket window.open intercept.
+  wc.setWindowOpenHandler(() => ({ action: 'deny' }))
   const allowed = targetOrigin(target)
   wc.on('will-navigate', (event, url) => {
     let origin: string | null = null

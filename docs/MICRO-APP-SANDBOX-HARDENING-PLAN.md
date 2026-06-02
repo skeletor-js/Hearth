@@ -194,8 +194,9 @@ Packaged builds use the same Vite-server + `bun install`-at-runtime model
 
 ### W5 — Main-window navigation guards — DONE
 
-- `[x]` `applyNavigationGuards()` sets `setWindowOpenHandler` → `deny` (routing
-  http(s) to the OS browser via `shell.openExternal`) and a `will-navigate`
+- `[x]` `applyNavigationGuards()` sets `setWindowOpenHandler` → **deny outright**
+  (no `shell.openExternal` — auto-opening arbitrary URLs in the user's real
+  browser is itself an abuse vector under this threat model) and a `will-navigate`
   handler that blocks any top-frame navigation off the shell origin
   ([window.ts](../electron/main/window.ts)).
 - `[x]` Applied to **both** the main window and the snapshot window (the latter

@@ -39,4 +39,10 @@ describe('buildShellCsp', () => {
   test('allows framing localhost micro-apps', () => {
     expect(buildShellCsp()).toContain('frame-src http://localhost:* http://127.0.0.1:*')
   })
+
+  test("allows Vite's inline dev scripts so the renderer mounts", () => {
+    // A header CSP applies document-wide (unlike the order-dependent meta tag), so
+    // it must permit Vite's inline React-refresh preamble or the shell goes blank.
+    expect(buildShellCsp()).toContain("script-src 'self' 'unsafe-inline'")
+  })
 })

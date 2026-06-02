@@ -45,7 +45,13 @@ export function buildMicroAppCsp(selfOrigin: string, approvedHosts: string[], br
 export function buildShellCsp(): string {
   return [
     "default-src 'self'",
-    "script-src 'self'",
+    // The shell is Hearth's own first-party renderer, served by Vite in BOTH dev
+    // and packaged self-evolving builds. Vite injects an inline React-refresh
+    // preamble; a header CSP (unlike the order-dependent meta tag) applies to the
+    // whole document, so 'unsafe-inline' is required here or the renderer never
+    // mounts. The untrusted surface is micro-apps, whose egress is locked down by
+    // their own (separate) per-app CSP — not the shell.
+    "script-src 'self' 'unsafe-inline'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     // The shell only connects to its own Vite HMR socket (dev + packaged self-
