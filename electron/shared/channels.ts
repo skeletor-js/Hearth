@@ -97,6 +97,10 @@ export const HEARTH_CHANNELS = {
   microAppCreate: 'micro-app:create',
   microAppStart: 'micro-app:start',
   microAppStop: 'micro-app:stop',
+  // W6 egress capability grants: read approved+pending hosts, user approves/revokes.
+  microAppCapabilities: 'micro-app:capabilities',
+  microAppApprove: 'micro-app:approve',
+  microAppRevoke: 'micro-app:revoke',
   permissionRespond: 'permission:respond',
 
   // main → renderer (send/broadcast)

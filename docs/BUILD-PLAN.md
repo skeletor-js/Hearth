@@ -325,4 +325,8 @@ Carried from MILESTONE-V1's out-of-scope list — do not let these creep in:
   [V2-PACKAGING-PLAN.md](./V2-PACKAGING-PLAN.md). A real `bun run dist` +
   notarization run is environment-gated.
 - Auto-update, an app store, multi-window, voice, mobile bridge.
-- Sandbox hardening beyond the iframe `sandbox` attribute.
+- ~~Sandbox hardening beyond the iframe `sandbox` attribute.~~ — DONE. Layered
+  isolation (opaque-origin frame, Hearth-injected per-app CSP, deny-by-default
+  permissions, main-window nav guards, install-script containment, user-approved
+  egress grants, credential broker) per
+  [MICRO-APP-SANDBOX-HARDENING-PLAN.md](MICRO-APP-SANDBOX-HARDENING-PLAN.md).

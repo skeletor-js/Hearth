@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, shell, type WebContents } from 'electron'
 import type { RendererTarget } from './dev-server.js'
 
 const WEB_PREFERENCES = {
@@ -20,6 +20,40 @@ function loadRenderer(win: BrowserWindow, target: RendererTarget): void {
   else if (target.file) void win.loadFile(target.file)
 }
 
+// The origin the shell is served from; top-frame navigation is confined to it.
+function targetOrigin(target: RendererTarget): string | null {
+  if (!target.url) return null // file:// load — handled by the file:// check below
+  try {
+    return new URL(target.url).origin
+  } catch {
+    return null
+  }
+}
+
+// Lock down the top frame: a compromised renderer (or a self-mod gone wrong) must
+// not be able to open OS windows or navigate the shell off its own origin. The
+// in-app browser is a separate WebContentsView with its own (already-guarded)
+// handlers — this only governs the main window's own webContents.
+function applyNavigationGuards(wc: WebContents, target: RendererTarget): void {
+  // Never spawn child windows; route any window.open / target=_blank to the OS
+  // browser instead of an unguarded Electron window.
+  wc.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//.test(url)) void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  const allowed = targetOrigin(target)
+  wc.on('will-navigate', (event, url) => {
+    let origin: string | null = null
+    try {
+      origin = new URL(url).origin
+    } catch {
+      // unparseable → block
+    }
+    const ok = allowed ? origin === allowed : url.startsWith('file://')
+    if (!ok) event.preventDefault()
+  })
+}
+
 export function createMainWindow(target: RendererTarget): BrowserWindow {
   const win = new BrowserWindow({
     width: 1200,
@@ -33,6 +67,7 @@ export function createMainWindow(target: RendererTarget): BrowserWindow {
   })
 
   win.once('ready-to-show', () => win.show())
+  applyNavigationGuards(win.webContents, target)
   loadRenderer(win, target)
   return win
 }
@@ -47,6 +82,7 @@ export function createSnapshotWindow(target: RendererTarget): BrowserWindow {
     show: false,
     webPreferences: WEB_PREFERENCES,
   })
+  applyNavigationGuards(win.webContents, target)
   loadRenderer(win, target)
   return win
 }

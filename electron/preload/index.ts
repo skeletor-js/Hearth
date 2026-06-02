@@ -19,6 +19,7 @@ import type { FileContent, FileEntry } from '../main/fs/files.js'
 import type { BrowserState } from '../main/browser/browser-view.js'
 import type { SoulConfig } from '../main/soul/soul.js'
 import type { CreateSessionInput, SessionDetail, SessionMeta, TranscriptEntry } from '../main/sessions/store.js'
+import type { AppCapabilities as MicroAppCapabilities } from '../main/micro-apps/capabilities.js'
 
 interface WorkspaceStatus {
   branch: string | null
@@ -220,6 +221,13 @@ const api = {
     create: (name: string) => ipcRenderer.invoke(CH.microAppCreate, name),
     start: (name: string): Promise<string> => ipcRenderer.invoke(CH.microAppStart, name),
     stop: (name: string) => ipcRenderer.invoke(CH.microAppStop, name),
+    // W6 egress grants: read approved + pending hosts, approve/revoke per app.
+    capabilities: (name: string): Promise<MicroAppCapabilities> =>
+      ipcRenderer.invoke(CH.microAppCapabilities, name),
+    approve: (name: string, hosts: string[]): Promise<void> =>
+      ipcRenderer.invoke(CH.microAppApprove, name, hosts),
+    revoke: (name: string, host?: string): Promise<void> =>
+      ipcRenderer.invoke(CH.microAppRevoke, name, host),
   },
 }
 

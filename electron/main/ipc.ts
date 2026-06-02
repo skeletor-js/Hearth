@@ -6,6 +6,8 @@ import { app, dialog, ipcMain, shell, type BrowserWindow } from 'electron'
 import { createRequire } from 'node:module'
 import { scaffoldMicroApp } from './micro-apps/scaffold.js'
 import { startMicroApp, stopMicroApp } from './micro-apps/server.js'
+import type { CapabilityStore } from './micro-apps/capabilities.js'
+import type { CredentialBroker } from './micro-apps/broker.js'
 import type { WorkspaceRegistry } from './workspaces/registry.js'
 import type { SessionStore, TranscriptEntry } from './sessions/store.js'
 import type { CreateSessionInput } from './sessions/store.js'
@@ -56,10 +58,12 @@ export interface MainServices {
   window: BrowserWindow
   secrets: SecretStore
   mcp: McpRegistry
+  capabilities: CapabilityStore
+  broker: CredentialBroker
 }
 
 export function registerIpc(services: MainServices): void {
-  const { repoRoot, host, selfMod, workspaces, sessions, browser, window, secrets, mcp } = services
+  const { repoRoot, host, selfMod, workspaces, sessions, browser, window, secrets, mcp, capabilities, broker } = services
 
   // Self-mod run tracking (W0): attribute streamed writes to subagents, drive the
   // concurrency gate, and pin the overlay during parallel-subagent phases.
@@ -417,10 +421,28 @@ export function registerIpc(services: MainServices): void {
   ipcMain.handle(HEARTH_CHANNELS.microAppCreate, (_e, name: string) =>
     scaffoldMicroApp(repoRoot, name),
   )
-  ipcMain.handle(HEARTH_CHANNELS.microAppStart, (_e, name: string) =>
-    startMicroApp(repoRoot, name),
-  )
+  ipcMain.handle(HEARTH_CHANNELS.microAppStart, async (_e, name: string) => {
+    const url = await startMicroApp(repoRoot, name)
+    // Hand the frame its per-app broker token + origin so it can make authed calls
+    // without ever holding the secret. The token only reaches this app's approved
+    // hosts (W6/W7). Passed as query params the app reads from location.search.
+    const brokerOrigin = broker.origin()
+    if (!brokerOrigin) return url
+    const u = new URL(url)
+    u.searchParams.set('__hearthBroker', brokerOrigin)
+    u.searchParams.set('__hearthToken', broker.tokenFor(name))
+    return u.toString()
+  })
   ipcMain.handle(HEARTH_CHANNELS.microAppStop, (_e, name: string) => stopMicroApp(name))
+  ipcMain.handle(HEARTH_CHANNELS.microAppCapabilities, (_e, name: string) =>
+    capabilities.capabilities(repoRoot, name),
+  )
+  ipcMain.handle(HEARTH_CHANNELS.microAppApprove, (_e, name: string, hosts: string[]) =>
+    capabilities.approve(name, hosts),
+  )
+  ipcMain.handle(HEARTH_CHANNELS.microAppRevoke, (_e, name: string, host?: string) =>
+    capabilities.revoke(name, host),
+  )
 
   app.on('before-quit', () => {
     terminals.disposeAll()

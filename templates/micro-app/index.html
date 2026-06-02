@@ -3,6 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Defense-in-depth floor for the framed document. Covers the directives that
+      never need per-app widening (scripts, styles, objects, base URI). Network
+      egress (connect-src) is intentionally NOT set here: it is governed by the
+      per-app Content-Security-Policy header Hearth injects from the user-approved
+      host allowlist (electron/main/micro-apps/session-policy.ts). A connect-src or
+      default-src here would intersect with that header and could only ever tighten
+      it, so leaving them out lets a granted app reach its approved hosts while
+      ungranted apps stay locked to same-origin by the header.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; object-src 'none'; base-uri 'self'"
+    />
     <title>{{name}}</title>
   </head>
   <body>

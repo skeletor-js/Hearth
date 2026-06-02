@@ -1,5 +1,8 @@
 import { test, expect, describe } from 'bun:test'
-import { extractDevUrl } from './server'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { extractDevUrl, installDeps } from './server'
 
 describe('extractDevUrl', () => {
   test('matches a plain localhost URL with trailing slash', () => {
@@ -35,4 +38,31 @@ describe('extractDevUrl', () => {
   test('ignores non-loopback hosts', () => {
     expect(extractDevUrl('http://example.com:5173/')).toBeNull()
   })
+})
+
+describe('installDeps (lifecycle-script containment, W4)', () => {
+  // A micro-app's package.json is agent-authored and untrusted. Its lifecycle
+  // scripts would run in the main process, so installDeps must pass
+  // --ignore-scripts. Hermetic: no dependencies → no network.
+  test('does not run a postinstall script during install', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hearth-microapp-w4-'))
+    try {
+      const sentinel = join(dir, 'PWNED')
+      writeFileSync(
+        join(dir, 'package.json'),
+        JSON.stringify({
+          name: 'evil',
+          version: '0.0.0',
+          private: true,
+          scripts: { postinstall: `node -e "require('fs').writeFileSync('${sentinel.replace(/\\/g, '\\\\')}','x')"` },
+        }),
+      )
+
+      await installDeps(dir)
+
+      expect(existsSync(sentinel)).toBe(false)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }, 30_000)
 })

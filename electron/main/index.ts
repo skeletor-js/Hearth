@@ -1,7 +1,7 @@
 // App entry. Wires services and opens the window. Thin by design — all feature
 // logic lives in the renderer (which is self-editable) or in the named services.
 
-import { app, safeStorage, BrowserWindow } from 'electron'
+import { app, safeStorage, session, BrowserWindow } from 'electron'
 import { createMainWindow, createSnapshotWindow } from './window.js'
 import { prepareRenderer } from './dev-server.js'
 import { registerIpc } from './ipc.js'
@@ -25,6 +25,9 @@ import { BrowserManager } from './browser/browser-view.js'
 import { HEARTH_CHANNELS } from '../shared/channels.js'
 import { join } from 'node:path'
 import { stopAllMicroApps } from './micro-apps/server.js'
+import { CapabilityStore } from './micro-apps/capabilities.js'
+import { CredentialBroker } from './micro-apps/broker.js'
+import { installSessionPolicy } from './micro-apps/session-policy.js'
 import { startAgentBridge } from './agent-bridge.js'
 import { ensureWorkspace } from './packaging/workspace.js'
 
@@ -109,6 +112,20 @@ async function bootstrap(): Promise<void> {
   const secrets = new SecretStore(join(dataDir, 'secrets.json'), safeStorageBackend(safeStorage))
   const mcp = new McpRegistry(join(dataDir, 'mcp-servers.json'))
 
+  // Micro-app egress hardening: the approved-host store (W6) and the credential
+  // broker (W7), plus the session policy (W2 permission deny + W3/W6 CSP headers).
+  // The CSP a micro-app gets is enforced here by Hearth's session, not by the
+  // app's own (untrusted) Vite config.
+  const capabilities = new CapabilityStore(join(dataDir, 'capabilities.json'))
+  const broker = new CredentialBroker({ capabilities, secrets })
+  broker.start().catch((err) => console.error('[hearth] credential broker failed to start:', err))
+  app.once('before-quit', () => void broker.close())
+  installSessionPolicy(session.defaultSession, {
+    shellOrigins: [renderer.target.url ?? 'file://'],
+    capabilities,
+    brokerOrigin: () => broker.origin(),
+  })
+
   // The host owns the current backend and swaps it at runtime; IPC talks to it,
   // not to a fixed agent. Starts on the env-selected backend (default Claude).
   const host = new AgentHost(makeAgentFactory(secrets, mcp, REPO_ROOT), resolveBackend())
@@ -173,7 +190,7 @@ async function bootstrap(): Promise<void> {
     REPO_ROOT,
   )
 
-  registerIpc({ repoRoot: REPO_ROOT, host, selfMod, workspaces, sessions, browser, window, secrets, mcp })
+  registerIpc({ repoRoot: REPO_ROOT, host, selfMod, workspaces, sessions, browser, window, secrets, mcp, capabilities, broker })
 
   // Connect the current backend in the background; the UI renders immediately.
   // A failed connect must surface, not crash boot.
