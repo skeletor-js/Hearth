@@ -2,9 +2,12 @@ import { useEffect, useState } from 'react'
 import type { McpServerConfig, McpServerInput, McpEnvVar, McpTransport } from '../../../../electron/main/mcp/registry'
 import type { ProbeResult } from '../../../../electron/main/mcp/probe'
 import type { ActiveConnector, ActiveConnectors } from '../../../../electron/shared/protocol'
-import { SecLabel, Switch, Btn, Status } from '../controls'
+import { SecLabel, Switch, Btn, Status, CopyCommand } from '../controls'
 import { Icon } from '@/shell/Icon'
 import { toast } from '@/shell/toast'
+import { useShell } from '@/shell/store'
+import { useTerminalBus } from '@/app/workbench/terminal-bus'
+import { GUIDED_CONNECTORS, addCommands, type GuidedConnector } from '../connectors-catalog'
 
 // User MCP servers, merged into every new session alongside the built-in `hearth`
 // bridge. Changes apply to NEW sessions (ACP binds servers at session creation).
@@ -14,10 +17,15 @@ export function ConnectorsSection() {
   const [tests, setTests] = useState<Record<string, ProbeResult | 'running'>>({})
 
   const [active, setActive] = useState<ActiveConnectors | null>(null)
+  const loadActive = () =>
+    window.hearth.mcp.active().then((a) => {
+      setActive(a)
+      return a
+    })
   const load = () => window.hearth.mcp.list().then(setServers)
   useEffect(() => {
     void load()
-    void window.hearth.mcp.active().then(setActive)
+    void loadActive()
   }, [])
 
   const test = async (id: string) => {
@@ -106,8 +114,188 @@ export function ConnectorsSection() {
         </Btn>
       )}
 
+      {active && <GuidedConnectors active={active} onRefresh={loadActive} />}
       {active && <ActiveConnectorsView active={active} />}
     </>
+  )
+}
+
+const isPresent = (active: ActiveConnectors, kind: 'claude' | 'codex', serverName: string): boolean =>
+  active[kind].some((c) => c.name === serverName)
+
+// A1 + A1b: guided "Add connector". We generate the right `mcp add` command per
+// backend and run it in the Hearth terminal; the CLI does the OAuth. Connectors
+// are per-backend, so when both CLIs are set up the user authorizes twice (once
+// each) — we walk them through both. Connectors without a first-party remote MCP
+// endpoint route to the persistent browser instead of a fabricated command.
+function GuidedConnectors({ active, onRefresh }: { active: ActiveConnectors; onRefresh: () => Promise<ActiveConnectors> }) {
+  const backends = ([] as ('claude' | 'codex')[]).concat(
+    active.claudeCli ? ['claude'] : [],
+    active.codexCli ? ['codex'] : [],
+  )
+  const [flow, setFlow] = useState<{ c: GuidedConnector; stepIdx: number; waiting: boolean } | null>(null)
+
+  // Poll the read-only connector view until the server appears for the current
+  // step's backend (= the `mcp add` landed), then advance. The user completes the
+  // CLI's browser sign-in in the meantime; bounded so a stuck flow never hangs.
+  useEffect(() => {
+    if (!flow?.waiting) return
+    const kind = backends[flow.stepIdx]
+    const serverName = flow.c.serverName
+    let tries = 0
+    const timer = setInterval(async () => {
+      tries++
+      const a = await onRefresh() // re-fetch + sync parent so ✓/✗ updates live
+      if (isPresent(a, kind, serverName) || tries >= 36) {
+        clearInterval(timer)
+        setFlow((f) => (f ? { ...f, waiting: false } : f))
+      }
+    }, 2500)
+    return () => clearInterval(timer)
+  }, [flow?.waiting, flow?.stepIdx])
+
+  const runStep = (c: GuidedConnector, kind: 'claude' | 'codex') => {
+    const cmds = addCommands(c, kind)
+    if (!cmds.length) return
+    useShell.getState().setBottomOpen(true)
+    useShell.getState().setBottomTab('terminal')
+    useTerminalBus.getState().run(cmds.join(' && '))
+    setFlow((f) => (f ? { ...f, waiting: true } : f))
+  }
+
+  const advance = () => {
+    setFlow((f) => {
+      if (!f) return null
+      const next = f.stepIdx + 1
+      if (next >= backends.length) {
+        onRefresh()
+        return null
+      }
+      return { ...f, stepIdx: next, waiting: false }
+    })
+  }
+
+  return (
+    <>
+      <SecLabel icon="plug-charging">Add a connector</SecLabel>
+      <p className="set-note">
+        Hearth runs the right command in your terminal and the CLI handles sign-in — no tokens are stored here.
+        Connectors are configured <b>per backend</b>, so with both Claude Code and Codex set up you authorize each
+        connector twice.
+      </p>
+      {backends.length === 0 && (
+        <p className="set-note warn">Neither claude nor codex resolves on your PATH — install one to add connectors.</p>
+      )}
+      <div className="list">
+        {GUIDED_CONNECTORS.map((c) => {
+          const onClaude = isPresent(active, 'claude', c.serverName)
+          const onCodex = isPresent(active, 'codex', c.serverName)
+          return (
+            <div key={c.id} className="list-row">
+              <div className="list-main">
+                <div className="list-title">
+                  {c.label}
+                  {!c.url && <span className="chip chip-sm">browser</span>}
+                </div>
+                <div className="list-meta">
+                  {active.claudeCli && (
+                    <span className={onClaude ? 'ok' : ''}>Claude {onClaude ? '✓' : '—'}</span>
+                  )}
+                  {active.claudeCli && active.codexCli && ' · '}
+                  {active.codexCli && <span className={onCodex ? 'ok' : ''}>Codex {onCodex ? '✓' : '—'}</span>}
+                </div>
+              </div>
+              <div className="list-actions">
+                {c.url ? (
+                  <Btn variant="default" onClick={() => setFlow({ c, stepIdx: 0, waiting: false })} disabled={!backends.length}>
+                    Set up
+                  </Btn>
+                ) : (
+                  <Btn
+                    variant="ghost"
+                    icon="globe"
+                    onClick={() => {
+                      useShell.getState().setBottomOpen(true)
+                      useShell.getState().setBottomTab('browser')
+                      // let BrowserTab mount (it opens about:blank) before navigating
+                      setTimeout(() => window.hearth.browser.navigate(c.site), 250)
+                    }}
+                  >
+                    Log in via browser
+                  </Btn>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {flow && (
+        <ConnectorFlow
+          flow={flow}
+          backends={backends}
+          present={(kind) => isPresent(active, kind, flow.c.serverName)}
+          onRun={runStep}
+          onSkipOrNext={advance}
+          onClose={() => {
+            onRefresh()
+            setFlow(null)
+          }}
+        />
+      )}
+    </>
+  )
+}
+
+function ConnectorFlow({
+  flow,
+  backends,
+  present,
+  onRun,
+  onSkipOrNext,
+  onClose,
+}: {
+  flow: { c: GuidedConnector; stepIdx: number; waiting: boolean }
+  backends: ('claude' | 'codex')[]
+  present: (kind: 'claude' | 'codex') => boolean
+  onRun: (c: GuidedConnector, kind: 'claude' | 'codex') => void
+  onSkipOrNext: () => void
+  onClose: () => void
+}) {
+  const kind = backends[flow.stepIdx]
+  const label = kind === 'codex' ? 'Codex' : 'Claude Code'
+  const done = present(kind)
+  return (
+    <div className="auth-login">
+      {backends.length > 1 && (
+        <p className="set-note">
+          {flow.c.label} — step {flow.stepIdx + 1} of {backends.length}: authorize for <b>{label}</b>. MCP connectors
+          are per backend, so you&apos;ll do this once for each.
+        </p>
+      )}
+      <CopyCommand command={addCommands(flow.c, kind).join(' && ')} />
+      <div className="auth-login-row">
+        <Btn variant="accent" icon="terminal-window" onClick={() => onRun(flow.c, kind)}>
+          Run in terminal
+        </Btn>
+        {done ? (
+          <Status tone="ok">{flow.c.serverName} added</Status>
+        ) : flow.waiting ? (
+          <Status tone="run">Waiting for {flow.c.serverName}… complete sign-in in the terminal</Status>
+        ) : (
+          <Status tone="off">Press Enter in the terminal, then finish sign-in</Status>
+        )}
+        {flow.stepIdx < backends.length - 1 ? (
+          <Btn variant="ghost" onClick={onSkipOrNext}>
+            {done ? 'Next backend' : 'Skip this backend'}
+          </Btn>
+        ) : (
+          <Btn variant="ghost" onClick={onClose}>
+            Done
+          </Btn>
+        )}
+      </div>
+    </div>
   )
 }
 

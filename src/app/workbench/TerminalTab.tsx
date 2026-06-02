@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { useShell } from '@/shell/store'
 import { useSession } from '../session-store'
+import { useTerminalBus } from './terminal-bus'
 
 function themeColors() {
   const s = getComputedStyle(document.documentElement)
@@ -19,13 +20,16 @@ function themeColors() {
 export function TerminalTab() {
   const cwd = useSession((s) => s.active?.cwd)
   const theme = useShell((s) => s.theme)
+  const pending = useTerminalBus((s) => s.pending)
   const hostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
+  const idRef = useRef<string | null>(null)
 
   useEffect(() => {
     const host = hostRef.current
     if (!host) return
     const id = (crypto.randomUUID?.() ?? String(Math.random())).slice(0, 12)
+    idRef.current = id
     const term = new Terminal({
       cursorBlink: true,
       fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
@@ -74,6 +78,23 @@ export function TerminalTab() {
   useEffect(() => {
     if (termRef.current) termRef.current.options.theme = themeColors()
   }, [theme])
+
+  // A guided action queued a command — type it into this PTY (not submitted; the
+  // user reviews and presses Enter). The delayed take() survives React StrictMode's
+  // throwaway first mount (its cleanup cancels the timer before it consumes) and
+  // gives the PTY time to spawn before we write. Consume-once across terminals.
+  useEffect(() => {
+    if (pending == null) return
+    const t = setTimeout(() => {
+      const id = idRef.current
+      const cmd = useTerminalBus.getState().take()
+      if (cmd && id) {
+        window.hearth.terminal.write(id, cmd)
+        termRef.current?.focus()
+      }
+    }, 350)
+    return () => clearTimeout(t)
+  }, [pending])
 
   return <div ref={hostRef} className="term-host" style={{ height: '100%', width: '100%', padding: 8 }} />
 }

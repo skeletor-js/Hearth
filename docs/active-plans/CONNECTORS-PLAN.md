@@ -96,8 +96,9 @@ Verified, this already works end-to-end:
 Goal: setting up a connector is a guided action inside Hearth, and the user can
 **see** what's active — without Hearth storing any tokens.
 
-> **Status:** A0, A2, A3 ✅ **DONE (P2, 2026-06-02)** — verified live. A1, A1b
-> (P3) and A4/A5 (P4) remain. See Implementation log → P2.
+> **Status:** A0, A2, A3 ✅ **DONE (P2, 2026-06-02)**. A1, A1b ✅ **DONE (P3,
+> 2026-06-02)** — verified live. A4/A5 + C1/C2 (P4) remain. See Implementation
+> log → P2, P3.
 
 - **A0 — Truthful per-backend auth status for BOTH backends (prerequisite).**
   Today `authStatusFor` only verifies a live connection for the **active** backend;
@@ -314,9 +315,9 @@ being in a chat session — to browse, run a command, or edit a markdown/text fi
    reliable `claude`/`codex` resolution (A3). Touched main (`ipc.ts` auth status, a
    credential-presence check, `pty.ts`, read-only config readers, IPC) —
    restart-tier. A0 gates A1b.
-3. **P3 — Track A1 + A1b (guided connect + dual-backend walkthrough).** The
-   terminal-command shortcuts + the six labeled connectors, and the
-   authorize-twice walkthrough when both backends are set up. Depends on P2's PATH
+3. **P3 — Track A1 + A1b (guided connect + dual-backend walkthrough). ✅ DONE
+   (2026-06-02).** The terminal-command shortcuts + the six labeled connectors, and
+   the authorize-twice walkthrough when both backends are set up. Depends on P2's PATH
    fix and P2's per-backend config readers being in place.
 4. **P4 — Track A4 + C1/C2 polish + A5 hygiene (optional).**
 
@@ -533,5 +534,47 @@ powers detect-and-hint. Avoids re-sourcing rc files per terminal.
   branch already reports truthfully for either backend); the live `claude mcp add`
   round-trip was not run to avoid mutating the user's config — the reader is proven
   against the user's real Codex servers and Claude uses the same tested parser.
+
+### P3 — Track A1 + A1b · 2026-06-02
+
+**A1 — guided "Add a connector".** A new section in `ConnectorsSection` lists the
+six connectors from a data-driven catalog
+([`connectors-catalog.ts`](../../src/app/settings/connectors-catalog.ts)). Each
+shows per-backend ✓/✗ (drawn from A2's read-only view). A connector with a
+verified first-party remote MCP endpoint (Notion) gets a guided command; the
+others (Google Workspace, Microsoft 365, Slack, Fireflies, Granola) honestly route
+to the **persistent browser** rather than a fabricated URL — fill `url` in the
+catalog if/when a provider ships an endpoint and it becomes a guided command for
+free. Claude commands pin `-s user` (global); Codex emits `mcp add --url … && mcp
+login …`. "Run in terminal" opens the bottom terminal and **types** the command
+(not submitted — the user reviews + presses Enter) via a small non-persisted bus
+([`terminal-bus.ts`](../../src/app/workbench/terminal-bus.ts)) consumed by
+`TerminalTab` (delayed take() survives React StrictMode's throwaway mount + PTY
+spawn latency).
+
+**A1b — dual-backend authorize-twice walkthrough.** Usable backends are derived
+from which CLI resolves on PATH (`claudeCli`/`codexCli` from A2 — the real
+prerequisite for `mcp add`). With both present, a "step N of 2 — authorize for
+{backend}" notice appears and the flow runs Claude then Codex, each with its own
+command + a poll of the read-only view (every 2.5s, ≤90s) that advances when the
+server appears for that backend; per-step "Skip this backend" / "Next backend".
+With one backend, a single silent step.
+
+**Files:** `src/app/settings/connectors-catalog.ts` (new),
+`src/app/workbench/terminal-bus.ts` (new),
+`src/app/workbench/TerminalTab.tsx`, `src/app/settings/sections/ConnectorsSection.tsx`.
+
+**Verification (live, via eval/snapshot bridge):**
+- Guided section renders all six: Notion (guided), the other five with a "browser"
+  badge + "Log in via browser"; per-connector "Claude — · Codex —" presence.
+- "Set up" on Notion → "Notion — step 1 of 2: authorize for Claude Code" with
+  `claude mcp add --transport http -s user notion https://mcp.notion.com/mcp`.
+- "Run in terminal" → bottom terminal opens and the command is **typed at the
+  prompt, not executed** (verified in a snapshot). Restored the live view after.
+- `bun run typecheck`, `lint`, `build`, `bun test` (306 pass) all green.
+- Not run here (would mutate the user's real `~/.claude.json` / require live OAuth):
+  pressing Enter to actually add a connector + completing the browser sign-in. The
+  command, backend sequencing, and PTY delivery are proven; the OAuth round-trip is
+  the user-in-the-loop step (per this plan's P3 verify caveat).
 
 _(append per phase: what changed, files touched, verification results)_
