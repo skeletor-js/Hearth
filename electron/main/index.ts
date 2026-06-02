@@ -27,6 +27,8 @@ import { join } from 'node:path'
 import { stopAllMicroApps } from './micro-apps/server.js'
 import { OverlayWindow } from './windows/overlay-window.js'
 import { runMorph } from './self-mod/hmr-morph.js'
+import { armRestartCover, consumeRestartCover } from './self-mod/restart-cover.js'
+import { captureFrame } from './windows/morph-capture.js'
 import { CapabilityStore } from './micro-apps/capabilities.js'
 import { CredentialBroker } from './micro-apps/broker.js'
 import { installSessionPolicy } from './micro-apps/session-policy.js'
@@ -114,6 +116,36 @@ async function bootstrap(): Promise<void> {
   overlay.webContents().once('did-finish-load', () => console.log('[hearth] morph overlay ready'))
   app.once('before-quit', () => overlay.destroy())
 
+  // B7: if a packaged relaunch armed a restart cover (a main/preload self-mod), show
+  // that last frame over this boot so the process restart doesn't flash black, then
+  // morph to the new UI once it paints. Inert in dev (nothing arms it). Guarded: a
+  // stale frame is ignored, and the cover auto-hides so it can never mask a broken boot.
+  try {
+    const cover = consumeRestartCover(app.getPath('userData'), overlay.originOffset(), Date.now())
+    if (cover) {
+      void (async () => {
+        await overlay.whenReady(1500)
+        overlay.show()
+        overlay.sendCover(cover.frame, cover.rect)
+        const safetyHide = setTimeout(() => overlay.hide(), 8000)
+        window.webContents.once('did-finish-load', () => {
+          setTimeout(async () => {
+            try {
+              overlay.sendHandoff(await captureFrame(window))
+              await overlay.awaitSignal('done', 2000)
+            } catch {
+              // ignore — fall through to hide
+            }
+            clearTimeout(safetyHide)
+            overlay.hide()
+          }, 600)
+        })
+      })()
+    }
+  } catch {
+    // best-effort — a failed restart cover just means a normal boot
+  }
+
   // Encrypted secret store (BYO API keys + MCP env) and the user's MCP server
   // registry. Both live under userData. Created before the host because the agent
   // factory reads them to resolve auth + MCP servers.
@@ -149,8 +181,12 @@ async function bootstrap(): Promise<void> {
         // the dev session (and its Vite server), leaving a blank window. Only
         // relaunch in a packaged build; in dev a window reload is the safe fallback.
         if (app.isPackaged) {
-          app.relaunch()
-          app.exit(0)
+          // Arm the restart cover (screenshot the UI) before relaunching, so the
+          // next boot can morph across the process restart instead of flashing black.
+          void armRestartCover(window, dataDir, Date.now()).finally(() => {
+            app.relaunch()
+            app.exit(0)
+          })
         } else {
           window.webContents.reload()
         }

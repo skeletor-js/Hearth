@@ -40,18 +40,24 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[!]` blocked
   never black-flash, and keeping them live preserves the agent's `view_app` — a
   stated non-goal to change). Full "hold every edit until an atomic end-of-turn
   apply" was intentionally not done for that reason.
-- **B7 packaged restart coverage:** ⏸️ **deferred** (see Residual). Covering a
-  whole-process `app.relaunch()` needs a persist-screenshot-across-boot path in the
-  restart/boot code; it's packaged-only (dev restart is a non-goal), **cannot be
-  verified in this environment** (no notarized `dist` run — already env-gated), and
-  touches the stability-critical boot path. Low value too: main/preload self-mods
-  are rare and explicitly discouraged. Deferred rather than ship unverifiable
-  boot-path code.
+- **B7 packaged restart coverage:** ✅ **implemented** (`restart-cover.ts`) —
+  verification packaged-gated. Before a packaged `app.relaunch()`, `armRestartCover`
+  screenshots the UI to `userData/restart-cover.json`; on the next boot,
+  `consumeRestartCover` shows that frame as the overlay cover and morphs to the new
+  UI once it paints. **Inert in dev** (electron-vite owns the dev restart, so nothing
+  arms it → consume is a no-op → cannot affect a dev boot — confirmed: app boots
+  clean). Guarded against masking a broken boot: a frame older than 15s is ignored,
+  and the cover auto-hides after 8s. It **can't be verified here** (needs a notarized
+  `dist` run — the same env gate that already applies to the packaged build), so it
+  ships code-complete and verification-pending, not unverified-and-claimed-working.
 
 **Net:** the user-facing goal — a self-mod that changes the UI no longer flashes
-black; structural reloads play under a seamless morph cover — is **done and
-verified** for all renderer reloads (the common case). The only uncovered path is a
-packaged main-process restart (B7), deferred.
+black; structural reloads play under a seamless morph cover — is **done and verified
+live** for all renderer reloads (the common case, B1–B6). The packaged main-process
+restart path (B7) is implemented but its visual verification is packaged-gated.
+Part A (live route-HMR) is terminal: proven infeasible under electron-vite, superseded
+by the morph. Undo/redo deliberately use the plain reload (morph-on-undo blanked on
+revert transients — documented follow-up).
 
 ---
 
@@ -271,11 +277,14 @@ so each piece is testable and the app stays shippable between steps.
 - **Acceptance:** during a multi-edit turn the user's window shows the pre-turn UI
   until the turn completes, then transitions once to the final UI.
 
-### B7 — Restart coverage across boot *(stretch / the hard tail)*
-- `[ ]` For `process-restart` (main/preload) in **packaged** builds: before
-  `app.relaunch()`, persist the last-frame screenshot to disk; on next boot, show
-  it as the overlay cover immediately, then morph once the new renderer paints.
-  Dev (electron-vite) restart is explicitly out of scope.
+### B7 — Restart coverage across boot *(implemented; packaged-verification-pending)*
+- `[x]` For `process-restart` (main/preload) in **packaged** builds:
+  `restart-cover.ts` — `armRestartCover` persists the last-frame screenshot + window
+  bounds before `app.relaunch()`; on next boot `consumeRestartCover` shows it as the
+  overlay cover and morphs once the new renderer paints. Dev (electron-vite) restart
+  is out of scope and inert (nothing arms it). Guarded: stale frame (>15s) ignored,
+  cover auto-hides after 8s so it never masks a broken boot. Visual verification is
+  packaged-gated (no notarized `dist` run here).
 - **Acceptance (packaged):** a main-process self-mod relaunch shows the last frame
   through the restart and morphs to the new UI instead of a black launch.
 
