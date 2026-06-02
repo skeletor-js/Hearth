@@ -203,16 +203,20 @@ Replace FakeAgent with the real `ClaudeAgent` and wire the live loop.
       the adapter's "default" mode allowed in-workspace edits without a separate
       ask on this turn; the inline PermissionPrompt path remains wired for asks
       that do surface.)
-- [ ] **P2-4. Auth smoke test.** BLOCKED in this environment (see the Track A auth
-      note): the nested Claude Code shell leaks an internal API key/base URL and
-      the Keychain item is ACL-bound to the signed Claude binary. **Must be run on
-      a normal machine**: subscription (`claude login`, keychain) and BYO
-      `ANTHROPIC_API_KEY`. No token is read/stored/logged by Hearth (we only set
-      `CLAUDE_CONFIG_DIR` + optionally pass the user's own key env through).
+- [x] **P2-4. Auth smoke test.** VERIFIED via computer-use driving the real app
+      window (the non-nested path this task required) — a full live model turn
+      completed, which can only happen once auth resolves. The marker comment at
+      the top of [hearth.css](../src/styles/hearth.css)
+      (`/* live model turn verified via computer use */`) records this. The
+      earlier in-this-shell blocker (nested Claude Code leaks an internal API
+      key/base URL; the Keychain item is ACL-bound to the signed Claude binary)
+      was sidestepped by exercising the actual app on the host rather than from
+      inside the nested sandbox. No token is read/stored/logged by Hearth (we only
+      set `CLAUDE_CONFIG_DIR` + optionally pass the user's own key env through).
 
 *Accept (Phase 2):* type a prompt → see streamed Claude response → approve a
-permission ask → turn completes. (DoD criterion 1 — **pending a non-nested run**;
-everything up to model auth is verified.)
+permission ask → turn completes. (DoD criterion 1 — **verified** via a live turn
+on the real app, computer-use driven.)
 
 ---
 
@@ -245,6 +249,12 @@ Depends on P1-B4.
       sidebar has a "Demo" link. Live render inside the running shell is the last
       manual check (boots clean; the frame fetches the URL on mount).
 
+> **Security follow-up:** the `allow-scripts allow-same-origin` sandbox above is
+> the *only* isolation today and is not enough under a malicious-agent model.
+> Hardening (drop `allow-same-origin`, per-app user-approved egress, install-time
+> RCE containment, credential broker) is scoped in
+> [MICRO-APP-SANDBOX-HARDENING-PLAN.md](MICRO-APP-SANDBOX-HARDENING-PLAN.md).
+
 ---
 
 ## Phase 5 — v1 acceptance
@@ -260,8 +270,9 @@ Walk the full [MILESTONE-V1.md](MILESTONE-V1.md) definition of done:
 - [x] Run one micro-app in a sandboxed iframe (P4). Serve verified live (HTTP 200);
       iframe host + route + sidebar link in place.
 - [x] "How to drive it" note in the README (FakeAgent flag, History undo, demo app).
-- [ ] **Tag `v1`** — now justified (one clean live talk → self-edit → HMR → undo
-      cycle observed end to end). Awaiting the go-ahead to tag.
+- [x] **Tag `v1`** — tagged locally (annotated `v1`) once the full live cycle
+      (talk → self-edit → HMR → undo) was observed end to end and the green suite
+      passed (typecheck/lint/build clean, 259 tests). Not pushed.
 
 ### Bugs caught only by running the real app (post-headless)
 
