@@ -70,9 +70,19 @@ export function ChatView() {
   const padNonEmpty = useSession((s) => s.scratchpadNonEmpty)
   const promptReq = useSession((s) => s.promptRequest)
   const lastReqNonce = useRef(0)
-  // Buffer of stream entries for the in-flight turn, flushed to the transcript
-  // on end so we persist per-turn (not per-token).
-  const turnBuffer = useRef<TranscriptEntry[]>([])
+  // Persist transcript entries INCREMENTALLY (each update as it streams), not
+  // buffered until turn-end. A self-mod that edits the renderer can trigger a full
+  // reload mid-turn, which would wipe an in-memory buffer before it flushed —
+  // losing the whole assistant turn. Writing as we go makes the transcript durable
+  // across that reload. Appends are serialized through one promise chain so JSONL
+  // lines never interleave and stay in stream order.
+  const persistChain = useRef<Promise<unknown>>(Promise.resolve())
+  const persist = (sessionId: string, entries: TranscriptEntry[]) => {
+    if (!entries.length) return
+    persistChain.current = persistChain.current
+      .then(() => window.hearth.sessions.append(sessionId, entries))
+      .catch(() => {})
+  }
 
   const id = () => nextId.current++
 
@@ -215,14 +225,13 @@ export function ChatView() {
     const offBe = window.hearth.agent.onBackendChanged((s) => setBackend(s.kind))
     const offUpdate = window.hearth.agent.onUpdate(({ update }) => {
       apply(update)
-      turnBuffer.current.push({ kind: 'update', update })
+      // Persist this update immediately so a mid-turn renderer reload (e.g. a
+      // self-mod that touches routes) can't lose the turn.
+      const a = useSession.getState().active
+      if (a) persist(a.id, [{ kind: 'update', update }])
       if (update.type === 'end') {
         setBusy(false)
         useSession.getState().refreshDiff() // working tree may have changed this turn
-        const a = useSession.getState().active
-        const batch = turnBuffer.current
-        turnBuffer.current = []
-        if (a && batch.length) void window.hearth.sessions.append(a.id, batch)
       }
     })
     const offError = window.hearth.agent.onError((message) => {
@@ -245,7 +254,6 @@ export function ChatView() {
     let live = true
     setMsgs([])
     openText.current = false
-    turnBuffer.current = []
     if (!active) {
       void ensureActiveSession()
       return
@@ -299,7 +307,7 @@ export function ChatView() {
     pushUser(text)
     setBusy(true)
     turnStart.current = Date.now()
-    void window.hearth.sessions.append(a.id, [{ kind: 'user', text }])
+    persist(a.id, [{ kind: 'user', text }])
     try {
       // Auto-attach: when on for this workspace, the agent sees the pad fenced in
       // front of the typed text, but the bubble + transcript keep only `text`.
