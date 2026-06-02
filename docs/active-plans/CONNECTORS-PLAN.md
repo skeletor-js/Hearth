@@ -96,6 +96,9 @@ Verified, this already works end-to-end:
 Goal: setting up a connector is a guided action inside Hearth, and the user can
 **see** what's active — without Hearth storing any tokens.
 
+> **Status:** A0, A2, A3 ✅ **DONE (P2, 2026-06-02)** — verified live. A1, A1b
+> (P3) and A4/A5 (P4) remain. See Implementation log → P2.
+
 - **A0 — Truthful per-backend auth status for BOTH backends (prerequisite).**
   Today `authStatusFor` only verifies a live connection for the **active** backend;
   the inactive one returns `connected: false` and renders as "Inactive backend"
@@ -306,9 +309,9 @@ being in a chat session — to browse, run a command, or edit a markdown/text fi
    hot-reloads, self-contained, highest immediate value. Verified in light + dark,
    on `/new`, `/history`, `/settings`, and `/chat`.
 2. **P2 — Track A0 + A2 + A3 (truthful dual-backend auth + visibility + PTY
-   PATH).** Per-backend auth status that shows BOTH backends as authorized when
-   they are (A0), the read-only active-connectors view (A2), and reliable
-   `claude`/`codex` resolution (A3). Touches main (`ipc.ts` auth status, a
+   PATH). ✅ DONE (2026-06-02).** Per-backend auth status that shows BOTH backends
+   as authorized when they are (A0), the read-only active-connectors view (A2), and
+   reliable `claude`/`codex` resolution (A3). Touched main (`ipc.ts` auth status, a
    credential-presence check, `pty.ts`, read-only config readers, IPC) —
    restart-tier. A0 gates A1b.
 3. **P3 — Track A1 + A1b (guided connect + dual-backend walkthrough).** The
@@ -476,5 +479,59 @@ outside a chat session.
 - Restored the user's original state (dark, panels closed, original session).
 - `bun run typecheck`, `bun run lint`, `bun run build`, `bun test` (301 pass) all
   green.
+
+### P2 — Track A0 + A2 + A3 · 2026-06-02
+
+**A0 — truthful per-backend auth.** `authStatusFor` no longer early-returns a bare
+`connected:false` for the inactive backend. In subscription mode it now reports
+`loginPresent` from a presence check of the CLI's own stored login
+([`login-presence.ts`](../../electron/main/agents/login-presence.ts)): Codex →
+`~/.codex/auth.json` existence; Claude → `~/.claude/.credentials.json` or the
+non-secret `oauthAccount` marker in `~/.claude.json`. **No token value is read,
+stored, or logged** (COMPLIANCE.md). Added `loginPresent` to `AuthState`. The
+`AuthSection` badge replaces "Inactive backend" with *Using your login* (active),
+*Signed in* (inactive + login present), or *Not signed in*; Log out / Re-check are
+available for both backends. API-key mode is unchanged (already truthful).
+
+**A2 — read-only active connectors.**
+[`active-connectors.ts`](../../electron/main/mcp/active-connectors.ts) reads what
+each backend loads, never throwing and never exposing auth values (only a
+`hasAuth` boolean): Claude from `~/.claude.json` top-level `mcpServers` (user),
+`projects[cwd].mcpServers` (local), and `<cwd>/.mcp.json` (project); Codex from
+`~/.codex/config.toml` via a minimal `[mcp_servers.<name>]` reader (NOT a general
+TOML parser — no dependency added). Nested `[mcp_servers.<name>.env]` tables are
+treated as subtables (mark auth) not phantom servers. Pure parsers
+(`parseClaudeConnectors`, `parseCodexConnectors`) are unit-tested
+([`active-connectors.test.ts`](../../electron/main/mcp/active-connectors.test.ts),
+5 cases). New IPC `connectors:active`; rendered in `ConnectorsSection` as a
+read-only block labeled "managed by Claude Code / Codex — edit in the terminal,"
+with a CLI-not-found hint driven by A3's resolver.
+
+**A3 — PTY PATH.** [`login-path.ts`](../../electron/main/terminal/login-path.ts)
+resolves the user's login PATH once (`$SHELL -lic` with sentinels, cached) and
+merges it with the inherited PATH; `pty.ts` spawns terminals with it. `cliResolves`
+powers detect-and-hint. Avoids re-sourcing rc files per terminal.
+
+**Files:** `electron/shared/protocol.ts`, `electron/shared/channels.ts`,
+`electron/main/ipc.ts`, `electron/main/agents/login-presence.ts`,
+`electron/main/mcp/active-connectors.ts` (+ test),
+`electron/main/terminal/login-path.ts`, `electron/main/terminal/pty.ts`,
+`electron/preload/index.ts`, `src/app/settings/sections/AuthSection.tsx`,
+`src/app/settings/sections/ConnectorsSection.tsx`.
+
+**Verification (live, via eval/snapshot bridge):**
+- A0: `auth.status` → Claude `{subscription, connected:true}`, Codex
+  `{subscription, connected:false, loginPresent:true}`. Settings shows Claude
+  *Using your login* + Codex *Signed in* — no "Inactive backend"; both authorized.
+- A2: `mcp.active()` → `claudeCli:true, codexCli:true`, Claude `[]`, Codex
+  `context7/stdio`, `playwright/stdio`, `node_repl/stdio` (Authorized). Settings
+  renders them with transport/scope chips. Phantom `node_repl.env` confirmed gone.
+- A3: ran `which claude codex` in a real Hearth PTY → both resolve (codex via an
+  nvm path that a GUI launch would otherwise miss), exit 0.
+- `bun run typecheck`, `lint`, `build`, `bun test` (305 pass) all green.
+- API-key parity not re-tested with real keys (the unchanged `mode==='api-key'`
+  branch already reports truthfully for either backend); the live `claude mcp add`
+  round-trip was not run to avoid mutating the user's config — the reader is proven
+  against the user's real Codex servers and Claude uses the same tested parser.
 
 _(append per phase: what changed, files touched, verification results)_

@@ -40,7 +40,9 @@ import type { AgentKind, AuthState, BackendStatus, PermissionRequest } from '../
 import type { SecretStore } from './secrets/secret-store.js'
 import { McpRegistry, type McpServerInput } from './mcp/registry.js'
 import { probeServer } from './mcp/probe.js'
+import { readActiveConnectors } from './mcp/active-connectors.js'
 import { resolveAuth, apiKeyRefs } from './agents/auth-config.js'
+import { hasStoredLogin } from './agents/login-presence.js'
 import { listSkills, globalSkillsDir, setSkillEnabled } from './skills/list.js'
 
 let runSeq = 0
@@ -340,8 +342,13 @@ export function registerIpc(services: MainServices): void {
       methods: [],
     }
     // Live connection state only applies to the active backend (the only one with
-    // a spawned adapter). The inactive backend reports its credential mode only.
-    if (kind !== host.kind) return base
+    // a spawned adapter). For the INACTIVE backend we still report a truthful,
+    // independent state: API-key presence is already known via `mode`/`keySource`;
+    // for subscription we presence-check the CLI's own stored login (never reading
+    // the token value — COMPLIANCE.md) so the user sees both backends are usable.
+    if (kind !== host.kind) {
+      return auth.mode === 'subscription' ? { ...base, loginPresent: hasStoredLogin(kind) } : base
+    }
     if (reconnect) {
       try {
         await host.reconnect()
@@ -388,6 +395,9 @@ export function registerIpc(services: MainServices): void {
     if (!cfg) return { ok: false, error: 'Server not found' }
     return probeServer(cfg, secrets)
   })
+  // A2: read-only view of the connectors each backend loads from its own CLI
+  // config. cwd scopes Claude's local/project servers; defaults to the repo root.
+  ipcMain.handle(HEARTH_CHANNELS.connectorsActive, (_e, cwd?: string) => readActiveConnectors(cwd || repoRoot))
 
   // Skills: read-only discovery (global + the active workspace).
   ipcMain.handle(HEARTH_CHANNELS.skillsList, (_e, cwd?: string) => ({

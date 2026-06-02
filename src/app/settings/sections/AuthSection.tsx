@@ -60,10 +60,16 @@ function badge(state: AuthState | undefined, isActive: boolean) {
   if (!state) return <Status tone="off">Checking…</Status>
   if (state.mode === 'api-key')
     return <Status tone="ok">API key{state.keySource === 'env' ? ' · from env' : ' · stored'}</Status>
-  if (!isActive) return <Status tone="off">Inactive backend</Status>
-  if (state.error) return <Status tone="warn">Not connected</Status>
-  if (state.connected) return <Status tone="ok">Using your login</Status>
-  return <Status tone="off">Connecting…</Status>
+  // Subscription. The active backend has a live adapter, so report the real
+  // connection; the inactive one reports its login presence (checked without
+  // spawning it) so the user sees both backends are authorized and can switch.
+  if (isActive) {
+    if (state.error) return <Status tone="warn">Not connected</Status>
+    if (state.connected) return <Status tone="ok">Using your login</Status>
+    return <Status tone="off">Connecting…</Status>
+  }
+  if (state.loginPresent) return <Status tone="ok">Signed in</Status>
+  return <Status tone="off">Not signed in</Status>
 }
 
 function BackendAuth({
@@ -119,16 +125,14 @@ function BackendAuth({
             <Btn variant="ghost" icon="key" onClick={() => setMode(mode === 'apikey' ? null : 'apikey')}>
               API key
             </Btn>
-            {(hasKey || (isActive && state?.connected)) && (
+            {(hasKey || (isActive && state?.connected) || state?.loginPresent) && (
               <Btn variant="ghost" icon="sign-out" onClick={logout}>
                 Log out
               </Btn>
             )}
-            {isActive && (
-              <Btn variant="ghost" icon="arrow-clockwise" onClick={onChanged} title="Re-check">
-                Re-check
-              </Btn>
-            )}
+            <Btn variant="ghost" icon="arrow-clockwise" onClick={onChanged} title="Re-check">
+              Re-check
+            </Btn>
           </div>
         </div>
 
@@ -149,11 +153,9 @@ function BackendAuth({
             </p>
             <div className="auth-login-row">
               <CopyCommand command={command} />
-              {isActive && (
-                <Btn variant="accent" icon="arrow-clockwise" onClick={onChanged}>
-                  Re-check
-                </Btn>
-              )}
+              <Btn variant="accent" icon="arrow-clockwise" onClick={onChanged}>
+                Re-check
+              </Btn>
             </div>
           </div>
         )}

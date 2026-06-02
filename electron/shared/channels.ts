@@ -84,6 +84,8 @@ export const HEARTH_CHANNELS = {
   mcpRemove: 'mcp:remove',
   mcpSetEnabled: 'mcp:set-enabled',
   mcpTest: 'mcp:test',
+  // read-only: connectors each backend loads from its own CLI config (A2).
+  connectorsActive: 'connectors:active',
   // skills: discovery + enable/disable of Claude Code skills (global + workspace).
   skillsList: 'skills:list',
   skillsReveal: 'skills:reveal',

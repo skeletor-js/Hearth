@@ -5,6 +5,7 @@
 
 import * as pty from 'node-pty'
 import { platform, env } from 'node:process'
+import { loginPath } from './login-path.js'
 
 export interface PtyHandle {
   proc: pty.IPty
@@ -35,7 +36,9 @@ export class TerminalManager {
       cols,
       rows,
       cwd,
-      env: { ...env, TERM: 'xterm-256color' } as Record<string, string>,
+      // Merge the user's login PATH so GUI-launched Hearth can resolve claude/codex
+      // and other shell-installed CLIs (see login-path.ts).
+      env: { ...env, PATH: loginPath(), TERM: 'xterm-256color' } as Record<string, string>,
     })
     const dataSub = proc.onData((data) => this.onData(id, data))
     const exitSub = proc.onExit(() => {

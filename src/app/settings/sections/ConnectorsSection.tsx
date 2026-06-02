@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { McpServerConfig, McpServerInput, McpEnvVar, McpTransport } from '../../../../electron/main/mcp/registry'
 import type { ProbeResult } from '../../../../electron/main/mcp/probe'
+import type { ActiveConnector, ActiveConnectors } from '../../../../electron/shared/protocol'
 import { SecLabel, Switch, Btn, Status } from '../controls'
 import { Icon } from '@/shell/Icon'
 import { toast } from '@/shell/toast'
@@ -12,8 +13,12 @@ export function ConnectorsSection() {
   const [editing, setEditing] = useState<null | string | 'new'>(null)
   const [tests, setTests] = useState<Record<string, ProbeResult | 'running'>>({})
 
+  const [active, setActive] = useState<ActiveConnectors | null>(null)
   const load = () => window.hearth.mcp.list().then(setServers)
-  useEffect(() => void load(), [])
+  useEffect(() => {
+    void load()
+    void window.hearth.mcp.active().then(setActive)
+  }, [])
 
   const test = async (id: string) => {
     setTests((t) => ({ ...t, [id]: 'running' }))
@@ -100,6 +105,67 @@ export function ConnectorsSection() {
           Add connector
         </Btn>
       )}
+
+      {active && <ActiveConnectorsView active={active} />}
+    </>
+  )
+}
+
+// A2: read-only view of what each backend loads from its OWN CLI config. Managed
+// by Claude Code / Codex — edited in the terminal, never written by Hearth.
+function ActiveConnectorsView({ active }: { active: ActiveConnectors }) {
+  const backends: { kind: 'claude' | 'codex'; label: string; cmd: string; servers: ActiveConnector[]; cli: boolean }[] = [
+    { kind: 'claude', label: 'Claude Code', cmd: 'claude mcp', servers: active.claude, cli: active.claudeCli },
+    { kind: 'codex', label: 'Codex', cmd: 'codex mcp', servers: active.codex, cli: active.codexCli },
+  ]
+  return (
+    <>
+      <SecLabel icon="plugs">Active connectors (from your CLIs)</SecLabel>
+      <p className="set-note">
+        What each backend loads from its own config. Managed by Claude Code / Codex — add or remove these in the
+        terminal (e.g. <code>claude mcp add</code>), not here. Hearth only reads them.
+      </p>
+      {backends.map((b) => (
+        <div key={b.kind} className="list">
+          <div className="list-row">
+            <div className="list-main">
+              <div className="list-title">{b.label}</div>
+            </div>
+            <div className="list-actions">
+              {b.cli ? (
+                <Status tone="off">{b.servers.length} connector{b.servers.length === 1 ? '' : 's'}</Status>
+              ) : (
+                <Status tone="warn">CLI not found on PATH</Status>
+              )}
+            </div>
+          </div>
+          {!b.cli && (
+            <div className="list-row">
+              <div className="list-meta warn">
+                <code>{b.kind}</code> isn&apos;t resolvable in Hearth&apos;s terminal — install it or check your PATH to
+                manage connectors.
+              </div>
+            </div>
+          )}
+          {b.servers.map((s) => (
+            <div key={b.kind + ':' + s.scope + ':' + s.name} className="list-row">
+              <div className="list-main">
+                <div className="list-title">
+                  {s.name} <span className="chip chip-sm">{s.transport}</span>
+                  <span className="chip chip-sm">{s.scope}</span>
+                </div>
+                <div className="list-meta">{s.target || '—'}</div>
+              </div>
+              <div className="list-actions">{s.hasAuth && <Status tone="ok">Authorized</Status>}</div>
+            </div>
+          ))}
+          {b.cli && b.servers.length === 0 && (
+            <div className="list-row">
+              <div className="list-meta">None yet — run <code>{b.cmd} add …</code> in the terminal.</div>
+            </div>
+          )}
+        </div>
+      ))}
     </>
   )
 }

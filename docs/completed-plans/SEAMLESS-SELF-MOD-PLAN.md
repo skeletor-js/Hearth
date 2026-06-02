@@ -1,5 +1,12 @@
 # Seamless Self-Mod Plan — kill the black screen
 
+> **Status: COMPLETE (2026-06-02).** User-facing goal met and verified live: UI
+> self-mods no longer flash black; structural reloads play under a seamless morph
+> cover (B1–B6). Part A (live route-HMR) is terminal — proven infeasible under
+> electron-vite and superseded by the morph. B7 (packaged restart cover) ships
+> code-complete; its only remaining check is visual verification on a notarized
+> `dist` build, which is packaged-gated and cannot run in dev. No dev work remains.
+
 When a user asks Hearth to change its own UI, it should *just happen*. Today most
 edits hot-swap invisibly, but **structural edits flash a black screen**: adding a
 route, editing `index.html`, or touching the main process forces a full reload (or

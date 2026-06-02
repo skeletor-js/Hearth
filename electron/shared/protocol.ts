@@ -71,12 +71,40 @@ export interface AuthState {
   mode: 'api-key' | 'subscription'
   /** Where the API key came from, when mode is api-key. */
   keySource?: 'secret' | 'env'
-  /** The ACP handshake completed (the adapter spawned + initialized). */
+  /** The ACP handshake completed (the adapter spawned + initialized). Only the
+   * active backend has a live adapter to report this. */
   connected: boolean
   /** Connect error, when the adapter failed to come up. */
   error?: string
+  /** For the INACTIVE backend in subscription mode: whether the CLI's own stored
+   * login is present (presence/expiry check only — never the token value). Lets
+   * the UI show both backends as authorized without spawning the inactive one. */
+  loginPresent?: boolean
   /** Auth methods the adapter advertises (drives the login affordances). */
   methods: AuthMethodInfo[]
+}
+
+/** One MCP connector a backend will load, surfaced read-only (managed by the CLI,
+ * not by Hearth). Auth values are never included — only whether auth is set. */
+export interface ActiveConnector {
+  name: string
+  /** Where the CLI config puts it: user (global), project (.mcp.json), or local
+   * (per-directory). Codex servers are all global ('user'). */
+  scope: 'user' | 'project' | 'local'
+  transport: 'stdio' | 'http' | 'sse'
+  /** Non-secret target: the URL (http/sse) or the command (stdio). */
+  target: string
+  /** Whether auth (headers/env) is configured — presence only, never the value. */
+  hasAuth: boolean
+}
+
+/** Read-only snapshot of what each backend loads, plus whether each CLI resolves
+ * on the PATH (drives detect-and-hint when claude/codex aren't installed). */
+export interface ActiveConnectors {
+  claude: ActiveConnector[]
+  codex: ActiveConnector[]
+  claudeCli: boolean
+  codexCli: boolean
 }
 
 /** One option the user can pick when answering a permission ask. */

@@ -3,7 +3,7 @@
 
 import { contextBridge, ipcRenderer } from 'electron'
 import { HEARTH_CHANNELS as CH } from '../shared/channels.js'
-import type { AgentKind, AgentUpdatePayload, AuthState, AvailableCommand, BackendStatus, ModelState, PermissionRequestPayload } from '../shared/protocol.js'
+import type { ActiveConnectors, AgentKind, AgentUpdatePayload, AuthState, AvailableCommand, BackendStatus, ModelState, PermissionRequestPayload } from '../shared/protocol.js'
 import type { SecretInfo } from '../main/secrets/secret-store.js'
 import type { McpServerConfig, McpServerInput } from '../main/mcp/registry.js'
 import type { ProbeResult } from '../main/mcp/probe.js'
@@ -192,6 +192,8 @@ const api = {
     remove: (id: string): Promise<void> => ipcRenderer.invoke(CH.mcpRemove, id),
     setEnabled: (id: string, enabled: boolean): Promise<void> => ipcRenderer.invoke(CH.mcpSetEnabled, id, enabled),
     test: (id: string): Promise<ProbeResult> => ipcRenderer.invoke(CH.mcpTest, id),
+    /** A2: read-only connectors each backend loads from its own CLI config. */
+    active: (cwd?: string): Promise<ActiveConnectors> => ipcRenderer.invoke(CH.connectorsActive, cwd),
   },
   skills: {
     list: (cwd?: string): Promise<{ skills: SkillInfo[]; commands: AvailableCommand[] }> =>
