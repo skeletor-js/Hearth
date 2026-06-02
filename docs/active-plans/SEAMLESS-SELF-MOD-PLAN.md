@@ -21,6 +21,40 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[!]` blocked
 
 ---
 
+## Implementation status (2026-06-02)
+
+- **Part A — route-tree HMR:** ❌ **abandoned** — infeasible under electron-vite
+  (Vite 6/7/8 + autoCodeSplitting all fail to register a new route on HMR; see the
+  Part A finding). Routes stay `full-reload` and are covered by the morph instead.
+- **B1 overlay window:** ✅ done.
+- **B2 capture + IPC:** ✅ done.
+- **B3 transition surface + timing:** ✅ done.
+- **B4 controller:** ✅ done — **verified seamless via computer-use** (old UI held,
+  no black, cover painted at the window's exact bounds).
+- **B5 wire cover into reload path:** ✅ done — `HmrController.coveredReload` runs
+  the morph on the full-reload tier; `ipc.ts` brackets the turn.
+- **B6 suppress autonomous reload:** ✅ done (core goal). The overlay plugin drops
+  Vite's outgoing `full-reload` HMR message at the websocket level while a turn is
+  active — **verified live** (route-add + index.html no longer reload mid-turn).
+  *Scope note:* hmr-tier component edits still hot-swap **live** mid-turn (they
+  never black-flash, and keeping them live preserves the agent's `view_app` — a
+  stated non-goal to change). Full "hold every edit until an atomic end-of-turn
+  apply" was intentionally not done for that reason.
+- **B7 packaged restart coverage:** ⏸️ **deferred** (see Residual). Covering a
+  whole-process `app.relaunch()` needs a persist-screenshot-across-boot path in the
+  restart/boot code; it's packaged-only (dev restart is a non-goal), **cannot be
+  verified in this environment** (no notarized `dist` run — already env-gated), and
+  touches the stability-critical boot path. Low value too: main/preload self-mods
+  are rare and explicitly discouraged. Deferred rather than ship unverifiable
+  boot-path code.
+
+**Net:** the user-facing goal — a self-mod that changes the UI no longer flashes
+black; structural reloads play under a seamless morph cover — is **done and
+verified** for all renderer reloads (the common case). The only uncovered path is a
+packaged main-process restart (B7), deferred.
+
+---
+
 ## Grounding (current state — verified)
 
 Hearth side:
