@@ -49,14 +49,18 @@ function TabBody({ tab, onOpenTab }: { tab: string; onOpenTab: (id: string) => v
 }
 
 // One panel used for BOTH the right and bottom panels; each owns its active tab.
+// Off-session (no chat) only the always-tools show — review/plan/self/agents are
+// session-contextual and have nothing to show without a session.
 export function WorkPanel({
   orientation,
   tab,
   setTab,
+  offSession = false,
 }: {
   orientation: 'right' | 'bottom'
   tab: string
   setTab: (id: string) => void
+  offSession?: boolean
 }) {
   const reviewCount = useSession((s) => s.reviewCount)
   const planCount = useSession((s) => s.plan.length)
@@ -81,7 +85,7 @@ export function WorkPanel({
         return true
     }
   }
-  const tabs = WB_TABS.filter((t) => ALWAYS_TABS.has(t.id) || needed(t.id))
+  const tabs = WB_TABS.filter((t) => ALWAYS_TABS.has(t.id) || (!offSession && needed(t.id)))
 
   // If the active tab fell out of view (a contextual tab that's no longer needed),
   // fall back to a sensible always-tool.

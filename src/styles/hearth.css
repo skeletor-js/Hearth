@@ -296,6 +296,8 @@ button.rail-item{ width:100%;border:0;background:transparent;font:inherit;text-a
   width:min(620px,68%);z-index:20;
   transform:translateX(0);transition:transform .28s cubic-bezier(.3,.7,.4,1); }
 .app[data-layout="focus"] .wb-col.is-hidden{ transform:translateX(calc(100% + 18px)); }
+/* Off-session (no data-layout): plain fixed-width right panel; width set inline */
+.app:not([data-layout]) .wb-col{ flex-shrink:0; }
 
 /* Bottom panel wrapper (spans stage width) */
 .wb-panel{ flex-shrink:0;height:40%;min-height:140px;display:flex;flex-direction:column;

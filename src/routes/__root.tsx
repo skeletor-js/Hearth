@@ -29,7 +29,9 @@ function RootLayout() {
     applyTheme(s.theme, s.accent, s.reduceMotion)
   }, [s.theme, s.accent, s.reduceMotion])
 
-  const showRight = isSession && (s.layout === 'focus' || s.rightOpen)
+  // Off-session, panels are plain open/closed surfaces — the focus/split machinery
+  // (data-layout, scrim) is session-only, so right visibility is just `rightOpen`.
+  const showRight = isSession ? s.layout === 'focus' || s.rightOpen : s.rightOpen
   const cmdk = useCommandPalette()
 
   if (!s.onboarded) {
@@ -61,17 +63,20 @@ function RootLayout() {
             <Outlet />
           </main>
           {showRight && (
-            <div className={'wb-col' + (s.layout === 'focus' && !s.rightOpen ? ' is-hidden' : '')} style={s.layout === 'split' ? undefined : { width: s.wbW }}>
-              {s.layout !== 'focus' && <Resizer axis="x" className="resizer-wb" onResize={s.resizeWb} />}
-              <WorkPanel orientation="right" tab={s.rightTab} setTab={s.openRightTab} />
+            <div
+              className={'wb-col' + (isSession && s.layout === 'focus' && !s.rightOpen ? ' is-hidden' : '')}
+              style={isSession && s.layout === 'split' ? undefined : { width: s.wbW }}
+            >
+              {(!isSession || s.layout !== 'focus') && <Resizer axis="x" className="resizer-wb" onResize={s.resizeWb} />}
+              <WorkPanel orientation="right" tab={s.rightTab} setTab={s.openRightTab} offSession={!isSession} />
             </div>
           )}
           {isSession && s.layout === 'focus' && s.rightOpen && <div className="focus-scrim" onClick={() => s.setRightOpen(false)} />}
         </div>
-        {isSession && s.bottomOpen && (
+        {s.bottomOpen && (
           <div className="wb-panel" style={{ height: s.panelH }}>
             <Resizer axis="y" className="resizer-panel" onResize={s.resizePanel} />
-            <WorkPanel orientation="bottom" tab={s.bottomTab} setTab={s.setBottomTab} />
+            <WorkPanel orientation="bottom" tab={s.bottomTab} setTab={s.setBottomTab} offSession={!isSession} />
           </div>
         )}
       </div>
@@ -86,8 +91,6 @@ function RootLayout() {
 // (session only). Buttons opt out of the drag region so they stay clickable.
 function Titlebar() {
   const s = useShell()
-  const pathname = useRouterState({ select: (st) => st.location.pathname })
-  const isSession = pathname === '/chat'
   return (
     <div className="titlebar" onDoubleClick={() => window.hearth.win.zoomToggle()}>
       {s.onboarded && (
@@ -100,12 +103,10 @@ function Titlebar() {
               onClick={s.toggleRailHidden}
             />
           </div>
-          {isSession && (
-            <div className="tb-right">
-              <PanelBtn side="bottom" on={s.bottomOpen} title="Toggle bottom panel" onClick={() => s.setBottomOpen(!s.bottomOpen)} />
-              <PanelBtn side="right" on={s.rightOpen} title="Toggle right panel" onClick={() => s.setRightOpen(!s.rightOpen)} />
-            </div>
-          )}
+          <div className="tb-right">
+            <PanelBtn side="bottom" on={s.bottomOpen} title="Toggle bottom panel" onClick={() => s.setBottomOpen(!s.bottomOpen)} />
+            <PanelBtn side="right" on={s.rightOpen} title="Toggle right panel" onClick={() => s.setRightOpen(!s.rightOpen)} />
+          </div>
         </>
       )}
     </div>

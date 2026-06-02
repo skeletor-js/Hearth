@@ -123,21 +123,57 @@ Goal: setting up a connector is a guided action inside Hearth, and the user can
 
 - **A1 — Guided "Add connector" runs the CLI for you.** Settings → Connectors
   grows a small set of one-click actions that **open the Hearth terminal and run
-  the right command** for each backend (e.g. `claude mcp add --transport http
+  the right command** for each backend (e.g. `claude mcp add --transport http -s user
   notion https://mcp.notion.com/mcp`; `codex mcp add …` for Codex), then let the
   CLI's own OAuth/browser flow run. Present the six requested ones (Notion, Google
   Workspace, Microsoft 365, Slack, Fireflies, Granola) as labeled shortcuts with
   their docs links; "Custom" drops the user at a terminal prompt or the existing
   registry form. We generate the command; the **CLI** does the auth. No Hearth
   token storage.
+  - **Scope MUST be global, not the CLI default.** `claude mcp add` defaults to
+    `-s local` (per-directory), so a connector added from a workspace terminal would
+    apply to that directory only — not "every Hearth session" as this plan intends.
+    Claude templates therefore pin **`-s user`** (writes the global `~/.claude.json`
+    the adapter loads via `settingSources`). Codex `mcp add` writes the global
+    `~/.codex/config.toml` by default — no per-scope flag needed, but confirm it
+    isn't writing a project-local override. If a user genuinely wants a
+    workspace-only connector, that's the "Custom" path, not the guided shortcuts.
+  - **Codex may need a second step: `codex mcp login <name>`.** The Codex CLI
+    exposes both `mcp add` and `mcp login` (verified: `codex mcp` subcommands are
+    `list/get/add/remove/login/logout`). For remote OAuth connectors, adding the
+    server and authorizing it can be two commands. The Codex command builder must
+    emit the login step where required, and A1b's "wait for OAuth" applies to it.
+  - **Not every provider has a first-party remote MCP — fall back to the browser,
+    not a fake command.** Of the six, only confirm a command shortcut where a
+    real, first-party Streamable-HTTP MCP endpoint exists (see the table below).
+    Where none does, the shortcut routes to the **persistent browser** path
+    ("Already built" above) — log in there and let the agent drive it — rather than
+    fabricating an `mcp add` URL that doesn't resolve. This is a labeled outcome of
+    the connector definition, not an error.
   - **Per-backend command templates are baked in, by design.** Each connector
     definition carries a command builder **per backend** (Claude:
-    `claude mcp add --transport http <name> <url>`; Codex: `codex mcp add …`), so
-    "add Notion" resolves to the right invocation for whichever backend(s) the user
-    has. The syntax differing across CLIs (and versions) is expected and absorbed
-    here — it is part of normal upkeep, tracked alongside adapter versions (A4),
-    **not** a per-setup caveat. Verify each template against the vendored adapter
-    when bumping versions.
+    `claude mcp add --transport http -s user <name> <url>`; Codex: `codex mcp add …`
+    [+ `codex mcp login …`]), so "add Notion" resolves to the right invocation for
+    whichever backend(s) the user has. The syntax differing across CLIs (and
+    versions) is expected and absorbed here — it is part of normal upkeep, tracked
+    alongside adapter versions (A4), **not** a per-setup caveat. Verify each
+    template against the vendored adapter when bumping versions.
+  - **Connector endpoint table (source at build time; do not guess).** Each
+    definition needs a verified endpoint + transport. Confirm each against the
+    provider's own MCP docs when implementing — these drift, and a wrong URL fails
+    silently in the CLI. Known-good seed; the rest are to-confirm:
+
+    | Connector | Transport | Endpoint | Status |
+    |---|---|---|---|
+    | Notion | http | `https://mcp.notion.com/mcp` | confirmed |
+    | Google Workspace | ? | — | confirm first-party remote MCP exists; else browser path |
+    | Microsoft 365 | ? | — | confirm first-party remote MCP exists; else browser path |
+    | Slack | ? | — | confirm first-party remote MCP exists; else browser path |
+    | Fireflies | ? | — | confirm endpoint from docs |
+    | Granola | ? | — | confirm endpoint from docs |
+
+    Filling this table accurately (and demoting any provider with no first-party
+    remote MCP to the browser path) is part of A1, not a follow-up.
 
 - **A1b — Dual-backend authorize-twice walkthrough (required).** Because
   connectors are per-CLI (limit 2), a user who has **both** Claude Code **and**
@@ -155,6 +191,19 @@ Goal: setting up a connector is a guided action inside Hearth, and the user can
     the Claude command and waits for its OAuth to complete; step 2 runs the Codex
     command and waits for its OAuth. Show per-step status and a "skip this backend"
     option.
+  - **How "wait for OAuth to complete" actually works (define it, don't hand-wave).**
+    Hearth gets no callback from the CLI's browser OAuth, so completion is detected
+    by **polling A2's config reader**: after the `mcp add` (+ Codex `mcp login`)
+    command is sent to the terminal, poll the backend's config (`~/.claude.json` /
+    `~/.codex/config.toml`) until the named server appears, then optionally confirm
+    with the same short-lived adapter probe A0 uses (spawn → list tools → tear down)
+    to verify the connector is actually reachable, not just written. Only then mark
+    the step done and advance.
+    - **Failure / timeout path (required).** If the server never appears within a
+      bounded timeout (e.g. user closed the browser, command errored, bad URL),
+      surface the terminal's output and offer **retry / skip this backend**. Never
+      hang the walkthrough on a stuck OAuth. CLI-not-found is caught earlier by A3's
+      detect-and-hint.
   - **If only one is set up:** run the single flow silently (no double-auth
     notice). If the user adds the second backend later, A2's per-backend view
     shows the connector as present on one backend and missing on the other, with a
@@ -166,9 +215,22 @@ Goal: setting up a connector is a guided action inside Hearth, and the user can
   `~/.codex/config.toml` for Codex, list server name + transport + (if derivable)
   auth/connected state. Clearly label it "managed by Claude Code / Codex — edit in
   the terminal." Closes the trust gap (limit 3). Read-only; never write tokens.
-- **A3 — Make `claude`/`codex` resolve in the PTY.** Spawn the terminal as a
-  login/interactive shell (or augment PATH from the user's shell) so GUI-launched
-  Hearth can find the CLIs (limit 4). Detect-and-hint if the binary is missing.
+  - **TOML parsing:** `~/.codex/config.toml` needs a TOML parser. Check for one
+    already on the dependency tree (codex-acp or a transitive dep) before adding
+    `@iarna/toml` or similar — per AGENTS.md, don't add a dep if one's vendored.
+  - **This reader is reused** as the completion signal for A1b's walkthrough and as
+    the per-connector ✓/✗ source for A1b's display — build it once, here.
+  - **Add-only by design.** The guided flow (A1) adds connectors; there is **no
+    guided remove/disable**. Removal stays a terminal action (`claude mcp remove` /
+    `codex mcp remove`), consistent with A2 being read-only and Hearth never
+    mutating CLI config. State this in the UI so it reads as a decision, not a gap.
+- **A3 — Make `claude`/`codex` resolve in the PTY.** GUI-launched Hearth can
+  inherit a stunted PATH and fail to resolve the CLIs (limit 4). **Resolve the
+  user's login PATH once at startup** (spawn `$SHELL -l -i -c 'echo $PATH'` a single
+  time, cache it) and merge it into the PTY env — rather than spawning every PTY as
+  a login+interactive shell, which re-sources heavy rc files on each terminal open
+  (slow, and `-i` can disturb PTY semantics). Detect-and-hint if the binary is still
+  missing after the PATH merge.
 - **A4 — Adapter version surfacing.** Show the vendored adapter versions in
   Settings and note that connector/feature currency tracks them (limit 1). A
   bump-reminder, not auto-update.
@@ -182,10 +244,17 @@ Goal: setting up a connector is a guided action inside Hearth, and the user can
 Non-goals: Hearth-brokered OAuth, a Hearth token store for third parties, an
 in-app catalog that bypasses the CLI.
 
-## Track B — Always-available panels
+## Track B — Always-available panels  ✅ DONE (P1, 2026-06-02)
 
 Goal: the user can open the browser, terminal, files, and scratchpad **without**
 being in a chat session — to browse, run a command, or edit a markdown/text file.
+
+> **Status:** B1–B4 implemented and verified live. Toggles + panels render on
+> `/new`, `/history`, `/settings` and stay correct on `/chat`; off-session shows
+> only the four always-tabs; Files/Terminal cwd falls back to `repoRoot` (already
+> handled in main). Verified in dark (offscreen render of all three off-session
+> routes) and light (live window). typecheck + lint + build + 301 tests green.
+> See Implementation log → P1.
 
 - **B1 — Ungate the top-right toggles.** In [__root.tsx](../../src/routes/__root.tsx)
   `Titlebar`, render the bottom/right `PanelBtn`s regardless of route (not just
@@ -196,10 +265,24 @@ being in a chat session — to browse, run a command, or edit a markdown/text fi
   (review, agents, plan, self) stay hidden until there's a session. Persisted
   `rightTab`/`bottomTab` that are session-only should fall back to an always tab
   off-session.
+  - **Off-session cwd (terminal + files) must be defined.** Both the terminal and
+    Files tab today derive cwd from `useSession((s) => s.active?.cwd)`, which is
+    **undefined off-session** (no active session). Main already defaults git/cwd to
+    `repoRoot` ([ipc.ts:221-223](../../electron/main/ipc.ts#L221)); use the same
+    fallback so the off-session terminal/files open in the Hearth repo root rather
+    than an undefined/`~` cwd. This also matters for A1: because the guided
+    `claude mcp add` uses `-s user` (global), the terminal's cwd is irrelevant to
+    connector scope — confirming the `-s user` decision is what decouples "add a
+    connector" from "which folder the off-session terminal happens to be in."
 - **B3 — Layout sanity.** The `data-layout` focus/split logic is session-scoped;
-  off-session use a plain open/closed panel (no focus scrim, no split). Verify the
-  browser `WebContentsView` bounds still track the panel rect on non-`/chat`
-  routes (it's positioned by the renderer-reported content rect).
+  off-session use a plain open/closed panel (no focus scrim, no split). **Pin the
+  off-session CSS contract:** `data-layout` is already set to `undefined`
+  off-session ([__root.tsx:46](../../src/routes/__root.tsx#L46)), so the focus/split
+  rules don't apply — confirm the `.app` grid renders the route content and an open
+  `wb-col`/`wb-panel` side by side at the persisted `wbW`/`panelH` sizes without the
+  session-only focus/split CSS collapsing the main column. Verify the browser
+  `WebContentsView` bounds still track the panel rect on non-`/chat` routes (it's
+  positioned by the renderer-reported content rect) under that grid.
 - **B4 — Persistence.** Panel open/closed + active tab already persist via the
   shell store; confirm they restore correctly when the app opens to a non-session
   route.
@@ -219,9 +302,9 @@ being in a chat session — to browse, run a command, or edit a markdown/text fi
 
 ## Phasing for `/goal`
 
-1. **P1 — Track B (panels global).** Pure renderer, hot-reloads, self-contained,
-   highest immediate value. Verify in light + dark, on `/new`, `/history`,
-   `/settings`, and `/chat`.
+1. **P1 — Track B (panels global). ✅ DONE (2026-06-02).** Pure renderer,
+   hot-reloads, self-contained, highest immediate value. Verified in light + dark,
+   on `/new`, `/history`, `/settings`, and `/chat`.
 2. **P2 — Track A0 + A2 + A3 (truthful dual-backend auth + visibility + PTY
    PATH).** Per-backend auth status that shows BOTH backends as authorized when
    they are (A0), the read-only active-connectors view (A2), and reliable
@@ -278,6 +361,10 @@ revive the deferred broker in the appendix. Apply the plan; don't re-derive it.
 
 ## Verify each phase BEFORE committing it
 - bun run typecheck, bun run lint, bun run build, bun test must pass.
+- NOTE: P2/P3 acceptance needs REAL state the agent can't self-provision — both
+  backends logged in (subscription) AND on API keys, plus live OAuth for Notion/
+  Granola against real accounts. These steps require the user in the loop; do P1's
+  live checks solo, but flag P2/P3's credential-dependent steps for the user.
 - P1: drive the LIVE app (read .hearth/bridge-url, POST /eval, GET /snapshot; or
   computer-use). Confirm the bottom/right panel toggles appear and work on /new,
   /history, /settings AND /chat; off-session only files/scratchpad/terminal/browser
@@ -344,5 +431,50 @@ preserved elsewhere, so re-spec it from scratch if revived.
 ---
 
 ## Implementation log
+
+### P1 — Track B (panels global) · 2026-06-02
+
+**What changed:** the browser/terminal/files/scratchpad panels are now usable
+outside a chat session.
+
+- **B1 — toggles ungated.** [`__root.tsx`](../../src/routes/__root.tsx) `Titlebar`
+  renders the bottom/right `PanelBtn`s on every route (dropped the `isSession`
+  wrapper; removed the now-unused `pathname`/`isSession` locals there).
+- **B2 — panels render off-session.** `showRight` is now
+  `isSession ? (layout==='focus' || rightOpen) : rightOpen`; the bottom panel
+  gate dropped from `isSession && bottomOpen` to `bottomOpen`. `WorkPanel` gained
+  an `offSession` prop that restricts the tab set to `ALWAYS_TABS` (review/plan/
+  self/agents stay hidden off-session). A persisted session-only `rightTab`
+  (default `review`) falls back to `files` via the existing fallback effect.
+- **B3 — layout sanity.** Focus/split styling (`is-hidden` class, `split` width
+  skip, focus-scrim, focus resizer suppression) is now gated on `isSession`, so
+  off-session is a plain open/closed panel. Added
+  `.app:not([data-layout]) .wb-col{ flex-shrink:0 }` in
+  [`hearth.css`](../../src/styles/hearth.css) so the right column keeps its inline
+  width off-session (all other width rules are `data-layout`-scoped). Browser
+  bounds tracking is route-independent (driven by `getBoundingClientRect`), so it
+  works off-session unchanged; off-session it opens `about:blank`.
+- **B4 — persistence.** Panel open/active-tab already persist via the `hearth-ui`
+  zustand store; confirmed the offscreen render hydrates them on a non-session
+  route.
+- **Off-session cwd:** no renderer change needed — main already defaults
+  `cwd || repoRoot` for terminal create and fs list/read/write
+  ([ipc.ts:274,296-299](../../electron/main/ipc.ts#L274)), so off-session Files
+  lists the repo root (confirmed in the captures).
+
+**Files touched:** [`src/routes/__root.tsx`](../../src/routes/__root.tsx),
+[`src/app/workbench/WorkPanel.tsx`](../../src/app/workbench/WorkPanel.tsx),
+[`src/styles/hearth.css`](../../src/styles/hearth.css).
+
+**Verification:** drove the live app via the eval/snapshot bridge.
+- Dark: offscreen render of `/history`, `/new`, `/settings` — both panels show
+  only Files/Scratchpad/Terminal/Browser; Files lists the repo root.
+- Light: on the live window, clicked the now-visible off-session toggles on
+  `/history` → both panels opened with the four always-tabs; captured.
+- `/chat` regression: navigated back to the active session — `data-layout`
+  returns to `companion`, chat surface intact, panels behave as before.
+- Restored the user's original state (dark, panels closed, original session).
+- `bun run typecheck`, `bun run lint`, `bun run build`, `bun test` (301 pass) all
+  green.
 
 _(append per phase: what changed, files touched, verification results)_
