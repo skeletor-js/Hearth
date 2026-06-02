@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { AgentKind, PermissionRequest, SessionUpdate } from '../../../electron/shared/protocol'
+import type { AgentKind, PermissionRequest, PromptImage, SessionUpdate } from '../../../electron/shared/protocol'
 import { FlameMark, ThinkingEmber } from '@/shell/Mascot'
 import { Icon } from '@/shell/Icon'
 import { useShell } from '@/shell/store'
@@ -16,7 +16,7 @@ type Block =
   | { kind: 'trace'; steps: TraceStep[]; result?: TraceResult; edits: number; turnMs?: number }
   | { kind: 'planref'; done: number; total: number }
 type Msg =
-  | { id: number; role: 'user'; text: string }
+  | { id: number; role: 'user'; text: string; images?: PromptImage[] }
   | { id: number; role: 'hearth'; blocks: Block[] }
   | { id: number; role: 'system'; text: string }
 
@@ -86,8 +86,8 @@ export function ChatView() {
 
   const id = () => nextId.current++
 
-  const pushUser = (text: string) =>
-    setMsgs((p) => [...p, { id: id(), role: 'user', text }, { id: id(), role: 'hearth', blocks: [] }])
+  const pushUser = (text: string, images?: PromptImage[]) =>
+    setMsgs((p) => [...p, { id: id(), role: 'user', text, images }, { id: id(), role: 'hearth', blocks: [] }])
 
   // Ensure there's a hearth message at the tail to receive stream blocks.
   const withHearthTail = (prev: Msg[]): [Msg[], Extract<Msg, { role: 'hearth' }>] => {
@@ -307,10 +307,10 @@ export function ChatView() {
     setPermission(null)
   }
 
-  const send = async (text: string) => {
+  const send = async (text: string, images?: PromptImage[]) => {
     const a = useSession.getState().active ?? (await ensureActiveSession())
     openText.current = false
-    pushUser(text)
+    pushUser(text, images)
     setBusy(true)
     turnStart.current = Date.now()
     persist(a.id, [{ kind: 'user', text }])
@@ -321,7 +321,7 @@ export function ChatView() {
       if (useShell.getState().scratchpadAttach[a.cwd]) {
         outbound = wrapForPrompt(text, await readScratchpad(a.cwd))
       }
-      const result = await window.hearth.agent.prompt(a.id, a.cwd, outbound)
+      const result = await window.hearth.agent.prompt(a.id, a.cwd, outbound, images)
       if (result) {
         useSession.getState().setLastSelfEdit({ commit: result.commit, subject: text, changedPaths: result.changedPaths })
       }
@@ -427,6 +427,13 @@ function MessageView({
             </button>
           </div>
         </div>
+        {m.images && m.images.length > 0 && (
+          <div className="msg-images">
+            {m.images.map((img, i) => (
+              <img key={i} src={`data:${img.mimeType};base64,${img.data}`} alt="attachment" />
+            ))}
+          </div>
+        )}
         <div className="msg-body">{m.text}</div>
       </div>
     )

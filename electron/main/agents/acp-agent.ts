@@ -9,7 +9,7 @@ import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { AcpClient, type AdapterSpec, type McpServerProvider } from './acp-client.js'
-import type { Agent, AgentKind, AgentSession, AuthMethodInfo, AvailableCommand, PermissionRequest, SessionUpdate } from './agent.js'
+import type { Agent, AgentKind, AgentSession, AuthMethodInfo, AvailableCommand, PermissionRequest, PromptCapabilities, SessionUpdate } from './agent.js'
 
 /**
  * Resolve a published adapter's launchable entry from its package.json `bin`.
@@ -53,6 +53,9 @@ export class AcpAgent implements Agent {
   }
   onPermission(cb: (sessionId: string, req: PermissionRequest) => Promise<string>): void {
     this.client.onPermission(cb)
+  }
+  promptCapabilities(): PromptCapabilities {
+    return this.client.promptCapabilities()
   }
   authMethods(): AuthMethodInfo[] {
     return this.client.authMethods()

@@ -137,7 +137,7 @@ export function registerIpc(services: MainServices): void {
 
   ipcMain.handle(
     HEARTH_CHANNELS.agentPrompt,
-    async (_e, payload: { sessionId: string; cwd?: string; text: string }) => {
+    async (_e, payload: { sessionId: string; cwd?: string; text: string; images?: import('../shared/protocol.js').PromptImage[] }) => {
       const key = payload.sessionId || 'default'
       // Recover an interrupted prior turn (crashed before captureTurn) before we
       // baseline — commits its orphaned changes as a `recovered` run, never lost.
@@ -154,7 +154,7 @@ export function registerIpc(services: MainServices): void {
       void overlay.turnStart()
       let result
       try {
-        await host.prompt(payload.text, { key, cwd: payload.cwd || repoRoot })
+        await host.prompt(payload.text, { key, cwd: payload.cwd || repoRoot, images: payload.images })
       } catch (err) {
         // Adapters can reject with a JSON-RPC error object (not an Error), which
         // serializes across IPC as "[object Object]". Normalize to a real Error
@@ -236,6 +236,13 @@ export function registerIpc(services: MainServices): void {
   )
   host.onUsageChanged((usage) => window.webContents.send(HEARTH_CHANNELS.agentUsageChanged, usage))
   ipcMain.handle(HEARTH_CHANNELS.agentGetUsage, () => host.getUsage())
+
+  // Prompt capabilities (image / embedded context) + advertised slash commands.
+  // W1 gates composer attachments on the former; W6 surfaces the latter in the
+  // composer, updating live on available_commands_update.
+  ipcMain.handle(HEARTH_CHANNELS.agentPromptCaps, () => host.promptCapabilities())
+  ipcMain.handle(HEARTH_CHANNELS.agentGetCommands, () => host.advertisedCommands())
+  host.onCommandsChanged((commands) => window.webContents.send(HEARTH_CHANNELS.agentCommandsChanged, commands))
 
   ipcMain.handle(HEARTH_CHANNELS.selfModHistory, () => selfMod.history())
   // Plain undo/redo: let Vite's autonomous reloads apply the revert. They self-heal

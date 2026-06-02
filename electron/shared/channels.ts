@@ -20,6 +20,9 @@ export const HEARTH_CHANNELS = {
   agentConfigChanged: 'agent:config:changed', // main → renderer
   agentGetUsage: 'agent:usage:get',
   agentUsageChanged: 'agent:usage:changed', // main → renderer
+  agentPromptCaps: 'agent:prompt-caps:get',
+  agentGetCommands: 'agent:commands:get',
+  agentCommandsChanged: 'agent:commands:changed', // main → renderer
   selfModHistory: 'self-mod:history',
   selfModUndo: 'self-mod:undo',
   selfModRedo: 'self-mod:redo',

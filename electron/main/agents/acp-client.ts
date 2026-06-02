@@ -25,7 +25,7 @@ import {
   type RequestPermissionResponse,
   type SessionNotification,
 } from '@agentclientprotocol/sdk'
-import type { AgentSession, AuthMethodInfo, AvailableCommand, PermissionRequest, SessionUpdate } from './agent.js'
+import type { AgentSession, AuthMethodInfo, AvailableCommand, PermissionRequest, PromptCapabilities, PromptImage, SessionUpdate } from './agent.js'
 import { normalizeConfigOptions, normalizeModels, normalizeModes, translatePermission, translateUpdate } from './acp-translate.js'
 import { buildChildEnv, shouldScrubInheritedKeys } from './child-env.js'
 import { createWriteBroker } from '../self-mod/write-broker.js'
@@ -58,6 +58,9 @@ export class AcpClient {
   // skills it has surfaced this connection. Both feed Settings (auth + skills).
   private authMethodsList: AuthMethodInfo[] = []
   private commands: AvailableCommand[] = []
+  // Prompt input the adapter accepts beyond text (image / embedded context),
+  // captured from initialize. Defaults to text-only until proven otherwise.
+  private promptCaps: PromptCapabilities = { image: false, embeddedContext: false }
 
   // A factory, not a resolved spec: resolution (which can throw — missing bin,
   // missing API key) is deferred to connect() so it fails through the connect
@@ -107,12 +110,10 @@ export class AcpClient {
     const client: Client = {
       sessionUpdate: async (params: SessionNotification) => {
         for (const update of translateUpdate(params.update, this.toolTitles)) {
-          // The agent's advertised slash commands / skills are captured for the
-          // Settings → Skills surface, not streamed into the chat transcript.
-          if (update.type === 'commands') {
-            this.commands = update.commands
-            continue
-          }
+          // The agent's advertised slash commands / skills: cache for getters, and
+          // also forward so the host can fire its commands-changed event (the chat
+          // surface ignores this update type). Not streamed into the transcript.
+          if (update.type === 'commands') this.commands = update.commands
           this.emit(params.sessionId, update)
         }
       },
@@ -158,11 +159,19 @@ export class AcpClient {
       name: m.name,
       description: m.description ?? undefined,
     }))
+    // Prompt capabilities (image / embedded context) — drives composer affordances.
+    const pc = init?.agentCapabilities?.promptCapabilities
+    this.promptCaps = { image: !!pc?.image, embeddedContext: !!pc?.embeddedContext }
   }
 
   /** Auth methods the adapter advertised at initialize (empty before connect). */
   authMethods(): AuthMethodInfo[] {
     return this.authMethodsList
+  }
+
+  /** Prompt capabilities the adapter advertised at initialize. */
+  promptCapabilities(): PromptCapabilities {
+    return this.promptCaps
   }
 
   /** Slash commands / skills the agent has advertised this connection. */
@@ -214,11 +223,17 @@ export class AcpClient {
       models,
       modes,
       configOptions,
-      prompt: async (text: string) => {
-        const { stopReason } = await connection.prompt({
-          sessionId,
-          prompt: [{ type: 'text', text }],
-        })
+      prompt: async (text: string, images?: PromptImage[]) => {
+        // text + any image blocks the backend advertised support for. Gate here too
+        // (defense in depth): never send an image to a backend that didn't advertise
+        // promptCapabilities.image.
+        const blocks: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [
+          { type: 'text', text },
+        ]
+        if (this.promptCaps.image && images?.length) {
+          for (const img of images) blocks.push({ type: 'image', data: img.data, mimeType: img.mimeType })
+        }
+        const { stopReason } = await connection.prompt({ sessionId, prompt: blocks })
         this.emit(sessionId, { type: 'end', stopReason })
       },
       setModel: async (modelId: string) => {

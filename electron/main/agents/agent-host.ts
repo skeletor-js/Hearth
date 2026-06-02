@@ -4,7 +4,7 @@
 // from whichever agent is live and re-points them on switch. The per-window
 // session also lives here, so a switch transparently starts a fresh session.
 
-import type { Agent, AgentKind, AgentSession, AuthMethodInfo, AvailableCommand, ConfigOption, ModelState, ModeState, PermissionRequest, SessionUpdate, Usage } from './agent.js'
+import type { Agent, AgentKind, AgentSession, AuthMethodInfo, AvailableCommand, ConfigOption, ModelState, ModeState, PermissionRequest, PromptCapabilities, PromptImage, SessionUpdate, Usage } from './agent.js'
 
 export type AgentFactory = (kind: AgentKind) => Agent
 type UpdateHandler = (sessionId: string, update: SessionUpdate) => void
@@ -13,6 +13,7 @@ type ModelsHandler = (state: ModelState) => void
 type ModeHandler = (state: ModeState) => void
 type ConfigHandler = (options: ConfigOption[]) => void
 type UsageHandler = (usage: Usage) => void
+type CommandsHandler = (commands: AvailableCommand[]) => void
 
 const EMPTY_MODELS: ModelState = { available: [], current: null }
 const EMPTY_MODES: ModeState = { available: [], current: null }
@@ -46,6 +47,7 @@ export class AgentHost {
   private readonly modeHandlers = new Set<ModeHandler>()
   private readonly configHandlers = new Set<ConfigHandler>()
   private readonly usageHandlers = new Set<UsageHandler>()
+  private readonly commandsHandlers = new Set<CommandsHandler>()
 
   constructor(
     private readonly factory: AgentFactory,
@@ -102,7 +104,7 @@ export class AgentHost {
    * Prompt within a renderer session. `key` is the renderer's session id (one
    * ACP session per key); `cwd` sets that session's task working directory.
    */
-  async prompt(text: string, opts?: { key?: string; cwd?: string }): Promise<string> {
+  async prompt(text: string, opts?: { key?: string; cwd?: string; images?: PromptImage[] }): Promise<string> {
     const agent = await this.connect()
     const key = opts?.key ?? 'default'
     let session = this.sessions.get(key)
@@ -125,8 +127,13 @@ export class AgentHost {
       this.usageByKind.delete(this.currentKind)
     }
     this.activeKey = key
-    await session.prompt(text)
+    await session.prompt(text, opts?.images)
     return session.id
+  }
+
+  /** Prompt capabilities the current backend advertised (image / embedded context). */
+  promptCapabilities(): PromptCapabilities {
+    return this.agent?.promptCapabilities?.() ?? { image: false, embeddedContext: false }
   }
 
   async cancel(): Promise<void> {
@@ -232,7 +239,14 @@ export class AgentHost {
     for (const h of this.usageHandlers) h(usage)
   }
 
-  /** Fold a live mode/config/usage update into the per-kind cache + handlers. */
+  // --- Advertised commands ---------------------------------------------------
+
+  onCommandsChanged(cb: CommandsHandler): () => void {
+    this.commandsHandlers.add(cb)
+    return () => this.commandsHandlers.delete(cb)
+  }
+
+  /** Fold a live mode/config/usage/commands update into the cache + handlers. */
   private absorbUpdate(update: SessionUpdate): void {
     if (update.type === 'mode') {
       this.setModeCache({ ...this.getModes(), current: update.current })
@@ -240,6 +254,8 @@ export class AgentHost {
       this.setConfigCache(update.options)
     } else if (update.type === 'usage') {
       this.setUsageCache(update.usage)
+    } else if (update.type === 'commands') {
+      for (const h of this.commandsHandlers) h(update.commands)
     }
   }
 

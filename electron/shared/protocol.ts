@@ -84,6 +84,19 @@ export interface Usage {
   cost?: { amount: number; currency: string }
 }
 
+/** What the active backend accepts in a prompt beyond text (mirrors ACP
+ * `promptCapabilities`). Drives which composer affordances are offered. */
+export interface PromptCapabilities {
+  image: boolean
+  embeddedContext: boolean
+}
+
+/** An image attached to a prompt — base64 data + mime (mirrors ACP image block). */
+export interface PromptImage {
+  data: string
+  mimeType: string
+}
+
 /** A single plan task (mirrors ACP `PlanEntry`). */
 export interface PlanEntry {
   content: string

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { AgentKind, ConfigOption, ModelState, ModeState, Usage } from '../../../electron/shared/protocol'
+import type { AgentKind, AvailableCommand, ConfigOption, ModelState, ModeState, PromptCapabilities, PromptImage, Usage } from '../../../electron/shared/protocol'
 import type { Workspace } from '../../../electron/main/workspaces/registry'
 import { Icon } from '@/shell/Icon'
 import { Switch } from '@/app/settings/controls'
@@ -246,7 +246,7 @@ export function Composer({
   onDetachScratchpad,
 }: {
   busy: boolean
-  onSend: (text: string) => void
+  onSend: (text: string, images?: PromptImage[]) => void
   onStop: () => void
   scratchpadAttached?: boolean
   onDetachScratchpad?: () => void
@@ -257,6 +257,10 @@ export function Composer({
   const [modes, setModes] = useState<ModeState>({ available: [], current: null })
   const [configOptions, setConfigOptions] = useState<ConfigOption[]>([])
   const [usage, setUsage] = useState<Usage | null>(null)
+  const [promptCaps, setPromptCaps] = useState<PromptCapabilities>({ image: false, embeddedContext: false })
+  const [pendingImages, setPendingImages] = useState<PromptImage[]>([])
+  const [commands, setCommands] = useState<AvailableCommand[]>([])
+  const [slashSel, setSlashSel] = useState(0)
   const [settingsAnchor, setSettingsAnchor] = useState<DownAnchor | null>(null)
   const [gitAnchor, setGitAnchor] = useState<Anchor | null>(null)
   const [wsAnchor, setWsAnchor] = useState<Anchor | null>(null)
@@ -298,6 +302,9 @@ export function Composer({
     void window.hearth.agent.getModes().then(setModes)
     void window.hearth.agent.getConfigOptions().then(setConfigOptions)
     void window.hearth.agent.getUsage().then(setUsage)
+    void window.hearth.agent.getPromptCapabilities().then(setPromptCaps)
+    void window.hearth.agent.getCommands().then(setCommands)
+    setPendingImages([]) // a backend that can't take images shouldn't keep stale ones
   }
   useEffect(() => {
     void window.hearth.agent.getBackend().then(setBackend)
@@ -310,12 +317,14 @@ export function Composer({
     const offModes = window.hearth.agent.onModeChanged(setModes)
     const offConfig = window.hearth.agent.onConfigChanged(setConfigOptions)
     const offUsage = window.hearth.agent.onUsageChanged(setUsage)
+    const offCommands = window.hearth.agent.onCommandsChanged(setCommands)
     return () => {
       offBe()
       offModels()
       offModes()
       offConfig()
       offUsage()
+      offCommands()
     }
   }, [])
 
@@ -383,13 +392,76 @@ export function Composer({
   const openGit = () => setGitAnchor(anchorFrom(branchRef.current))
   const openWs = () => setWsAnchor(anchorFrom(wsRef.current))
 
+  // --- Image attachments (W1) — gated on promptCapabilities.image ---
+  const addImageFiles = async (files: File[]) => {
+    const imgs = files.filter((f) => f.type.startsWith('image/'))
+    if (!imgs.length) return
+    const read = (f: File) =>
+      new Promise<PromptImage>((resolve, reject) => {
+        const r = new FileReader()
+        r.onload = () => {
+          // dataURL: "data:<mime>;base64,<data>" — strip the prefix for the ACP block.
+          const s = String(r.result)
+          const comma = s.indexOf(',')
+          resolve({ data: comma >= 0 ? s.slice(comma + 1) : s, mimeType: f.type })
+        }
+        r.onerror = () => reject(r.error)
+        r.readAsDataURL(f)
+      })
+    const next = await Promise.all(imgs.map(read))
+    setPendingImages((p) => [...p, ...next])
+  }
+  const onPaste = (e: React.ClipboardEvent) => {
+    if (!promptCaps.image) return
+    const files = Array.from(e.clipboardData.files)
+    if (files.some((f) => f.type.startsWith('image/'))) {
+      e.preventDefault()
+      void addImageFiles(files)
+    }
+  }
+  const onDrop = (e: React.DragEvent) => {
+    if (!promptCaps.image) return
+    const files = Array.from(e.dataTransfer.files)
+    if (files.some((f) => f.type.startsWith('image/'))) {
+      e.preventDefault()
+      void addImageFiles(files)
+    }
+  }
+
+  // --- Slash-command palette (W6) ---
+  const slashQuery = /^\/(\S*)$/.exec(input)?.[1] // "/" + token, no space yet
+  const slashMatches =
+    slashQuery != null ? commands.filter((c) => c.name.toLowerCase().startsWith(slashQuery.toLowerCase())).slice(0, 8) : []
+  const slashOpen = slashMatches.length > 0
+  const pickCommand = (name: string) => {
+    setInput(`/${name} `)
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }
+  useEffect(() => setSlashSel(0), [slashQuery])
+
   const send = () => {
     const text = input.trim()
-    if (!text || busy) return
-    onSend(text)
+    if ((!text && pendingImages.length === 0) || busy) return
+    onSend(text, pendingImages.length ? pendingImages : undefined)
     setInput('')
+    setPendingImages([])
   }
   const onKeyDown = (e: React.KeyboardEvent) => {
+    if (slashOpen) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        return setSlashSel((i) => (i + 1) % slashMatches.length)
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        return setSlashSel((i) => (i - 1 + slashMatches.length) % slashMatches.length)
+      }
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+        e.preventDefault()
+        return pickCommand(slashMatches[slashSel].name)
+      }
+      if (e.key === 'Escape') return setInput('')
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       send()
@@ -398,9 +470,25 @@ export function Composer({
 
   const be = BACKENDS[backend]
   const modeName = modes.available.find((m) => m.id === modes.current)?.name
+  const canSend = !!input.trim() || pendingImages.length > 0
   return (
     <div className="composer-wrap">
-      <div className="composer">
+      {slashOpen && (
+        <div className="slash-menu">
+          {slashMatches.map((c, i) => (
+            <div
+              key={c.name}
+              className={'slash-item' + (i === slashSel ? ' is-active' : '')}
+              onMouseEnter={() => setSlashSel(i)}
+              onClick={() => pickCommand(c.name)}
+            >
+              <span className="slash-name">/{c.name}</span>
+              {c.description && <span className="slash-desc">{c.description}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="composer" onDrop={onDrop} onDragOver={(e) => promptCaps.image && e.preventDefault()}>
         <div className="ctx-chips">
           <button
             ref={wsRef}
@@ -429,6 +517,18 @@ export function Composer({
             </button>
           )}
         </div>
+        {pendingImages.length > 0 && (
+          <div className="composer-attachments">
+            {pendingImages.map((img, i) => (
+              <div key={i} className="attach-thumb">
+                <img src={`data:${img.mimeType};base64,${img.data}`} alt="attachment" />
+                <button className="attach-x" title="Remove" onClick={() => setPendingImages((p) => p.filter((_, j) => j !== i))}>
+                  <Icon name="x" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <textarea
           ref={inputRef}
           className="composer-input"
@@ -436,7 +536,8 @@ export function Composer({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Reply to Hearth, or ask it to change itself…"
+          onPaste={onPaste}
+          placeholder={promptCaps.image ? 'Reply to Hearth, paste a screenshot, or ask it to change itself…' : 'Reply to Hearth, or ask it to change itself…'}
           style={{ overflowY: 'auto' }}
         />
         <div className="composer-bar">
@@ -452,7 +553,7 @@ export function Composer({
           )}
           <span className="spacer" />
           <button
-            className={'send' + (busy ? '' : input.trim() ? '' : ' is-disabled')}
+            className={'send' + (busy ? '' : canSend ? '' : ' is-disabled')}
             onClick={busy ? onStop : send}
             title={busy ? 'Stop' : 'Send'}
           >

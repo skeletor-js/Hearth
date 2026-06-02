@@ -510,7 +510,7 @@ button.rail-item{ width:100%;border:0;background:transparent;font:inherit;text-a
   display:flex;align-items:center;gap:6px; }
 
 /* Composer */
-.composer-wrap{ flex-shrink:0;padding:10px 30px 18px;
+.composer-wrap{ flex-shrink:0;padding:10px 30px 18px;position:relative;
   border-top:1px solid var(--border);background:var(--bg); }
 .app[data-layout="split"] .composer-wrap{ padding:10px 26px 18px; }
 .composer{ max-width:760px;margin:0 auto;pointer-events:auto;
@@ -577,6 +577,24 @@ button.rail-item{ width:100%;border:0;background:transparent;font:inherit;text-a
   0%,100%{ border-color:var(--border);background:var(--bg-inset); }
   15%,40%{ border-color:var(--accent);background:var(--accent-soft); }
 }
+
+/* W1: pending image attachments in the composer + image thumbnails in a sent message. */
+.composer-attachments{ display:flex;flex-wrap:wrap;gap:6px;padding:6px 2px 0; }
+.attach-thumb{ position:relative;width:56px;height:56px;border-radius:8px;overflow:hidden;border:1px solid var(--border); }
+.attach-thumb img{ width:100%;height:100%;object-fit:cover;display:block; }
+.attach-x{ position:absolute;top:2px;right:2px;width:16px;height:16px;display:flex;align-items:center;justify-content:center;
+  border-radius:50%;background:rgba(0,0,0,.55);color:#fff;border:none;cursor:pointer;font-size:9px; }
+.msg-images{ display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 6px; }
+.msg-images img{ max-width:240px;max-height:200px;border-radius:8px;border:1px solid var(--border);display:block; }
+
+/* W6: slash-command palette above the composer. */
+.slash-menu{ position:absolute;left:0;right:0;bottom:calc(100% + 6px);z-index:30;
+  background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--r-pop);
+  box-shadow:0 10px 30px rgba(0,0,0,.28);overflow:hidden;max-height:280px;overflow-y:auto; }
+.slash-item{ display:flex;align-items:baseline;gap:8px;padding:7px 11px;cursor:pointer; }
+.slash-item.is-active{ background:var(--bg-inset); }
+.slash-name{ font-family:var(--mono);font-size:var(--t-12);color:var(--accent-text); }
+.slash-desc{ color:var(--subtle);font-size:var(--t-11);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 
 kbd{ display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;
   padding:0 4px;border-radius:4px;border:1px solid var(--border-strong);background:var(--bg-panel);
