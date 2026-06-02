@@ -90,7 +90,43 @@ case) are fully coverable.
 
 ---
 
-## Part A — Route-tree HMR  *(the quick win)*
+## Part A — Route-tree HMR  *(ATTEMPTED — infeasible in this setup)*
+
+> **Finding (2026-06-01): live route-tree HMR does not work under Hearth's
+> electron-vite + @tanstack/router-plugin setup, so Part A is abandoned in favor
+> of a morph-covered reload (Part B).** Evidence, verified live via the eval bridge:
+> the router-HMR accept boundary *does* prevent the hard reload (a `window`
+> sentinel survives), but a newly-created route module is **never picked up by
+> HMR re-execution** — `mod.routeTree` handed to the accept callback consistently
+> lacks the new route, even though the route file is on disk, is included in the
+> regenerated `routeTree.gen.ts`, and imports fine on its own; a **fresh boot
+> registers it correctly**.
+>
+> **Every modification Stella uses was tried and none fixed it here:** the
+> separate-`router.tsx` accept module, a cache-busted `import('/src/routeTree.gen.ts?t=…')`
+> re-import, `autoCodeSplitting: true` on the router plugin, and a dev plugin
+> calling `server.moduleGraph.invalidateAll()` on every `routeTree.gen` change.
+> In all cases: no reload (good) but the new route never enters the live tree.
+> This is an electron-vite module-graph incompatibility that plain-Vite Stella
+> doesn't hit — electron-vite won't re-crawl a newly-created route module on HMR.
+> Net: a full reload is *required* to register a new route. So routes stay on the
+> `full-reload` tier and are made seamless by hiding that reload behind the morph
+> cover (Part B) — not by live HMR. A1/A2 below are kept for the record.
+>
+> **Spike (decisive): electron-vite is NOT the cause — do not migrate off it.**
+> Stella runs the renderer on plain Vite (not electron-vite), so the obvious
+> suspect was our bundler. A throwaway spike served the renderer with **plain
+> Vite** (reusing the built main/preload, Electron pointed at the plain-Vite URL)
+> and ran the same add-a-route test: **route-HMR failed identically** — new route
+> never registers, no reload. Removing our `selfModOverlay` plugin from the plain-
+> Vite config didn't change it either. So the broken new-route HMR is at the
+> Vite + @tanstack/router-plugin layer itself, independent of electron-vite and of
+> our overlay. The likely real difference vs Stella is the **Vite major version**
+> (Hearth runs Vite 6.4.2; Stella runs Vite 8) — a new-file module-graph crawl
+> improvement. Chasing a Vite-8 upgrade isn't worth it when the morph (Part B)
+> hides the reload robustly regardless of cause. **Outcome: keep electron-vite;
+> cover route reloads with the morph.** The spike paid for itself by ruling out a
+> large, risky migration that would not have fixed anything.
 
 ### A1 — HMR boundary in the router
 - `[ ]` In [main.tsx](../../src/main.tsx), after `createRouter`, add the Stella
@@ -226,11 +262,20 @@ so each piece is testable and the app stays shippable between steps.
   stores/hooks out of component modules.
 
 ## Sequencing
-- **A1 + A2 first** — small, high-value, low-risk; kills the black for the common
-  "add a page" case on its own. Verify live before moving on.
-- **B1 → B2 → B3 → B4 → B5** in order; each is independently testable, and the app
-  degrades to today's behavior until B5 wires it in.
-- **B6, B7** are opt-in after B5 lands and the core feels good.
+- ~~A1 + A2 first~~ — **abandoned** (route-HMR infeasible here; see the Part A
+  finding). Routes stay `full-reload` and are covered by the morph instead.
+- **Revised ordering (since the morph now carries routes too):**
+  - **B1 → B2 → B3 → B4** — overlay window, capture/IPC, transition surface,
+    controller. Independently testable; the app keeps today's behavior until wired.
+  - **B6 BEFORE B5 (prerequisite, not optional).** To cover a reload we must
+    control *when* it happens: Vite reloads autonomously on file save (mid-turn),
+    before the controller runs. So the overlay plugin must **pin/suppress** the
+    autonomous HMR during a turn (extend `self-mod-overlay`'s pin path to single-
+    writer turns), then the controller applies the reload at turn end **under the
+    cover**. Without this, the reload fires uncovered and the cover is pointless.
+  - **B5** — wire the controller into the `full-reload` tier (and the suppressed
+    apply) so route/index.html edits morph instead of flashing.
+  - **B7** — packaged restart coverage, last.
 
 ## Follow-ups (out of scope)
 - Fancier morph transition (displacement/shader) once the crossfade ships.
