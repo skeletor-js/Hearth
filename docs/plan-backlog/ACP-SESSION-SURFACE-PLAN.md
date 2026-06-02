@@ -395,7 +395,12 @@ doesn't surface them richly.
 
 ---
 
-## Phase 3 — Terminal capability (W2)
+## Phase 3 — Terminal capability (W2) — VERIFIED INERT, NOT BUILT
+
+> **Outcome:** the verify-first gate below failed for both backends — neither routes
+> execution through the client's standard `terminal/*` — so building client handlers
+> would be dead code. Disposition is the same as W11 (fs mediation): backlogged,
+> blocked on adapter support. Details in the implementation log (Phase 3).
 
 Hearth doesn't advertise `clientCapabilities.terminal`, so the agent executes
 commands invisibly inside the adapter. ACP lets the agent call `terminal/create ·
@@ -672,3 +677,27 @@ live: branch matched `git status` (↑8), both popovers open, both themes.
   commands captured; `/de` → `/debug`; palette renders above the composer.
 - Note: image attachments aren't persisted in the transcript (text-only entries);
   they're live-session only, which is sufficient for the screenshot→agent loop.
+
+### Phase 3 — W2 terminal capability (verified inert, not built)
+
+Ran the plan's mandatory verify-first check against both bundled adapters:
+- **Claude `claude-agent-acp@0.23.1`**: runs Bash inside its bundled `cli.js`; never
+  calls the client `terminal/create`. It only *streams* command output back via a
+  **non-standard** `_meta.terminal_output` capability (`terminal_info` /
+  `terminal_output` / `terminal_exit` on tool calls), gated on
+  `clientCapabilities._meta.terminal_output`. Standard ACP `terminal/*` is unused.
+- **Codex `codex-acp@0.0.44`**: executes commands in its own sandbox
+  (`sandboxPolicy` / `sandboxMode`, tied to its modes read-only/agent/full-access);
+  zero call sites for the SDK's `createTerminal`.
+
+So advertising `clientCapabilities.terminal: true` and implementing
+`terminal/create · output · wait_for_exit · kill · release` on the client would be
+**inert dead code** with both adapters — the exact failure mode the plan's caveat
+anticipated, and the same disposition as W11 (fs mediation): the lever is real in
+ACP but the shipped adapters don't use it. **Not built.** Backlogged, blocked on a
+future adapter that honors the client terminal capability.
+
+The only achievable lever today is Claude's `_meta.terminal_output` *visibility*
+channel (no control/cancel/sandbox; Claude-only `_meta`, not parity-clean, and
+largely duplicative of the tool-call trace that already shows Bash steps).
+Deprioritized for the same reasons as W12. No code written for Phase 3.
