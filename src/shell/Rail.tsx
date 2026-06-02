@@ -39,6 +39,34 @@ export function Rail() {
     void navigate({ to: '/chat' })
   }
 
+  // Start a fresh session in the current workspace (no prompt). Falls back to the
+  // Hearth workspace, then the first available; with none, route home to pick one.
+  // Flashes the workspace chip to signal it's changeable. See HOME-NEWSESSION plan.
+  const newSession = async () => {
+    const list = workspaces.length ? workspaces : await window.hearth.workspaces.list()
+    const ws =
+      list.find((w) => w.id === useSession.getState().active?.workspaceId) ??
+      list.find((w) => w.isHearth) ??
+      list[0]
+    if (!ws) return navigate({ to: '/new' })
+    await startSession(ws)
+    useSession.getState().flashWorkspaceChip()
+    void navigate({ to: '/chat' })
+  }
+
+  // ⌘N → New Session. Nothing else binds it (CommandPalette owns ⌘K only).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
+        e.preventDefault()
+        void newSession()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // newSession closes over `workspaces`; rebind when it changes so the lookup is current.
+  }, [workspaces])
+
   const resume = (m: SessionMeta) => {
     openSession(m)
     void navigate({ to: '/chat' })
@@ -57,12 +85,16 @@ export function Rail() {
 
       <div className="rail-scroll scroll">
         <div className="rail-group">
-          <Link to="/new" className={itemClass(pathname === '/new')}>
+          <button className="rail-item" onClick={() => void newSession()}>
             <Icon name="plus" />
-            <span className="ri-label">New session</span>
+            <span className="ri-label">New Session</span>
             <span className="ri-end">
               <kbd>⌘N</kbd>
             </span>
+          </button>
+          <Link to="/new" className={itemClass(pathname === '/new')}>
+            <Icon name="house" />
+            <span className="ri-label">Home</span>
           </Link>
           <Link to="/search" className={itemClass(pathname === '/search')}>
             <Icon name="magnifying-glass" />

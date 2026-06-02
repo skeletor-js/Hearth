@@ -46,6 +46,11 @@ interface SessionState {
   sessionsNonce: number
   bumpSessions: () => void
 
+  /** Bumped to pulse the composer's workspace chip (signals it's changeable after
+   * a New Session starts in the current workspace). */
+  workspaceFlashNonce: number
+  flashWorkspaceChip: () => void
+
   /** A prompt queued from elsewhere (e.g. History conflict) for the chat to send. */
   pendingPrompt: string | null
   setPendingPrompt: (p: string | null) => void
@@ -86,6 +91,9 @@ export const useSession = create<SessionState>((set, get) => ({
 
   sessionsNonce: 0,
   bumpSessions: () => set((s) => ({ sessionsNonce: s.sessionsNonce + 1 })),
+
+  workspaceFlashNonce: 0,
+  flashWorkspaceChip: () => set((s) => ({ workspaceFlashNonce: s.workspaceFlashNonce + 1 })),
 
   pendingPrompt: null,
   setPendingPrompt: (pendingPrompt) => set({ pendingPrompt }),

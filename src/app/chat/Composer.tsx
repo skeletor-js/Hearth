@@ -1,9 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { AgentKind, ModelState } from '../../../electron/shared/protocol'
+import type { Workspace } from '../../../electron/main/workspaces/registry'
 import { Icon } from '@/shell/Icon'
 import { Seg } from '@/app/settings/controls'
 import { GitPanel } from '@/app/workbench/GitPanel'
 import { useSession } from '@/app/session-store'
+import { startSession } from '@/app/sessions'
 
 type Mode = 'plan' | 'auto' | 'ask'
 const MODES: [Mode, string, string][] = [
@@ -17,7 +19,15 @@ const BACKENDS: Record<AgentKind, { name: string; sub: string; icon: string }> =
   codex: { name: 'Codex', sub: 'OpenAI Codex · ACP', icon: 'brackets-curly' },
 }
 
-function BackendPop({
+type Anchor = { left: number; bottom: number }
+
+function basename(p: string): string {
+  return p.split('/').pop() || p
+}
+
+/** The agent-settings popover: backend switch + model picker. Phase 1B adds the
+ * advertised-mode selector and a usage line here. */
+function AgentSettingsPop({
   current,
   anchor,
   models,
@@ -26,7 +36,7 @@ function BackendPop({
   onClose,
 }: {
   current: AgentKind
-  anchor: { left: number; bottom: number }
+  anchor: Anchor
   models: ModelState
   onPick: (k: AgentKind) => void
   onPickModel: (id: string) => void
@@ -81,18 +91,78 @@ function BackendPop({
   )
 }
 
+/** Switch the active workspace. A session is bound to one cwd, so picking a
+ * workspace starts a fresh session there (consistent with the rail). */
+function WorkspacePop({
+  anchor,
+  currentId,
+  onClose,
+}: {
+  anchor: Anchor
+  currentId: string | undefined
+  onClose: () => void
+}) {
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  useEffect(() => {
+    void window.hearth.workspaces.list().then(setWorkspaces)
+  }, [])
+
+  const pick = async (ws: Workspace) => {
+    onClose()
+    await startSession(ws)
+    useSession.getState().flashWorkspaceChip()
+  }
+  const openFolder = async () => {
+    const ws = await window.hearth.workspaces.open()
+    onClose()
+    if (ws) {
+      await startSession(ws)
+      useSession.getState().flashWorkspaceChip()
+    }
+  }
+
+  return (
+    <>
+      <div className="pop-mask" onClick={onClose} />
+      <div className="pop" style={anchor}>
+        <div className="pop-sect">Workspace</div>
+        {workspaces.map((w) => (
+          <div key={w.id} className="pop-item" onClick={() => void pick(w)} title={w.path}>
+            <span className="pi-mark">
+              <Icon name={w.isHearth ? 'flame' : 'folder'} />
+            </span>
+            <div className="pi-body" style={{ minWidth: 0 }}>
+              <div className="pi-name">{w.name}</div>
+              <div className="pi-sub" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {w.path}
+              </div>
+            </div>
+            {w.id === currentId && <Icon name="check" className="pi-check" />}
+          </div>
+        ))}
+        <div className="pop-item" onClick={() => void openFolder()}>
+          <span className="pi-mark">
+            <Icon name="folder-simple-plus" />
+          </span>
+          <div className="pi-body">
+            <div className="pi-name">Open folder…</div>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
 export function Composer({
   busy,
   onSend,
   onStop,
-  branch = 'hearth',
   scratchpadAttached = false,
   onDetachScratchpad,
 }: {
   busy: boolean
   onSend: (text: string) => void
   onStop: () => void
-  branch?: string
   scratchpadAttached?: boolean
   onDetachScratchpad?: () => void
 }) {
@@ -100,11 +170,21 @@ export function Composer({
   const [mode, setMode] = useState<Mode>('auto')
   const [backend, setBackend] = useState<AgentKind>('claude')
   const [models, setModels] = useState<ModelState>({ available: [], current: null })
-  const [popAnchor, setPopAnchor] = useState<{ left: number; bottom: number } | null>(null)
-  const [gitAnchor, setGitAnchor] = useState<{ left: number; bottom: number } | null>(null)
-  const beRef = useRef<HTMLButtonElement>(null)
+  const [settingsAnchor, setSettingsAnchor] = useState<Anchor | null>(null)
+  const [gitAnchor, setGitAnchor] = useState<Anchor | null>(null)
+  const [wsAnchor, setWsAnchor] = useState<Anchor | null>(null)
+  const settingsRef = useRef<HTMLButtonElement>(null)
   const branchRef = useRef<HTMLButtonElement>(null)
+  const wsRef = useRef<HTMLButtonElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  const cwd = useSession((s) => s.active?.cwd)
+  const workspaceId = useSession((s) => s.active?.workspaceId)
+  const diffNonce = useSession((s) => s.diffNonce)
+  const flashNonce = useSession((s) => s.workspaceFlashNonce)
+  const [branch, setBranch] = useState<{ name: string; ahead: number; behind: number } | null>(null)
+  const [wsName, setWsName] = useState<string | null>(null)
+  const [flashing, setFlashing] = useState(false)
 
   // Auto-grow the composer with its content, capped before it scrolls internally.
   useLayoutEffect(() => {
@@ -137,6 +217,42 @@ export function Composer({
     }
   }, [])
 
+  // Real branch (+ ahead/behind) for the active session's cwd. Refreshes when the
+  // session changes and whenever the working tree likely changed (diffNonce).
+  useEffect(() => {
+    let live = true
+    if (!cwd) return setBranch(null)
+    void window.hearth.git
+      .status(cwd)
+      .then((s) => live && setBranch(s?.branch ? { name: s.branch, ahead: s.ahead, behind: s.behind } : null))
+      .catch(() => live && setBranch(null))
+    return () => {
+      live = false
+    }
+  }, [cwd, diffNonce])
+
+  // Workspace name: match the active workspace id, fall back to the cwd basename.
+  useEffect(() => {
+    let live = true
+    if (!cwd) return setWsName(null)
+    void window.hearth.workspaces.list().then((list) => {
+      if (!live) return
+      const ws = list.find((w) => w.id === workspaceId)
+      setWsName(ws?.name ?? basename(cwd))
+    })
+    return () => {
+      live = false
+    }
+  }, [cwd, workspaceId])
+
+  // Pulse the workspace chip when New Session signals the workspace is changeable.
+  useEffect(() => {
+    if (flashNonce === 0) return
+    setFlashing(true)
+    const t = setTimeout(() => setFlashing(false), 1500)
+    return () => clearTimeout(t)
+  }, [flashNonce])
+
   const pickBackend = async (k: AgentKind) => {
     if (k === backend) return
     setBackend(k)
@@ -147,14 +263,13 @@ export function Composer({
     void window.hearth.agent.setModel(id)
   }
 
-  const openPop = () => {
-    const r = beRef.current?.getBoundingClientRect()
-    if (r) setPopAnchor({ left: r.left, bottom: window.innerHeight - r.top + 6 })
+  const anchorFrom = (el: HTMLElement | null): Anchor | null => {
+    const r = el?.getBoundingClientRect()
+    return r ? { left: r.left, bottom: window.innerHeight - r.top + 6 } : null
   }
-  const openGit = () => {
-    const r = branchRef.current?.getBoundingClientRect()
-    if (r) setGitAnchor({ left: r.left, bottom: window.innerHeight - r.top + 6 })
-  }
+  const openSettings = () => setSettingsAnchor(anchorFrom(settingsRef.current))
+  const openGit = () => setGitAnchor(anchorFrom(branchRef.current))
+  const openWs = () => setWsAnchor(anchorFrom(wsRef.current))
 
   const send = () => {
     const text = input.trim()
@@ -174,14 +289,26 @@ export function Composer({
     <div className="composer-wrap">
       <div className="composer">
         <div className="ctx-chips">
-          <button ref={branchRef} className="chip" title="Branch, changes & environment" onClick={openGit}>
-            <Icon name="git-branch" /> {branch}
+          <button
+            ref={wsRef}
+            className={'chip' + (flashing ? ' is-flashing' : '')}
+            title={cwd ? `Workspace: ${cwd} — click to switch` : 'Workspace'}
+            onClick={openWs}
+          >
+            <Icon name="folder" /> {wsName ?? '…'}
           </button>
-          <span className="chip" title="Hearth can edit its own code">
-            <Icon name="flame" fill style={{ color: 'var(--accent)' }} /> Self-edit
-          </span>
-          <button ref={beRef} className="chip" title="Switch agent backend" onClick={openPop}>
+          <button ref={branchRef} className="chip" title="Branch, changes & environment" onClick={openGit}>
+            <Icon name="git-branch" /> {branch?.name ?? '…'}
+            {branch && (branch.ahead > 0 || branch.behind > 0) && (
+              <span style={{ color: 'var(--faint)' }}>
+                {branch.ahead > 0 ? ` ↑${branch.ahead}` : ''}
+                {branch.behind > 0 ? ` ↓${branch.behind}` : ''}
+              </span>
+            )}
+          </button>
+          <button ref={settingsRef} className="chip" title="Agent settings" onClick={openSettings}>
             <Icon name={be.icon} /> {be.name}
+            <Icon name="caret-down" />
           </button>
           {scratchpadAttached && (
             <button className="chip" title="Scratchpad is attached to each message — click to turn off" onClick={onDetachScratchpad}>
@@ -211,16 +338,17 @@ export function Composer({
           </button>
         </div>
       </div>
-      {popAnchor && (
-        <BackendPop
+      {settingsAnchor && (
+        <AgentSettingsPop
           current={backend}
-          anchor={popAnchor}
+          anchor={settingsAnchor}
           models={models}
           onPick={pickBackend}
           onPickModel={pickModel}
-          onClose={() => setPopAnchor(null)}
+          onClose={() => setSettingsAnchor(null)}
         />
       )}
+      {wsAnchor && <WorkspacePop anchor={wsAnchor} currentId={workspaceId} onClose={() => setWsAnchor(null)} />}
       {gitAnchor && <GitPanel anchor={gitAnchor} onClose={() => setGitAnchor(null)} />}
     </div>
   )
