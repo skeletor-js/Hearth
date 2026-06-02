@@ -155,6 +155,19 @@ export function registerIpc(services: MainServices): void {
       let result
       try {
         await host.prompt(payload.text, { key, cwd: payload.cwd || repoRoot })
+      } catch (err) {
+        // Adapters can reject with a JSON-RPC error object (not an Error), which
+        // serializes across IPC as "[object Object]". Normalize to a real Error
+        // with a readable message so the renderer shows the actual failure.
+        const message =
+          err instanceof Error
+            ? err.message
+            : typeof err === 'object' && err
+              ? (err as { message?: unknown }).message
+                ? String((err as { message: unknown }).message)
+                : JSON.stringify(err)
+              : String(err)
+        throw new Error(message)
       } finally {
         const ended = runTracker.endRun(runId)
         // Apply the overlay batch (no-op for unpinned paths / single-writer turns).
@@ -209,6 +222,20 @@ export function registerIpc(services: MainServices): void {
   host.onModelsChanged((state) => window.webContents.send(HEARTH_CHANNELS.agentModelsChanged, state))
   ipcMain.handle(HEARTH_CHANNELS.agentGetModels, () => host.getModels())
   ipcMain.handle(HEARTH_CHANNELS.agentSetModel, (_e, modelId: string) => host.setModel(modelId))
+
+  // Permission mode, generic config options, and usage — one path for both backends
+  // (ACP set_mode / set_config_option + current_mode_update / config_option_update /
+  // usage_update). See ACP-SESSION-SURFACE-PLAN Phase 1B.
+  host.onModeChanged((state) => window.webContents.send(HEARTH_CHANNELS.agentModeChanged, state))
+  ipcMain.handle(HEARTH_CHANNELS.agentGetModes, () => host.getModes())
+  ipcMain.handle(HEARTH_CHANNELS.agentSetMode, (_e, modeId: string) => host.setMode(modeId))
+  host.onConfigChanged((options) => window.webContents.send(HEARTH_CHANNELS.agentConfigChanged, options))
+  ipcMain.handle(HEARTH_CHANNELS.agentGetConfig, () => host.getConfigOptions())
+  ipcMain.handle(HEARTH_CHANNELS.agentSetConfig, (_e, configId: string, value: string | boolean) =>
+    host.setConfigOption(configId, value),
+  )
+  host.onUsageChanged((usage) => window.webContents.send(HEARTH_CHANNELS.agentUsageChanged, usage))
+  ipcMain.handle(HEARTH_CHANNELS.agentGetUsage, () => host.getUsage())
 
   ipcMain.handle(HEARTH_CHANNELS.selfModHistory, () => selfMod.history())
   // Plain undo/redo: let Vite's autonomous reloads apply the revert. They self-heal

@@ -20,7 +20,18 @@ class StubAgent implements Agent {
   }
   async newSession(): Promise<AgentSession> {
     const id = `${this.kind}-${++this.sessions}`
-    return { id, prompt: async () => {}, cancel: async () => {}, dispose: async () => {} }
+    return {
+      id,
+      models: { available: [], current: null },
+      modes: { available: [], current: null },
+      configOptions: [],
+      prompt: async () => {},
+      setModel: async () => {},
+      setMode: async () => {},
+      setConfigOption: async () => {},
+      cancel: async () => {},
+      dispose: async () => {},
+    }
   }
   onUpdate(cb: (s: string, u: SessionUpdate) => void): () => void {
     this.updates.add(cb)

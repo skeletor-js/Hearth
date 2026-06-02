@@ -27,6 +27,63 @@ export interface ModelState {
   current: string | null
 }
 
+/** A permission/operating mode the backend advertises (mirrors ACP `SessionMode`). */
+export interface SessionMode {
+  id: string
+  name: string
+  description?: string
+}
+
+/** The modes a backend offers + which is current (mirrors ACP `SessionModeState`).
+ * Claude: default/acceptEdits/plan/dontAsk(/bypassPermissions). Codex:
+ * read-only/agent/agent-full-access. Rendered generically — no fixed label map. */
+export interface ModeState {
+  available: SessionMode[]
+  current: string | null
+}
+
+/** One selectable value of a `select` config option (mirrors ACP select option). */
+export interface ConfigSelectOption {
+  value: string
+  name: string
+  description?: string
+}
+
+/** A generic agent-advertised session config option (mirrors ACP `SessionConfigOption`).
+ * `category` is a UX hint (`mode | model | thought_level | <custom>`); the renderer
+ * already surfaces mode + model via dedicated controls, so it renders only options
+ * whose category is neither, keeping the surface forward-compatible. */
+export type ConfigOption =
+  | {
+      id: string
+      name: string
+      description?: string
+      category?: string
+      type: 'select'
+      current: string
+      options: ConfigSelectOption[]
+    }
+  | {
+      id: string
+      name: string
+      description?: string
+      category?: string
+      type: 'boolean'
+      current: boolean
+    }
+
+/** Context-window + cost usage for a session (mirrors ACP `usage_update`). Tokens
+ * here are context occupancy, not a billing breakdown; cost is cumulative session
+ * spend reported by the adapter. See docs/COMPLIANCE.md (Agent-SDK metered pool). */
+export interface Usage {
+  /** Tokens currently in the context window. */
+  used: number
+  /** Total context-window size in tokens. */
+  size: number
+  /** Cumulative session cost, when the adapter reports it. */
+  cost?: { amount: number; currency: string }
+}
+
 /** A single plan task (mirrors ACP `PlanEntry`). */
 export interface PlanEntry {
   content: string
@@ -47,6 +104,9 @@ export type SessionUpdate =
   | { type: 'diff'; path: string; oldText: string | null; newText: string; parentToolCallId?: string }
   | { type: 'plan'; entries: PlanEntry[] }
   | { type: 'commands'; commands: AvailableCommand[] }
+  | { type: 'mode'; current: string }
+  | { type: 'config'; options: ConfigOption[] }
+  | { type: 'usage'; usage: Usage }
   | { type: 'end'; stopReason: string }
 
 /** A slash command / skill the agent advertises (mirrors ACP `AvailableCommand`). */

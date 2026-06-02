@@ -4,14 +4,23 @@
 // from whichever agent is live and re-points them on switch. The per-window
 // session also lives here, so a switch transparently starts a fresh session.
 
-import type { Agent, AgentKind, AgentSession, AuthMethodInfo, AvailableCommand, ModelState, PermissionRequest, SessionUpdate } from './agent.js'
+import type { Agent, AgentKind, AgentSession, AuthMethodInfo, AvailableCommand, ConfigOption, ModelState, ModeState, PermissionRequest, SessionUpdate, Usage } from './agent.js'
 
 export type AgentFactory = (kind: AgentKind) => Agent
 type UpdateHandler = (sessionId: string, update: SessionUpdate) => void
 type PermissionHandler = (sessionId: string, req: PermissionRequest) => Promise<string>
 type ModelsHandler = (state: ModelState) => void
+type ModeHandler = (state: ModeState) => void
+type ConfigHandler = (options: ConfigOption[]) => void
+type UsageHandler = (usage: Usage) => void
 
 const EMPTY_MODELS: ModelState = { available: [], current: null }
+const EMPTY_MODES: ModeState = { available: [], current: null }
+
+// The default permission mode applied to every new session, per backend. Both are
+// the "prompt for dangerous operations" baseline (replaces the old acceptEdits
+// settings-file workaround — see claude.ts). Rendered/driven generically via ACP.
+const DEFAULT_MODE: Record<AgentKind, string> = { claude: 'default', codex: 'agent' }
 
 export class AgentHost {
   private agent: Agent | null = null
@@ -28,6 +37,15 @@ export class AgentHost {
   private modelsByKind = new Map<AgentKind, ModelState>()
   private preferredModel = new Map<AgentKind, string>()
   private readonly modelsHandlers = new Set<ModelsHandler>()
+  // Latest mode/config/usage per backend kind, plus the user's preferred mode
+  // (re-applied to new sessions of that kind, like preferredModel).
+  private modesByKind = new Map<AgentKind, ModeState>()
+  private preferredMode = new Map<AgentKind, string>()
+  private configByKind = new Map<AgentKind, ConfigOption[]>()
+  private usageByKind = new Map<AgentKind, Usage>()
+  private readonly modeHandlers = new Set<ModeHandler>()
+  private readonly configHandlers = new Set<ConfigHandler>()
+  private readonly usageHandlers = new Set<UsageHandler>()
 
   constructor(
     private readonly factory: AgentFactory,
@@ -55,6 +73,9 @@ export class AgentHost {
       const agent = this.factory(this.currentKind)
       this.agent = agent
       this.offUpdate = agent.onUpdate((sessionId, update) => {
+        // Live mode/config/usage updates maintain the per-kind cache and fire the
+        // dedicated change handlers (the renderer's chat surface ignores them).
+        this.absorbUpdate(update)
         for (const h of this.updateHandlers) h(sessionId, update)
       })
       agent.onPermission((sessionId, req) =>
@@ -97,6 +118,11 @@ export class AgentHost {
         state = { ...state, current: preferred }
       }
       this.setModelCache(state)
+      await this.initModes(session)
+      this.setConfigCache(session.configOptions)
+      // A fresh ACP session starts usage from zero; drop the prior session's
+      // figure so the UI doesn't show stale cost until the first turn reports.
+      this.usageByKind.delete(this.currentKind)
     }
     this.activeKey = key
     await session.prompt(text)
@@ -129,6 +155,92 @@ export class AgentHost {
   private setModelCache(state: ModelState): void {
     this.modelsByKind.set(this.currentKind, state)
     for (const h of this.modelsHandlers) h(state)
+  }
+
+  // --- Modes -----------------------------------------------------------------
+
+  /** Apply the preferred (or default) mode to a new session and cache it. */
+  private async initModes(session: AgentSession): Promise<void> {
+    let state = session.modes
+    const want = this.preferredMode.get(this.currentKind) ?? DEFAULT_MODE[this.currentKind]
+    if (want && want !== state.current && state.available.some((m) => m.id === want)) {
+      await session.setMode(want)
+      state = { ...state, current: want }
+    }
+    this.setModeCache(state)
+  }
+
+  /** Modes the current backend offers (cached from the latest session). */
+  getModes(): ModeState {
+    return this.modesByKind.get(this.currentKind) ?? EMPTY_MODES
+  }
+
+  onModeChanged(cb: ModeHandler): () => void {
+    this.modeHandlers.add(cb)
+    return () => this.modeHandlers.delete(cb)
+  }
+
+  /** Switch the permission mode — applied to the active session and remembered as
+   * the preferred mode for new sessions of this kind. */
+  async setMode(modeId: string): Promise<void> {
+    this.preferredMode.set(this.currentKind, modeId)
+    if (this.activeKey) await this.sessions.get(this.activeKey)?.setMode(modeId)
+    this.setModeCache({ ...this.getModes(), current: modeId })
+  }
+
+  private setModeCache(state: ModeState): void {
+    this.modesByKind.set(this.currentKind, state)
+    for (const h of this.modeHandlers) h(state)
+  }
+
+  // --- Generic config options ------------------------------------------------
+
+  /** Config options the current backend offers (cached from the latest session). */
+  getConfigOptions(): ConfigOption[] {
+    return this.configByKind.get(this.currentKind) ?? []
+  }
+
+  onConfigChanged(cb: ConfigHandler): () => void {
+    this.configHandlers.add(cb)
+    return () => this.configHandlers.delete(cb)
+  }
+
+  /** Set a generic config option on the active session. */
+  async setConfigOption(configId: string, value: string | boolean): Promise<void> {
+    if (this.activeKey) await this.sessions.get(this.activeKey)?.setConfigOption(configId, value)
+  }
+
+  private setConfigCache(options: ConfigOption[]): void {
+    this.configByKind.set(this.currentKind, options)
+    for (const h of this.configHandlers) h(options)
+  }
+
+  // --- Usage -----------------------------------------------------------------
+
+  /** Latest usage for the current backend (null until a turn reports it). */
+  getUsage(): Usage | null {
+    return this.usageByKind.get(this.currentKind) ?? null
+  }
+
+  onUsageChanged(cb: UsageHandler): () => void {
+    this.usageHandlers.add(cb)
+    return () => this.usageHandlers.delete(cb)
+  }
+
+  private setUsageCache(usage: Usage): void {
+    this.usageByKind.set(this.currentKind, usage)
+    for (const h of this.usageHandlers) h(usage)
+  }
+
+  /** Fold a live mode/config/usage update into the per-kind cache + handlers. */
+  private absorbUpdate(update: SessionUpdate): void {
+    if (update.type === 'mode') {
+      this.setModeCache({ ...this.getModes(), current: update.current })
+    } else if (update.type === 'config') {
+      this.setConfigCache(update.options)
+    } else if (update.type === 'usage') {
+      this.setUsageCache(update.usage)
+    }
   }
 
   /** Tear down the current backend and bring up `kind`. No-op if already on it. */

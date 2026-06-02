@@ -195,6 +195,12 @@ export function ChatView() {
           // The agent's advertised slash commands / skills are captured for
           // Settings, never rendered into the chat transcript.
           return prev
+        case 'mode':
+        case 'config':
+        case 'usage':
+          // Session mode / config-option / usage updates aren't chat content —
+          // the composer's agent-settings popover consumes them. Ignore here.
+          return prev
         case 'end': {
           openText.current = false
           // Attach a result summary to the turn's last trace block (a closing

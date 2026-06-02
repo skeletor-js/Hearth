@@ -11,8 +11,10 @@ import type {
   PermissionOptionKind,
   ToolCallStatus,
   SessionModelState,
+  SessionModeState,
+  SessionConfigOption,
 } from '@agentclientprotocol/sdk'
-import type { ModelState, PermissionRequest, SessionUpdate } from './agent.js'
+import type { ConfigOption, ModelState, ModeState, PermissionRequest, SessionUpdate } from './agent.js'
 
 /** Normalize ACP's `SessionModelState` into Hearth's `{available, current}`. Pure. */
 export function normalizeModels(state: SessionModelState | null | undefined): ModelState {
@@ -25,6 +27,52 @@ export function normalizeModels(state: SessionModelState | null | undefined): Mo
     })),
     current: state.currentModelId ?? null,
   }
+}
+
+/** Normalize ACP's `SessionModeState` into Hearth's `{available, current}`. Pure. */
+export function normalizeModes(state: SessionModeState | null | undefined): ModeState {
+  if (!state) return { available: [], current: null }
+  return {
+    available: (state.availableModes ?? []).map((m) => ({
+      id: m.id,
+      name: m.name,
+      description: m.description ?? undefined,
+    })),
+    current: state.currentModeId ?? null,
+  }
+}
+
+/** Normalize ACP `SessionConfigOption`s into Hearth's `ConfigOption`. Pure.
+ * Grouped selects are flattened into a single option list (adapters use flat
+ * options today; flattening is forward-safe). Unknown shapes are skipped. */
+export function normalizeConfigOptions(
+  options: Array<SessionConfigOption> | null | undefined,
+): ConfigOption[] {
+  if (!options) return []
+  const out: ConfigOption[] = []
+  for (const o of options) {
+    const base = {
+      id: o.id,
+      name: o.name,
+      description: o.description ?? undefined,
+      category: o.category ?? undefined,
+    }
+    if (o.type === 'boolean') {
+      out.push({ ...base, type: 'boolean', current: o.currentValue })
+    } else if (o.type === 'select') {
+      // options is either SessionConfigSelectOption[] or SessionConfigSelectGroup[].
+      const flat: { value: string; name: string; description?: string }[] = []
+      for (const item of o.options) {
+        if ('group' in item) {
+          for (const opt of item.options) flat.push({ value: opt.value, name: opt.name, description: opt.description ?? undefined })
+        } else {
+          flat.push({ value: item.value, name: item.name, description: item.description ?? undefined })
+        }
+      }
+      out.push({ ...base, type: 'select', current: o.currentValue, options: flat })
+    }
+  }
+  return out
 }
 
 /** ACP tool-call status → our coarser lifecycle. */
@@ -163,8 +211,26 @@ export function translateUpdate(
         },
       ]
 
-    // mode/config/usage updates, and the echo of the user's own message aren't
-    // part of the chat surface.
+    case 'current_mode_update':
+      return [{ type: 'mode', current: update.currentModeId }]
+
+    case 'config_option_update':
+      return [{ type: 'config', options: normalizeConfigOptions(update.configOptions) }]
+
+    case 'usage_update':
+      return [
+        {
+          type: 'usage',
+          usage: {
+            used: update.used,
+            size: update.size,
+            ...(update.cost ? { cost: { amount: update.cost.amount, currency: update.cost.currency } } : {}),
+          },
+        },
+      ]
+
+    // The echo of the user's own message and session_info aren't part of the
+    // surfaces Hearth drives today.
     default:
       return []
   }

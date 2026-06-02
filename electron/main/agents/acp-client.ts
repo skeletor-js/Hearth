@@ -26,7 +26,7 @@ import {
   type SessionNotification,
 } from '@agentclientprotocol/sdk'
 import type { AgentSession, AuthMethodInfo, AvailableCommand, PermissionRequest, SessionUpdate } from './agent.js'
-import { normalizeModels, translatePermission, translateUpdate } from './acp-translate.js'
+import { normalizeConfigOptions, normalizeModels, normalizeModes, translatePermission, translateUpdate } from './acp-translate.js'
 import { buildChildEnv, shouldScrubInheritedKeys } from './child-env.js'
 import { createWriteBroker } from '../self-mod/write-broker.js'
 
@@ -206,10 +206,14 @@ export class AcpClient {
     const res = await connection.newSession({ cwd: sessionCwd, mcpServers })
     const sessionId = res.sessionId
     const models = normalizeModels(res.models)
+    const modes = normalizeModes(res.modes)
+    const configOptions = normalizeConfigOptions(res.configOptions)
 
     return {
       id: sessionId,
       models,
+      modes,
+      configOptions,
       prompt: async (text: string) => {
         const { stopReason } = await connection.prompt({
           sessionId,
@@ -220,6 +224,19 @@ export class AcpClient {
       setModel: async (modelId: string) => {
         // unstable_* in the SDK; a no-op on backends that don't implement it.
         await connection.unstable_setSessionModel?.({ sessionId, modelId })
+      },
+      setMode: async (modeId: string) => {
+        // Stable in the SDK; both adapters implement it. No-op if absent.
+        await connection.setSessionMode?.({ sessionId, modeId })
+      },
+      setConfigOption: async (configId: string, value: string | boolean) => {
+        // Stable in the SDK. The request is a discriminated union: boolean options
+        // carry `{ type:'boolean', value }`, selects carry `{ value: <valueId> }`.
+        const params =
+          typeof value === 'boolean'
+            ? { sessionId, configId, type: 'boolean' as const, value }
+            : { sessionId, configId, value }
+        await connection.setSessionConfigOption?.(params)
       },
       cancel: async () => {
         await connection.cancel({ sessionId })

@@ -3,7 +3,7 @@
 
 import { contextBridge, ipcRenderer } from 'electron'
 import { HEARTH_CHANNELS as CH } from '../shared/channels.js'
-import type { ActiveConnectors, AgentKind, AgentUpdatePayload, AuthState, AvailableCommand, BackendStatus, ModelState, PermissionRequestPayload } from '../shared/protocol.js'
+import type { ActiveConnectors, AgentKind, AgentUpdatePayload, AuthState, AvailableCommand, BackendStatus, ConfigOption, ModelState, ModeState, PermissionRequestPayload, Usage } from '../shared/protocol.js'
 import type { SecretInfo } from '../main/secrets/secret-store.js'
 import type { McpServerConfig, McpServerInput } from '../main/mcp/registry.js'
 import type { ProbeResult } from '../main/mcp/probe.js'
@@ -41,6 +41,27 @@ const api = {
       const handler = (_e: unknown, state: ModelState) => cb(state)
       ipcRenderer.on(CH.agentModelsChanged, handler)
       return () => void ipcRenderer.off(CH.agentModelsChanged, handler)
+    },
+    getModes: (): Promise<ModeState> => ipcRenderer.invoke(CH.agentGetModes),
+    setMode: (modeId: string): Promise<void> => ipcRenderer.invoke(CH.agentSetMode, modeId),
+    onModeChanged: (cb: (state: ModeState) => void) => {
+      const handler = (_e: unknown, state: ModeState) => cb(state)
+      ipcRenderer.on(CH.agentModeChanged, handler)
+      return () => void ipcRenderer.off(CH.agentModeChanged, handler)
+    },
+    getConfigOptions: (): Promise<ConfigOption[]> => ipcRenderer.invoke(CH.agentGetConfig),
+    setConfigOption: (configId: string, value: string | boolean): Promise<void> =>
+      ipcRenderer.invoke(CH.agentSetConfig, configId, value),
+    onConfigChanged: (cb: (options: ConfigOption[]) => void) => {
+      const handler = (_e: unknown, options: ConfigOption[]) => cb(options)
+      ipcRenderer.on(CH.agentConfigChanged, handler)
+      return () => void ipcRenderer.off(CH.agentConfigChanged, handler)
+    },
+    getUsage: (): Promise<Usage | null> => ipcRenderer.invoke(CH.agentGetUsage),
+    onUsageChanged: (cb: (usage: Usage) => void) => {
+      const handler = (_e: unknown, usage: Usage) => cb(usage)
+      ipcRenderer.on(CH.agentUsageChanged, handler)
+      return () => void ipcRenderer.off(CH.agentUsageChanged, handler)
     },
     onBackendChanged: (cb: (status: BackendStatus) => void) => {
       const handler = (_e: unknown, status: BackendStatus) => cb(status)

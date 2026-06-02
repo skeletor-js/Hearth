@@ -21,6 +21,7 @@ export class FakeAgent implements Agent {
   }
 
   private model = 'sonnet'
+  private mode = 'default'
 
   async newSession(_opts?: { cwd?: string }): Promise<AgentSession> {
     const id = `fake-${++this.counter}`
@@ -33,10 +34,22 @@ export class FakeAgent implements Agent {
         ],
         current: this.model,
       },
+      modes: {
+        available: [
+          { id: 'default', name: 'Default' },
+          { id: 'acceptEdits', name: 'Accept Edits' },
+        ],
+        current: this.mode,
+      },
+      configOptions: [],
       prompt: (text: string) => this.runTurn(id, text),
       setModel: async (modelId: string) => {
         this.model = modelId
       },
+      setMode: async (modeId: string) => {
+        this.mode = modeId
+      },
+      setConfigOption: async () => {},
       cancel: async () => {
         this.emit(id, { type: 'end', stopReason: 'cancelled' })
       },

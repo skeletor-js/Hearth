@@ -1,5 +1,5 @@
 import { test, expect, describe } from 'bun:test'
-import { mapToolStatus, mapPermissionKind, translatePermission, translateUpdate, normalizeModels } from './acp-translate.js'
+import { mapToolStatus, mapPermissionKind, translatePermission, translateUpdate, normalizeModels, normalizeModes, normalizeConfigOptions } from './acp-translate.js'
 
 describe('normalizeModels', () => {
   test('absent/null → empty', () => {
@@ -22,6 +22,98 @@ describe('normalizeModels', () => {
       ],
       current: 'sonnet',
     })
+  })
+})
+
+describe('normalizeModes', () => {
+  test('absent/null → empty', () => {
+    expect(normalizeModes(null)).toEqual({ available: [], current: null })
+    expect(normalizeModes(undefined)).toEqual({ available: [], current: null })
+  })
+  test('maps available modes + current id, dropping null descriptions', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const state: any = {
+      availableModes: [
+        { id: 'default', name: 'Default', description: 'prompts for dangerous ops' },
+        { id: 'plan', name: 'Plan Mode', description: null },
+      ],
+      currentModeId: 'default',
+    }
+    expect(normalizeModes(state)).toEqual({
+      available: [
+        { id: 'default', name: 'Default', description: 'prompts for dangerous ops' },
+        { id: 'plan', name: 'Plan Mode', description: undefined },
+      ],
+      current: 'default',
+    })
+  })
+})
+
+describe('normalizeConfigOptions', () => {
+  test('absent → empty', () => {
+    expect(normalizeConfigOptions(null)).toEqual([])
+    expect(normalizeConfigOptions(undefined)).toEqual([])
+  })
+  test('maps a select option (flat) and a boolean option', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const opts: any = [
+      {
+        id: 'model',
+        name: 'Model',
+        category: 'model',
+        type: 'select',
+        currentValue: 'opus',
+        options: [
+          { value: 'opus', name: 'Opus', description: null },
+          { value: 'sonnet', name: 'Sonnet', description: 'fast' },
+        ],
+      },
+      { id: 'verbose', name: 'Verbose', category: '_custom', type: 'boolean', currentValue: true },
+    ]
+    expect(normalizeConfigOptions(opts)).toEqual([
+      {
+        id: 'model',
+        name: 'Model',
+        description: undefined,
+        category: 'model',
+        type: 'select',
+        current: 'opus',
+        options: [
+          { value: 'opus', name: 'Opus', description: undefined },
+          { value: 'sonnet', name: 'Sonnet', description: 'fast' },
+        ],
+      },
+      { id: 'verbose', name: 'Verbose', description: undefined, category: '_custom', type: 'boolean', current: true },
+    ])
+  })
+  test('flattens grouped select options', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const opts: any = [
+      {
+        id: 'thought_level',
+        name: 'Reasoning',
+        category: 'thought_level',
+        type: 'select',
+        currentValue: 'high',
+        options: [
+          { group: 'g1', name: 'Group 1', options: [{ value: 'low', name: 'Low' }, { value: 'high', name: 'High' }] },
+        ],
+      },
+    ]
+    expect(normalizeConfigOptions(opts)).toEqual([
+      {
+        id: 'thought_level',
+        name: 'Reasoning',
+        description: undefined,
+        category: 'thought_level',
+        type: 'select',
+        current: 'high',
+        options: [
+          { value: 'low', name: 'Low', description: undefined },
+          { value: 'high', name: 'High', description: undefined },
+        ],
+      },
+    ])
   })
 })
 
@@ -194,9 +286,62 @@ describe('translateUpdate', () => {
     expect(out).toEqual([{ type: 'tool-call', id: 't4', title: 'Run', status: 'running' }])
   })
 
-  test('user_message_chunk and unhandled updates are dropped', () => {
+  test('user_message_chunk and session_info_update are dropped', () => {
     expect(translateUpdate(u({ sessionUpdate: 'user_message_chunk', content: { type: 'text', text: 'me' } }), titles())).toEqual([])
-    expect(translateUpdate(u({ sessionUpdate: 'usage_update' }), titles())).toEqual([])
+    expect(translateUpdate(u({ sessionUpdate: 'session_info_update' }), titles())).toEqual([])
+  })
+
+  test('current_mode_update -> mode update', () => {
+    expect(translateUpdate(u({ sessionUpdate: 'current_mode_update', currentModeId: 'plan' }), titles())).toEqual([
+      { type: 'mode', current: 'plan' },
+    ])
+  })
+
+  test('config_option_update -> config update (normalized)', () => {
+    const out = translateUpdate(
+      u({
+        sessionUpdate: 'config_option_update',
+        configOptions: [
+          {
+            id: 'mode',
+            name: 'Mode',
+            category: 'mode',
+            type: 'select',
+            currentValue: 'default',
+            options: [{ value: 'default', name: 'Default', description: null }],
+          },
+        ],
+      }),
+      titles(),
+    )
+    expect(out).toEqual([
+      {
+        type: 'config',
+        options: [
+          {
+            id: 'mode',
+            name: 'Mode',
+            description: undefined,
+            category: 'mode',
+            type: 'select',
+            current: 'default',
+            options: [{ value: 'default', name: 'Default', description: undefined }],
+          },
+        ],
+      },
+    ])
+  })
+
+  test('usage_update -> usage update with context + cost', () => {
+    expect(
+      translateUpdate(u({ sessionUpdate: 'usage_update', used: 1200, size: 200000, cost: { amount: 0.04, currency: 'USD' } }), titles()),
+    ).toEqual([{ type: 'usage', usage: { used: 1200, size: 200000, cost: { amount: 0.04, currency: 'USD' } } }])
+  })
+
+  test('usage_update without cost omits the cost key', () => {
+    expect(translateUpdate(u({ sessionUpdate: 'usage_update', used: 10, size: 100 }), titles())).toEqual([
+      { type: 'usage', usage: { used: 10, size: 100 } },
+    ])
   })
 
   test('available_commands_update -> commands update (name + description)', () => {

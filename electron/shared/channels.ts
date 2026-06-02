@@ -12,6 +12,14 @@ export const HEARTH_CHANNELS = {
   agentGetModels: 'agent:models:get',
   agentSetModel: 'agent:model:set',
   agentModelsChanged: 'agent:models:changed', // main → renderer
+  agentGetModes: 'agent:modes:get',
+  agentSetMode: 'agent:mode:set',
+  agentModeChanged: 'agent:mode:changed', // main → renderer
+  agentGetConfig: 'agent:config:get',
+  agentSetConfig: 'agent:config:set',
+  agentConfigChanged: 'agent:config:changed', // main → renderer
+  agentGetUsage: 'agent:usage:get',
+  agentUsageChanged: 'agent:usage:changed', // main → renderer
   selfModHistory: 'self-mod:history',
   selfModUndo: 'self-mod:undo',
   selfModRedo: 'self-mod:redo',

@@ -1,18 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { AgentKind, ModelState } from '../../../electron/shared/protocol'
+import type { AgentKind, ConfigOption, ModelState, ModeState, Usage } from '../../../electron/shared/protocol'
 import type { Workspace } from '../../../electron/main/workspaces/registry'
 import { Icon } from '@/shell/Icon'
-import { Seg } from '@/app/settings/controls'
+import { Switch } from '@/app/settings/controls'
 import { GitPanel } from '@/app/workbench/GitPanel'
 import { useSession } from '@/app/session-store'
 import { startSession } from '@/app/sessions'
-
-type Mode = 'plan' | 'auto' | 'ask'
-const MODES: [Mode, string, string][] = [
-  ['plan', 'Plan', 'list-bullets'],
-  ['auto', 'Auto', 'lightning'],
-  ['ask', 'Ask', 'hand'],
-]
 
 const BACKENDS: Record<AgentKind, { name: string; sub: string; icon: string }> = {
   claude: { name: 'Claude', sub: 'Claude Agent · ACP', icon: 'terminal-window' },
@@ -20,32 +13,57 @@ const BACKENDS: Record<AgentKind, { name: string; sub: string; icon: string }> =
 }
 
 type Anchor = { left: number; bottom: number }
+// The agent-settings popover is tall (backend + mode + model + options + usage), and
+// the composer sits mid-screen, so it opens DOWNWARD from the chip with a
+// viewport-clamped height instead of growing upward off the top.
+type DownAnchor = { left: number; top: number; maxHeight: number }
 
 function basename(p: string): string {
   return p.split('/').pop() || p
 }
 
-/** The agent-settings popover: backend switch + model picker. Phase 1B adds the
- * advertised-mode selector and a usage line here. */
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'k'
+  return String(n)
+}
+
+/** The agent-settings popover: backend, permission mode, model, any other
+ * agent-advertised config options, and a read-only usage line. Modes/options are
+ * rendered generically from what the backend advertises — no fixed label map. */
 function AgentSettingsPop({
   current,
   anchor,
   models,
+  modes,
+  configOptions,
+  usage,
   onPick,
   onPickModel,
+  onPickMode,
+  onSetConfig,
   onClose,
 }: {
   current: AgentKind
-  anchor: Anchor
+  anchor: DownAnchor
   models: ModelState
+  modes: ModeState
+  configOptions: ConfigOption[]
+  usage: Usage | null
   onPick: (k: AgentKind) => void
   onPickModel: (id: string) => void
+  onPickMode: (id: string) => void
+  onSetConfig: (id: string, value: string | boolean) => void
   onClose: () => void
 }) {
+  // Mode + model are surfaced by their own controls; render only the *other*
+  // advertised options generically (forward-compatible, e.g. a future reasoning
+  // level), so they never duplicate the mode/model sections.
+  const extraConfig = configOptions.filter((o) => o.category !== 'mode' && o.category !== 'model')
   return (
     <>
       <div className="pop-mask" onClick={onClose} />
-      <div className="pop" style={anchor}>
+      <div className="pop" style={{ left: anchor.left, top: anchor.top, maxHeight: anchor.maxHeight, overflow: 'auto' }}>
         <div className="pop-sect">Agent backend · ACP</div>
         {(Object.keys(BACKENDS) as AgentKind[]).map((id) => {
           const b = BACKENDS[id]
@@ -69,6 +87,25 @@ function AgentSettingsPop({
             </div>
           )
         })}
+
+        {modes.available.length > 0 && (
+          <>
+            <div className="pop-sect">Permission mode</div>
+            {modes.available.map((m) => (
+              <div key={m.id} className="pop-item" onClick={() => onPickMode(m.id)}>
+                <span className="pi-mark">
+                  <Icon name="shield-check" />
+                </span>
+                <div className="pi-body">
+                  <div className="pi-name">{m.name}</div>
+                  {m.description && <div className="pi-sub">{m.description}</div>}
+                </div>
+                {modes.current === m.id && <Icon name="check" className="pi-check" />}
+              </div>
+            ))}
+          </>
+        )}
+
         {models.available.length > 0 && (
           <>
             <div className="pop-sect">Model</div>
@@ -84,6 +121,54 @@ function AgentSettingsPop({
                 {models.current === m.id && <Icon name="check" className="pi-check" />}
               </div>
             ))}
+          </>
+        )}
+
+        {extraConfig.map((opt) =>
+          opt.type === 'boolean' ? (
+            <div key={opt.id}>
+              <div className="pop-sect">{opt.name}</div>
+              <div className="pop-item" style={{ cursor: 'default' }}>
+                <div className="pi-body">
+                  {opt.description && <div className="pi-sub">{opt.description}</div>}
+                </div>
+                <Switch on={opt.current} onChange={(v) => onSetConfig(opt.id, v)} />
+              </div>
+            </div>
+          ) : (
+            <div key={opt.id}>
+              <div className="pop-sect">{opt.name}</div>
+              {opt.options.map((o) => (
+                <div key={o.value} className="pop-item" onClick={() => onSetConfig(opt.id, o.value)}>
+                  <span className="pi-mark">
+                    <Icon name="sliders-horizontal" />
+                  </span>
+                  <div className="pi-body">
+                    <div className="pi-name">{o.name}</div>
+                    {o.description && <div className="pi-sub">{o.description}</div>}
+                  </div>
+                  {opt.current === o.value && <Icon name="check" className="pi-check" />}
+                </div>
+              ))}
+            </div>
+          ),
+        )}
+
+        {usage && (
+          <>
+            <div className="pop-sect">Usage</div>
+            <div className="pop-item" style={{ cursor: 'default' }}>
+              <span className="pi-mark">
+                <Icon name="gauge" />
+              </span>
+              <div className="pi-body">
+                <div className="pi-name">
+                  {fmtTokens(usage.used)} / {fmtTokens(usage.size)} context
+                  {usage.cost && ` · $${usage.cost.amount.toFixed(usage.cost.amount < 1 ? 3 : 2)}`}
+                </div>
+                <div className="pi-sub">Runs on the Agent SDK metered credit pool — see docs/COMPLIANCE.md</div>
+              </div>
+            </div>
           </>
         )}
       </div>
@@ -167,13 +252,16 @@ export function Composer({
   onDetachScratchpad?: () => void
 }) {
   const [input, setInput] = useState('')
-  const [mode, setMode] = useState<Mode>('auto')
   const [backend, setBackend] = useState<AgentKind>('claude')
   const [models, setModels] = useState<ModelState>({ available: [], current: null })
-  const [settingsAnchor, setSettingsAnchor] = useState<Anchor | null>(null)
+  const [modes, setModes] = useState<ModeState>({ available: [], current: null })
+  const [configOptions, setConfigOptions] = useState<ConfigOption[]>([])
+  const [usage, setUsage] = useState<Usage | null>(null)
+  const [settingsAnchor, setSettingsAnchor] = useState<DownAnchor | null>(null)
   const [gitAnchor, setGitAnchor] = useState<Anchor | null>(null)
   const [wsAnchor, setWsAnchor] = useState<Anchor | null>(null)
   const settingsRef = useRef<HTMLButtonElement>(null)
+  const modeRef = useRef<HTMLButtonElement>(null)
   const branchRef = useRef<HTMLButtonElement>(null)
   const wsRef = useRef<HTMLButtonElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -203,17 +291,31 @@ export function Composer({
     requestAnimationFrame(() => inputRef.current?.focus())
   }, [composerDraft])
 
+  // Pull the agent's current backend + session config (model/mode/options/usage),
+  // and re-pull on backend switch. Live changes arrive on the change channels.
+  const refreshAgent = () => {
+    void window.hearth.agent.getModels().then(setModels)
+    void window.hearth.agent.getModes().then(setModes)
+    void window.hearth.agent.getConfigOptions().then(setConfigOptions)
+    void window.hearth.agent.getUsage().then(setUsage)
+  }
   useEffect(() => {
     void window.hearth.agent.getBackend().then(setBackend)
-    void window.hearth.agent.getModels().then(setModels)
+    refreshAgent()
     const offBe = window.hearth.agent.onBackendChanged((s) => {
       setBackend(s.kind)
-      void window.hearth.agent.getModels().then(setModels)
+      refreshAgent()
     })
     const offModels = window.hearth.agent.onModelsChanged(setModels)
+    const offModes = window.hearth.agent.onModeChanged(setModes)
+    const offConfig = window.hearth.agent.onConfigChanged(setConfigOptions)
+    const offUsage = window.hearth.agent.onUsageChanged(setUsage)
     return () => {
       offBe()
       offModels()
+      offModes()
+      offConfig()
+      offUsage()
     }
   }, [])
 
@@ -262,12 +364,22 @@ export function Composer({
     setModels((m) => ({ ...m, current: id }))
     void window.hearth.agent.setModel(id)
   }
+  const pickMode = (id: string) => {
+    setModes((m) => ({ ...m, current: id }))
+    void window.hearth.agent.setMode(id)
+  }
+  const setConfig = (id: string, value: string | boolean) => {
+    void window.hearth.agent.setConfigOption(id, value)
+  }
 
   const anchorFrom = (el: HTMLElement | null): Anchor | null => {
     const r = el?.getBoundingClientRect()
     return r ? { left: r.left, bottom: window.innerHeight - r.top + 6 } : null
   }
-  const openSettings = () => setSettingsAnchor(anchorFrom(settingsRef.current))
+  const openSettings = (el: HTMLElement | null) => {
+    const r = el?.getBoundingClientRect()
+    if (r) setSettingsAnchor({ left: r.left, top: r.bottom + 6, maxHeight: window.innerHeight - r.bottom - 18 })
+  }
   const openGit = () => setGitAnchor(anchorFrom(branchRef.current))
   const openWs = () => setWsAnchor(anchorFrom(wsRef.current))
 
@@ -285,6 +397,7 @@ export function Composer({
   }
 
   const be = BACKENDS[backend]
+  const modeName = modes.available.find((m) => m.id === modes.current)?.name
   return (
     <div className="composer-wrap">
       <div className="composer">
@@ -306,7 +419,7 @@ export function Composer({
               </span>
             )}
           </button>
-          <button ref={settingsRef} className="chip" title="Agent settings" onClick={openSettings}>
+          <button ref={settingsRef} className="chip" title="Agent settings" onClick={() => openSettings(settingsRef.current)}>
             <Icon name={be.icon} /> {be.name}
             <Icon name="caret-down" />
           </button>
@@ -327,7 +440,16 @@ export function Composer({
           style={{ overflowY: 'auto' }}
         />
         <div className="composer-bar">
-          <Seg value={mode} options={MODES} onChange={setMode} />
+          {modes.available.length > 0 && (
+            <button
+              ref={modeRef}
+              className="chip chip-sm"
+              title="Permission mode — click for agent settings"
+              onClick={() => openSettings(modeRef.current)}
+            >
+              <Icon name="shield-check" /> {modeName ?? 'Mode'}
+            </button>
+          )}
           <span className="spacer" />
           <button
             className={'send' + (busy ? '' : input.trim() ? '' : ' is-disabled')}
@@ -343,8 +465,13 @@ export function Composer({
           current={backend}
           anchor={settingsAnchor}
           models={models}
+          modes={modes}
+          configOptions={configOptions}
+          usage={usage}
           onPick={pickBackend}
           onPickModel={pickModel}
+          onPickMode={pickMode}
+          onSetConfig={setConfig}
           onClose={() => setSettingsAnchor(null)}
         />
       )}

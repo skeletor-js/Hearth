@@ -17,16 +17,24 @@ export interface AgentConfig {
 
 // The streamed-update and permission shapes live in shared/ so the renderer and
 // preload import the exact same definitions. Re-exported here for main-process code.
-export type { SessionUpdate, PermissionRequest, PermissionOption, PlanEntry, AgentModel, ModelState, AuthMethodInfo, AvailableCommand } from '../../shared/protocol.js'
-import type { SessionUpdate, PermissionRequest, ModelState, AuthMethodInfo, AvailableCommand } from '../../shared/protocol.js'
+export type { SessionUpdate, PermissionRequest, PermissionOption, PlanEntry, AgentModel, ModelState, ModeState, SessionMode, ConfigOption, ConfigSelectOption, Usage, AuthMethodInfo, AvailableCommand } from '../../shared/protocol.js'
+import type { SessionUpdate, PermissionRequest, ModelState, ModeState, ConfigOption, AuthMethodInfo, AvailableCommand } from '../../shared/protocol.js'
 
 export interface AgentSession {
   readonly id: string
   /** Models the backend offered for this session (may be empty). */
   readonly models: ModelState
+  /** Permission/operating modes the backend offered (may be empty). */
+  readonly modes: ModeState
+  /** Generic config options the backend advertised (may be empty). */
+  readonly configOptions: ConfigOption[]
   prompt(text: string): Promise<void>
   /** Switch the model for this session (no-op if the backend exposes none). */
   setModel(modelId: string): Promise<void>
+  /** Switch the permission mode (no-op if the backend exposes none). */
+  setMode(modeId: string): Promise<void>
+  /** Set a generic config option by id (value: a select value id or a boolean). */
+  setConfigOption(configId: string, value: string | boolean): Promise<void>
   cancel(): Promise<void>
   dispose(): Promise<void>
 }
