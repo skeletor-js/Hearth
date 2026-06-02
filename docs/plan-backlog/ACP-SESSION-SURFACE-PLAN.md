@@ -609,4 +609,49 @@ when picked up.
 
 ## Implementation log
 
-_(append per phase/workstream: what changed, files touched, verification results)_
+### Phase 1 — session & composer surface (done)
+
+**1A (renderer, commit `a88e494`).** Rail: renamed the misnamed "New session" link
+to **Home** (`house`); added a real **New Session** item that starts a session in
+the current workspace, binds ⌘N, and flashes the workspace chip. Composer: chips are
+now `[workspace] [branch] [agent settings]` — dropped the dead Self-edit + standalone
+Claude chips; branch reads the real branch (+ahead/behind) from `git.status`;
+workspace chip opens a switch popover. Files: `Rail.tsx`, `Composer.tsx`,
+`session-store.ts` (`flashWorkspaceChip`), `hearth.css` (flash keyframe). Verified
+live: branch matched `git status` (↑8), both popovers open, both themes.
+
+**1B (main + shared, commit `12c3e7e`).** One generic path for both backends:
+- `protocol.ts`: `ModeState`/`SessionMode`, `ConfigOption` (select|boolean), `Usage`
+  + `mode`/`config`/`usage` SessionUpdate variants.
+- `acp-translate.ts`: `normalizeModes` / `normalizeConfigOptions` (flattens grouped
+  selects) + translate the three previously-dropped updates. Unit tests added.
+- `acp-client.ts`: `newSession` captures `res.modes` + `res.configOptions`; `setMode`
+  (stable `setSessionMode`) + `setConfigOption`.
+- `agent-host.ts`: per-kind cache + change handlers; applies the **Default/prompt**
+  baseline per session via runtime `setSessionMode` (Claude `default`, Codex `agent`);
+  remembers preferred mode.
+- `ipc.ts`/`preload`/`channels.ts`: get/set + change events (mirror `onModelsChanged`).
+  Also normalized thrown adapter errors (no more `[object Object]`).
+- `Composer.tsx`: agent-settings popover renders advertised modes + model + other
+  config options generically + a truthful usage line (context + cost, metered-pool
+  note); replaced the cosmetic Plan/Auto/Ask Seg with a live mode pill; popover opens
+  downward, viewport-clamped.
+
+  **Deviation from the plan's "remove the settings.local.json write" decision —
+  required, verified.** The bundled `claude-agent-acp@0.23.1` resolves
+  `permissions.defaultMode` from merged CLI settings at *every* `session/new` and
+  **hard-crashes** on an unparseable value. The dev user has `defaultMode: "auto"` in
+  `~/.claude/settings.json` (newer CLIs accept it; this adapter doesn't). Fully
+  removing the local write exposed that latent crash (`Invalid permissions.defaultMode:
+  auto.` — caught in live verification). Resolution: mode is driven at runtime as
+  planned, but `claude.ts` keeps **one narrow, documented compatibility shim** —
+  `ensureParseablePermissionMode` writes a parseable baseline (`default`) into local
+  settings *only when the effective merged value would crash the adapter*, merged
+  surgically (preserves `allow`/`hooks`/`enabledMcpjsonServers`/…). No-op when the
+  user's mode is valid or absent. This honors the plan's intent (runtime-driven,
+  symmetric, Default baseline, hooks preserved) without bricking session creation. A
+  future adapter that tolerates its own CLI's modes lets the shim be deleted.
+
+  Verified live (Claude, subscription): session create succeeds; modes render +
+  switch live (`setMode('plan')` → mode pill updates); model switch; usage shows
+  `18.3k / 1.0M context · $0.11` with the compliance note; both themes.
