@@ -121,12 +121,21 @@ case) are fully coverable.
 > never registers, no reload. Removing our `selfModOverlay` plugin from the plain-
 > Vite config didn't change it either. So the broken new-route HMR is at the
 > Vite + @tanstack/router-plugin layer itself, independent of electron-vite and of
-> our overlay. The likely real difference vs Stella is the **Vite major version**
-> (Hearth runs Vite 6.4.2; Stella runs Vite 8) — a new-file module-graph crawl
-> improvement. Chasing a Vite-8 upgrade isn't worth it when the morph (Part B)
-> hides the reload robustly regardless of cause. **Outcome: keep electron-vite;
-> cover route reloads with the morph.** The spike paid for itself by ruling out a
-> large, risky migration that would not have fixed anything.
+> our overlay.
+>
+> **Vite version + autoCodeSplitting ruled out too (exhaustive).** Tested the
+> renderer on plain Vite **6, 7, and 8** (8 = Stella's exact version, with
+> `@vitejs/plugin-react@6`), and with **`autoCodeSplitting: true`** (Stella's exact
+> router-plugin config) on Vite 8 — **every combination fails identically**: the
+> accept fires, no reload, but the new route never registers. So it is NOT the
+> bundler, NOT our overlay, NOT the Vite major, NOT autoCodeSplitting. The cause is
+> some deeper route-module/regenerated-tree interaction specific to this codebase
+> that we could not isolate without disproportionate effort. (Aside: electron-vite
+> caps at Vite 7 — no version supports Vite 8 — so Vite 8 would force the migration
+> anyway, and it doesn't even fix the bug.) **Final outcome: route-HMR abandoned;
+> keep electron-vite + Vite 6; cover route reloads (and index.html) with the morph
+> (Part B).** The spike sequence paid for itself by ruling out a large, risky
+> migration that would have fixed nothing.
 
 ### A1 — HMR boundary in the router
 - `[ ]` In [main.tsx](../../src/main.tsx), after `createRouter`, add the Stella
