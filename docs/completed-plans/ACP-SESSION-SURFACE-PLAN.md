@@ -1,5 +1,12 @@
 # Hearth ACP & Session Surface Plan
 
+**Status: COMPLETE (2026-06-02).** Phases 1A, 1B, 2, and 4 shipped and verified
+live; Phase 3 (W2 terminal) verified inert with the current adapters and
+deliberately not built. Deferred follow-ons (W7 elicitation, W3 fork/list, the
+Claude-only `_meta.terminal_output` visibility lever) are noted inline. See the
+status table below and the implementation log at the bottom for per-phase detail,
+commits, and the one documented deviation (the `claude.ts` defaultMode shim).
+
 Hearth talks to its backends over the Agent Client Protocol (ACP). The protocol
 exposes far more than Hearth uses today — session persistence, richer prompt
 input, a terminal capability, usage metering, live mode control, structured
