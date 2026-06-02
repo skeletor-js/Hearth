@@ -25,6 +25,7 @@ import { BrowserManager } from './browser/browser-view.js'
 import { HEARTH_CHANNELS } from '../shared/channels.js'
 import { join } from 'node:path'
 import { stopAllMicroApps } from './micro-apps/server.js'
+import { OverlayWindow } from './windows/overlay-window.js'
 import { CapabilityStore } from './micro-apps/capabilities.js'
 import { CredentialBroker } from './micro-apps/broker.js'
 import { installSessionPolicy } from './micro-apps/session-policy.js'
@@ -104,6 +105,13 @@ async function bootstrap(): Promise<void> {
   app.once('before-quit', () => void renderer.close())
 
   const window = createMainWindow(renderer.target)
+
+  // Pre-warm the transparent morph-overlay window (B1 of the seamless-self-mod
+  // plan) so it's ready to cover a structural-self-mod reload with no black flash.
+  // It stays invisible + click-through until the morph controller drives it.
+  const overlay = new OverlayWindow(renderer.target)
+  overlay.webContents().once('did-finish-load', () => console.log('[hearth] morph overlay ready'))
+  app.once('before-quit', () => overlay.destroy())
 
   // Encrypted secret store (BYO API keys + MCP env) and the user's MCP server
   // registry. Both live under userData. Created before the host because the agent

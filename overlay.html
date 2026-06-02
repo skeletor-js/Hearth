@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Transparent: this window floats over the main window and only paints the
+         morph cover. No CSP meta needed (no network; same-origin assets only). -->
+    <style>
+      html,
+      body,
+      #overlay-root {
+        margin: 0;
+        height: 100%;
+        width: 100%;
+        background: transparent;
+        overflow: hidden;
+      }
+    </style>
+    <title>Hearth Morph</title>
+  </head>
+  <body>
+    <div id="overlay-root"></div>
+    <script type="module" src="/src/overlay/main.tsx"></script>
+  </body>
+</html>

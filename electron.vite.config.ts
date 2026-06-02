@@ -43,7 +43,13 @@ export default defineConfig({
       tailwind(),
     ],
     build: {
-      rollupOptions: { input: resolve(__dirname, 'index.html') },
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'index.html'),
+          // The transparent morph-overlay window (electron/main/windows/overlay-window.ts).
+          overlay: resolve(__dirname, 'overlay.html'),
+        },
+      },
     },
   },
 })
