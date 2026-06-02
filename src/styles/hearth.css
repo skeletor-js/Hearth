@@ -869,6 +869,7 @@ select.field{ cursor:default; }
   overflow:hidden;margin-bottom:13px;background:var(--bg-panel); }
 .list-row{ display:flex;align-items:center;gap:12px;padding:11px 13px;border-top:1px solid var(--border); }
 .list-row:first-child{ border-top:0; }
+.list-row.is-off .list-main{ opacity:.5; }
 .list-main{ flex:1;min-width:0; }
 .list-title{ font-size:var(--t-13);color:var(--strong);font-weight:500;display:flex;align-items:center;gap:7px; }
 .list-title.mono{ font-family:var(--mono);font-size:var(--t-12);font-weight:400; }

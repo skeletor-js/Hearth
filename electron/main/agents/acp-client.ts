@@ -27,6 +27,7 @@ import {
 } from '@agentclientprotocol/sdk'
 import type { AgentSession, AuthMethodInfo, AvailableCommand, PermissionRequest, SessionUpdate } from './agent.js'
 import { normalizeModels, translatePermission, translateUpdate } from './acp-translate.js'
+import { buildChildEnv, shouldScrubInheritedKeys } from './child-env.js'
 import { createWriteBroker } from '../self-mod/write-broker.js'
 
 export interface AdapterSpec {
@@ -70,9 +71,13 @@ export class AcpClient {
   async connect(): Promise<void> {
     const spec = this.resolveSpec()
     this.cwd = spec.cwd
+    // Merge spec.env over our env. When HEARTH_SCRUB_INHERITED_KEYS=1, strip the
+    // credential/gateway vars a parent agent may have leaked first, so the spawned
+    // adapter uses only the credential Hearth chose (login, or the BYO key in
+    // spec.env which is merged after the scrub). See child-env.ts.
     const child = spawn(spec.command, spec.args, {
       cwd: spec.cwd,
-      env: { ...process.env, ...spec.env },
+      env: buildChildEnv(process.env, spec.env, { scrubInheritedKeys: shouldScrubInheritedKeys() }),
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     this.child = child

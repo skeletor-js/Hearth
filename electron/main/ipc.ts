@@ -39,7 +39,7 @@ import type { SecretStore } from './secrets/secret-store.js'
 import { McpRegistry, type McpServerInput } from './mcp/registry.js'
 import { probeServer } from './mcp/probe.js'
 import { resolveAuth, apiKeyRefs } from './agents/auth-config.js'
-import { listSkills, globalSkillsDir } from './skills/list.js'
+import { listSkills, globalSkillsDir, setSkillEnabled } from './skills/list.js'
 
 let runSeq = 0
 
@@ -378,6 +378,9 @@ export function registerIpc(services: MainServices): void {
     commands: host.advertisedCommands(),
   }))
   ipcMain.handle(HEARTH_CHANNELS.skillsReveal, () => void shell.openPath(globalSkillsDir()))
+  ipcMain.handle(HEARTH_CHANNELS.skillsSetEnabled, (_e, path: string, enabled: boolean) =>
+    setSkillEnabled(path, enabled),
+  )
 
   // Data & privacy: reveal the on-disk data folder backing the "stays on your
   // machine" claim.

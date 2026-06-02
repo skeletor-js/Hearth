@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { BrowserWindow } from 'electron'
-import { resolveRendererTarget } from './dev-server.js'
+import type { RendererTarget } from './dev-server.js'
 
 const WEB_PREFERENCES = {
   // electron-vite emits the preload as .mjs (package.json is "type":"module").
@@ -15,13 +15,12 @@ const WEB_PREFERENCES = {
   backgroundThrottling: false,
 }
 
-function loadRenderer(win: BrowserWindow): void {
-  const target = resolveRendererTarget()
+function loadRenderer(win: BrowserWindow, target: RendererTarget): void {
   if (target.url) void win.loadURL(target.url)
   else if (target.file) void win.loadFile(target.file)
 }
 
-export function createMainWindow(): BrowserWindow {
+export function createMainWindow(target: RendererTarget): BrowserWindow {
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -34,20 +33,20 @@ export function createMainWindow(): BrowserWindow {
   })
 
   win.once('ready-to-show', () => win.show())
-  loadRenderer(win)
+  loadRenderer(win, target)
   return win
 }
 
 // A hidden window used only to capture route-specific snapshots for the agent.
 // Keeping it separate means `view_app({path})` never navigates — or wipes the
 // state of — the user's actual window (e.g. the live chat). See snapshot.ts.
-export function createSnapshotWindow(): BrowserWindow {
+export function createSnapshotWindow(target: RendererTarget): BrowserWindow {
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
     show: false,
     webPreferences: WEB_PREFERENCES,
   })
-  loadRenderer(win)
+  loadRenderer(win, target)
   return win
 }

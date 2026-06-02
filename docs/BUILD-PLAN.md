@@ -305,7 +305,13 @@ Carried from MILESTONE-V1's out-of-scope list — do not let these creep in:
   [AcpAgent](../electron/main/agents/acp-agent.ts) base + `@agentclientprotocol/codex-acp`.
   Select with `HEARTH_AGENT=codex`. Verified live (connect → session → prompt →
   message + tool-call + end).
-- Packaged/notarized self-evolving build that ships its own Vite server
-  ([dev-server.ts](../electron/main/dev-server.ts) `TODO(v2)`).
+- ~~Packaged/notarized self-evolving build that ships its own Vite server~~ —
+  IMPLEMENTED (v2). [dev-server.ts](../electron/main/dev-server.ts) now starts a
+  runtime Vite server rooted at a writable userData workspace
+  ([workspace.ts](../electron/main/packaging/workspace.ts),
+  [renderer-server.ts](../electron/main/packaging/renderer-server.ts)), with an
+  electron-builder config + hardened-runtime entitlements. See
+  [V2-PACKAGING-PLAN.md](./V2-PACKAGING-PLAN.md). A real `bun run dist` +
+  notarization run is environment-gated.
 - Auto-update, an app store, multi-window, voice, mobile bridge.
 - Sandbox hardening beyond the iframe `sandbox` attribute.

@@ -3,6 +3,7 @@
 
 import { app, safeStorage, BrowserWindow } from 'electron'
 import { createMainWindow, createSnapshotWindow } from './window.js'
+import { prepareRenderer } from './dev-server.js'
 import { registerIpc } from './ipc.js'
 import { ClaudeAgent } from './agents/claude.js'
 import { CodexAgent } from './agents/codex.js'
@@ -25,11 +26,26 @@ import { HEARTH_CHANNELS } from '../shared/channels.js'
 import { join } from 'node:path'
 import { stopAllMicroApps } from './micro-apps/server.js'
 import { startAgentBridge } from './agent-bridge.js'
+import { ensureWorkspace } from './packaging/workspace.js'
 
 // The repo is the agent's working directory — editing it IS self-modification.
 // In dev that's the project root; in a packaged self-evolving build it's the
-// app's writable copy of its own source (v2).
-const REPO_ROOT = process.env.HEARTH_REPO_ROOT ?? process.cwd()
+// app's writable copy of its own source (v2), seeded under userData on first
+// launch. Resolved by resolveRepoRoot() at boot.
+async function resolveRepoRoot(): Promise<string> {
+  if (process.env.HEARTH_REPO_ROOT) return process.env.HEARTH_REPO_ROOT
+  if (!app.isPackaged) return process.cwd()
+  // Packaged: copy the shipped, read-only source into a writable workspace and
+  // run (Vite root + git) from there. Shipped source + node_modules live under
+  // Resources/app-source (see electron-builder config in package.json).
+  const sourceDir = join(process.resourcesPath, 'app-source')
+  return ensureWorkspace({
+    workspaceDir: join(app.getPath('userData'), 'workspace'),
+    sourceDir,
+    nodeModulesDir: join(sourceDir, 'node_modules'),
+    version: app.getVersion(),
+  })
+}
 
 // Which backend to drive: HEARTH_AGENT=codex selects Codex, otherwise Claude.
 function resolveBackend(): AgentKind {
@@ -41,18 +57,23 @@ function resolveBackend(): AgentKind {
 // to each backend, resolved (secrets injected) lazily at session creation so
 // tokens never sit in a config file. HEARTH_FAKE_AGENT=1 forces the scripted
 // agent (UI/permission dev without a live model).
-function makeAgentFactory(secrets: SecretStore, mcp: McpRegistry): AgentFactory {
+function makeAgentFactory(secrets: SecretStore, mcp: McpRegistry, repoRoot: string): AgentFactory {
   const userMcpServers = async () => toAcpServers(mcp.list(), secrets).servers
   return (kind: AgentKind): Agent => {
     if (process.env.HEARTH_FAKE_AGENT) return new FakeAgent()
     const auth = resolveAuth(kind, secrets)
     return kind === 'codex'
-      ? new CodexAgent({ kind: 'codex', cwd: REPO_ROOT, auth }, userMcpServers)
-      : new ClaudeAgent({ kind: 'claude', cwd: REPO_ROOT, auth }, userMcpServers)
+      ? new CodexAgent({ kind: 'codex', cwd: repoRoot, auth }, userMcpServers)
+      : new ClaudeAgent({ kind: 'claude', cwd: repoRoot, auth }, userMcpServers)
   }
 }
 
 async function bootstrap(): Promise<void> {
+  // Resolve the writable repo root first — in a packaged build this seeds the
+  // userData workspace, which everything below (watchdog revert, self-mod, Vite
+  // root) operates on.
+  const REPO_ROOT = await resolveRepoRoot()
+
   // Boot watchdog (W6): if the previous self-mod restart never reached ready, it
   // bricked boot — auto-revert that commit and relaunch before anything else runs.
   const watchdog = new BootWatchdog(join(app.getPath('userData'), 'pending-self-mod-restart.json'))
@@ -73,7 +94,13 @@ async function bootstrap(): Promise<void> {
     console.error(`[hearth] self-mod restart bricked boot repeatedly (commit ${decision.commit}); booting current state without further auto-revert`)
   }
 
-  const window = createMainWindow()
+  // Resolve how the renderer loads: dev server URL, or (packaged) our own Vite
+  // server rooted at the workspace, falling back to the static bundle. Done after
+  // the watchdog's relaunch branch so we never start a server we're about to kill.
+  const renderer = await prepareRenderer(REPO_ROOT)
+  app.once('before-quit', () => void renderer.close())
+
+  const window = createMainWindow(renderer.target)
 
   // Encrypted secret store (BYO API keys + MCP env) and the user's MCP server
   // registry. Both live under userData. Created before the host because the agent
@@ -84,7 +111,7 @@ async function bootstrap(): Promise<void> {
 
   // The host owns the current backend and swaps it at runtime; IPC talks to it,
   // not to a fixed agent. Starts on the env-selected backend (default Claude).
-  const host = new AgentHost(makeAgentFactory(secrets, mcp), resolveBackend())
+  const host = new AgentHost(makeAgentFactory(secrets, mcp, REPO_ROOT), resolveBackend())
   console.log(`[hearth] backend: ${host.kind}`)
 
   const hmr = new HmrController({
@@ -141,7 +168,10 @@ async function bootstrap(): Promise<void> {
 
   // Loopback bridge: lets the agent see (snapshot) AND drive (eval) the live app.
   // Route captures use a hidden window so the user's view is never disturbed.
-  startAgentBridge({ mainWindow: window, createSnapshotWindow, browser }, REPO_ROOT)
+  startAgentBridge(
+    { mainWindow: window, createSnapshotWindow: () => createSnapshotWindow(renderer.target), browser },
+    REPO_ROOT,
+  )
 
   registerIpc({ repoRoot: REPO_ROOT, host, selfMod, workspaces, sessions, browser, window, secrets, mcp })
 

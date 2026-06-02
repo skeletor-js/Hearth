@@ -28,4 +28,11 @@ export default tseslint.config(
     files: ['electron/**/*.{ts,mjs}', 'scripts/**/*.mjs', '*.config.{ts,js}'],
     languageOptions: { globals: { ...globals.node } },
   },
+  {
+    // CommonJS build hooks (electron-builder afterSign, etc.) run under Node and
+    // use require(); they aren't part of the TS app.
+    files: ['build/**/*.cjs'],
+    languageOptions: { globals: { ...globals.node }, sourceType: 'commonjs' },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
 )

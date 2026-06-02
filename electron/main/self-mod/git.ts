@@ -21,6 +21,30 @@ async function git(repoRoot: string, args: string[]): Promise<string> {
   return result.stdout
 }
 
+/**
+ * Initialize a fresh repo at `repoRoot` and commit everything in it as the
+ * baseline. Used to seed the packaged app's writable source workspace (v2). Sets a
+ * local commit identity so the commit succeeds even when global git config is
+ * empty (a clean machine with no `git config user.*`).
+ */
+export async function initBaselineRepo(repoRoot: string, subject: string): Promise<string> {
+  await git(repoRoot, ['init'])
+  await git(repoRoot, ['config', 'user.email', 'hearth@localhost'])
+  await git(repoRoot, ['config', 'user.name', 'Hearth'])
+  await git(repoRoot, ['add', '-A'])
+  await git(repoRoot, ['commit', '-m', subject])
+  return (await git(repoRoot, ['rev-parse', 'HEAD'])).trim()
+}
+
+/** Stage and commit every change, but only if the tree is dirty (a no-op commit
+ * fails). Returns the new HEAD, or null when there was nothing to commit. */
+export async function commitAll(repoRoot: string, subject: string): Promise<string | null> {
+  if ((await listDirty(repoRoot)).length === 0) return null
+  await git(repoRoot, ['add', '-A'])
+  await git(repoRoot, ['commit', '-m', subject])
+  return (await git(repoRoot, ['rev-parse', 'HEAD'])).trim()
+}
+
 export async function listDirty(repoRoot: string): Promise<string[]> {
   // -z gives NUL-separated, *unquoted* paths. Without it, porcelain C-quotes any
   // path containing spaces or special chars (e.g. `"a file.txt"`), which would

@@ -196,6 +196,8 @@ const api = {
     list: (cwd?: string): Promise<{ skills: SkillInfo[]; commands: AvailableCommand[] }> =>
       ipcRenderer.invoke(CH.skillsList, cwd),
     reveal: (): Promise<void> => ipcRenderer.invoke(CH.skillsReveal),
+    setEnabled: (path: string, enabled: boolean): Promise<string> =>
+      ipcRenderer.invoke(CH.skillsSetEnabled, path, enabled),
   },
   data: {
     reveal: (): Promise<void> => ipcRenderer.invoke(CH.dataReveal),

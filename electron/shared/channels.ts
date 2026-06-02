@@ -84,9 +84,10 @@ export const HEARTH_CHANNELS = {
   mcpRemove: 'mcp:remove',
   mcpSetEnabled: 'mcp:set-enabled',
   mcpTest: 'mcp:test',
-  // skills: read-only discovery of Claude Code skills (global + workspace).
+  // skills: discovery + enable/disable of Claude Code skills (global + workspace).
   skillsList: 'skills:list',
   skillsReveal: 'skills:reveal',
+  skillsSetEnabled: 'skills:set-enabled',
   // data & privacy.
   dataReveal: 'data:reveal', // open the data folder
   // about: app + adapter/SDK versions.

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened-runtime entitlements for the packaged self-evolving build (v2, WS2-5).
+
+  Hardened runtime is required for notarization but it breaks the things Hearth
+  depends on unless these are granted:
+    - allow-jit / allow-unsigned-executable-memory: V8's JIT and the in-process
+      Vite server (esbuild/rollup codegen) need writable+executable memory.
+    - disable-library-validation: Hearth spawns the ACP adapters via the Electron
+      binary (process.execPath + ELECTRON_RUN_AS_NODE) and loads native modules
+      (dugite's bundled git, node-pty); those aren't all signed by the same Team ID.
+    - allow-dyld-environment-variables: spawning the adapters with a custom env
+      under hardened runtime.
+    - inherit: child processes (the spawned adapters) inherit these entitlements;
+      referenced via electron-builder `entitlementsInherit`.
+-->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+  <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+  <true/>
+  <key>com.apple.security.inherit</key>
+  <true/>
+</dict>
+</plist>

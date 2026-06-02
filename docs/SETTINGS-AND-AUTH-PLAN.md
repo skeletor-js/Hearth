@@ -213,8 +213,10 @@ config dir. The ACP stream also advertises them: `AvailableCommandsUpdate` /
 - `window.hearth.skills.list()` reads skill dirs (global + workspace), returns
   name + description + scope + source path.
 - Settings — Skills section: list with scope chips, "Reveal folder" action,
-  link to docs on adding a skill. Enable/disable deferred (skills toggle by
-  file presence; a real toggle means moving files — out of v1 scope, note it).
+  link to docs on adding a skill. Enable/disable IMPLEMENTED (v2): a per-skill
+  toggle moves the folder between `skills/` and `skills-disabled/` so the agent
+  stops/starts seeing it (see V2-PACKAGING-PLAN.md WS3, skills/list.ts
+  `setSkillEnabled`).
 
 ---
 
