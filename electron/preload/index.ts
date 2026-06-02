@@ -3,7 +3,11 @@
 
 import { contextBridge, ipcRenderer } from 'electron'
 import { HEARTH_CHANNELS as CH } from '../shared/channels.js'
-import type { AgentKind, AgentUpdatePayload, BackendStatus, ModelState, PermissionRequestPayload } from '../shared/protocol.js'
+import type { AgentKind, AgentUpdatePayload, AuthState, AvailableCommand, BackendStatus, ModelState, PermissionRequestPayload } from '../shared/protocol.js'
+import type { SecretInfo } from '../main/secrets/secret-store.js'
+import type { McpServerConfig, McpServerInput } from '../main/mcp/registry.js'
+import type { ProbeResult } from '../main/mcp/probe.js'
+import type { SkillInfo } from '../main/skills/list.js'
 import type { DiffSummary } from '../main/self-mod/git-diff.js'
 import type { BranchInfo, GitStatus, PrResult } from '../main/self-mod/git-ops.js'
 import type { SelfModResult, StepResult } from '../main/self-mod/self-mod-service.js'
@@ -159,6 +163,52 @@ const api = {
   },
   memory: {
     get: (): Promise<string> => ipcRenderer.invoke(CH.memoryGet),
+    clear: (): Promise<void> => ipcRenderer.invoke(CH.memoryClear),
+  },
+  secrets: {
+    list: (): Promise<SecretInfo[]> => ipcRenderer.invoke(CH.secretsList),
+    set: (key: string, value: string): Promise<void> => ipcRenderer.invoke(CH.secretsSet, key, value),
+    delete: (key: string): Promise<void> => ipcRenderer.invoke(CH.secretsDelete, key),
+    encryptionAvailable: (): Promise<boolean> => ipcRenderer.invoke(CH.secretsEncryptionAvailable),
+  },
+  auth: {
+    status: (kind: AgentKind, reconnect?: boolean): Promise<AuthState> =>
+      ipcRenderer.invoke(CH.authStatus, kind, reconnect),
+    login: (kind: AgentKind): Promise<{ command: string }> => ipcRenderer.invoke(CH.authLogin, kind),
+    logout: (kind: AgentKind): Promise<{ cleared?: boolean; command?: string }> =>
+      ipcRenderer.invoke(CH.authLogout, kind),
+    onChanged: (cb: (state: AuthState) => void) => {
+      const h = (_e: unknown, state: AuthState) => cb(state)
+      ipcRenderer.on(CH.authChanged, h)
+      return () => void ipcRenderer.off(CH.authChanged, h)
+    },
+  },
+  mcp: {
+    list: (): Promise<McpServerConfig[]> => ipcRenderer.invoke(CH.mcpList),
+    add: (input: McpServerInput): Promise<McpServerConfig> => ipcRenderer.invoke(CH.mcpAdd, input),
+    update: (id: string, patch: Partial<McpServerInput>): Promise<McpServerConfig | null> =>
+      ipcRenderer.invoke(CH.mcpUpdate, id, patch),
+    remove: (id: string): Promise<void> => ipcRenderer.invoke(CH.mcpRemove, id),
+    setEnabled: (id: string, enabled: boolean): Promise<void> => ipcRenderer.invoke(CH.mcpSetEnabled, id, enabled),
+    test: (id: string): Promise<ProbeResult> => ipcRenderer.invoke(CH.mcpTest, id),
+  },
+  skills: {
+    list: (cwd?: string): Promise<{ skills: SkillInfo[]; commands: AvailableCommand[] }> =>
+      ipcRenderer.invoke(CH.skillsList, cwd),
+    reveal: (): Promise<void> => ipcRenderer.invoke(CH.skillsReveal),
+  },
+  data: {
+    reveal: (): Promise<void> => ipcRenderer.invoke(CH.dataReveal),
+  },
+  about: {
+    info: (): Promise<{
+      app: string
+      electron: string
+      node: string
+      acpSdk: string | null
+      claudeAdapter: string | null
+      codexAdapter: string | null
+    }> => ipcRenderer.invoke(CH.aboutInfo),
   },
   win: {
     /** Toggle the window between filling the screen and its previous frame. */

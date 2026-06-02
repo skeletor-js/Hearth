@@ -19,12 +19,13 @@ import {
   ndJsonStream,
   PROTOCOL_VERSION,
   type Client,
+  type McpServer,
   type McpServerStdio,
   type RequestPermissionRequest,
   type RequestPermissionResponse,
   type SessionNotification,
 } from '@agentclientprotocol/sdk'
-import type { AgentSession, PermissionRequest, SessionUpdate } from './agent.js'
+import type { AgentSession, AuthMethodInfo, AvailableCommand, PermissionRequest, SessionUpdate } from './agent.js'
 import { normalizeModels, translatePermission, translateUpdate } from './acp-translate.js'
 import { createWriteBroker } from '../self-mod/write-broker.js'
 
@@ -39,6 +40,9 @@ export interface AdapterSpec {
 
 export type UpdateHandler = (sessionId: string, update: SessionUpdate) => void
 export type PermissionHandler = (sessionId: string, req: PermissionRequest) => Promise<string>
+/** Supplies the user's configured MCP servers, resolved (secrets injected) at
+ * session-creation time so tokens never sit in a config file. */
+export type McpServerProvider = () => Promise<McpServer[]>
 
 export class AcpClient {
   private child: ChildProcessWithoutNullStreams | null = null
@@ -49,11 +53,19 @@ export class AcpClient {
   // tool-call id -> title, so tool_call_update notifications (which omit the
   // title) can be displayed with a name. See acp-translate.translateUpdate.
   private toolTitles = new Map<string, string>()
+  // Auth methods the adapter advertised at initialize, and the slash commands /
+  // skills it has surfaced this connection. Both feed Settings (auth + skills).
+  private authMethodsList: AuthMethodInfo[] = []
+  private commands: AvailableCommand[] = []
 
   // A factory, not a resolved spec: resolution (which can throw — missing bin,
   // missing API key) is deferred to connect() so it fails through the connect
-  // rejection path rather than at construction time.
-  constructor(private readonly resolveSpec: () => AdapterSpec) {}
+  // rejection path rather than at construction time. `userMcpServers` supplies
+  // the user's configured MCP servers to merge into each new session.
+  constructor(
+    private readonly resolveSpec: () => AdapterSpec,
+    private readonly userMcpServers?: McpServerProvider,
+  ) {}
 
   async connect(): Promise<void> {
     const spec = this.resolveSpec()
@@ -90,6 +102,12 @@ export class AcpClient {
     const client: Client = {
       sessionUpdate: async (params: SessionNotification) => {
         for (const update of translateUpdate(params.update, this.toolTitles)) {
+          // The agent's advertised slash commands / skills are captured for the
+          // Settings → Skills surface, not streamed into the chat transcript.
+          if (update.type === 'commands') {
+            this.commands = update.commands
+            continue
+          }
           this.emit(params.sessionId, update)
         }
       },
@@ -120,13 +138,31 @@ export class AcpClient {
     }
 
     this.connection = new ClientSideConnection(() => client, stream)
-    await this.connection.initialize({
+    const init = await this.connection.initialize({
       protocolVersion: PROTOCOL_VERSION,
       // fs capability mirrors mediation: ON routes writes through Hearth's broker
       // (scope + merge); OFF means the agent writes directly to disk and the git
       // self-mod layer observes after (the default — see ARCHITECTURE.md).
       clientCapabilities: { fs: { readTextFile: mediate, writeTextFile: mediate } },
     })
+    // The initialize response advertises which auth methods the adapter supports
+    // (env-var / terminal login). Captured for Settings → Auth; we never act on it
+    // automatically (no OAuth rendered — see docs/COMPLIANCE.md).
+    this.authMethodsList = (init?.authMethods ?? []).map((m) => ({
+      id: m.id,
+      name: m.name,
+      description: m.description ?? undefined,
+    }))
+  }
+
+  /** Auth methods the adapter advertised at initialize (empty before connect). */
+  authMethods(): AuthMethodInfo[] {
+    return this.authMethodsList
+  }
+
+  /** Slash commands / skills the agent has advertised this connection. */
+  advertisedCommands(): AvailableCommand[] {
+    return this.commands
   }
 
   // Give the agent the Hearth MCP tools (view_app / read_ui / click / fill /
@@ -158,7 +194,11 @@ export class AcpClient {
     // The session's task cwd (the workspace) may differ from the connect-time
     // cwd (REPO_ROOT). The MCP bridge stays anchored at REPO_ROOT (this.cwd).
     const sessionCwd = opts?.cwd ?? this.cwd
-    const res = await connection.newSession({ cwd: sessionCwd, mcpServers: this.bridgeMcpServers() })
+    // Built-in bridge + the user's configured servers (secrets resolved here, at
+    // session creation, so tokens never sit in a config file).
+    const userServers = this.userMcpServers ? await this.userMcpServers().catch(() => []) : []
+    const mcpServers: McpServer[] = [...this.bridgeMcpServers(), ...userServers]
+    const res = await connection.newSession({ cwd: sessionCwd, mcpServers })
     const sessionId = res.sessionId
     const models = normalizeModels(res.models)
 

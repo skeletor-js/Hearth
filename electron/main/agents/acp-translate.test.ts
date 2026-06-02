@@ -199,6 +199,28 @@ describe('translateUpdate', () => {
     expect(translateUpdate(u({ sessionUpdate: 'usage_update' }), titles())).toEqual([])
   })
 
+  test('available_commands_update -> commands update (name + description)', () => {
+    const out = translateUpdate(
+      u({
+        sessionUpdate: 'available_commands_update',
+        availableCommands: [
+          { name: 'deep-research', description: 'Run a research harness' },
+          { name: 'verify', description: null },
+        ],
+      }),
+      titles(),
+    )
+    expect(out).toEqual([
+      {
+        type: 'commands',
+        commands: [
+          { name: 'deep-research', description: 'Run a research harness' },
+          { name: 'verify', description: undefined },
+        ],
+      },
+    ])
+  })
+
   test('plan -> plan update carrying entries (content/status/priority)', () => {
     const out = translateUpdate(
       u({

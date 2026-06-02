@@ -65,6 +65,32 @@ export const HEARTH_CHANNELS = {
   personalityGet: 'personality:get',
   personalitySet: 'personality:set',
   memoryGet: 'memory:get',
+  memoryClear: 'memory:clear',
+  // secrets: encrypted local store (BYO API keys + MCP env). Renderer sets/clears
+  // and sees names only — never reads a value back.
+  secretsList: 'secrets:list',
+  secretsSet: 'secrets:set',
+  secretsDelete: 'secrets:delete',
+  secretsEncryptionAvailable: 'secrets:encryption-available',
+  // auth: ACP-native auth status + guided login (no OAuth rendered, no token stored).
+  authStatus: 'auth:status',
+  authLogin: 'auth:login',
+  authLogout: 'auth:logout',
+  authChanged: 'auth:changed', // main → renderer
+  // MCP servers the user adds (merged into each new ACP session).
+  mcpList: 'mcp:list',
+  mcpAdd: 'mcp:add',
+  mcpUpdate: 'mcp:update',
+  mcpRemove: 'mcp:remove',
+  mcpSetEnabled: 'mcp:set-enabled',
+  mcpTest: 'mcp:test',
+  // skills: read-only discovery of Claude Code skills (global + workspace).
+  skillsList: 'skills:list',
+  skillsReveal: 'skills:reveal',
+  // data & privacy.
+  dataReveal: 'data:reveal', // open the data folder
+  // about: app + adapter/SDK versions.
+  aboutInfo: 'about:info',
   // window chrome: double-click the title-bar strip to zoom (fill) / restore.
   windowZoomToggle: 'window:zoom-toggle',
   microAppCreate: 'micro-app:create',

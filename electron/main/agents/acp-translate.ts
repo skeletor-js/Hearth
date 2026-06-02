@@ -150,8 +150,21 @@ export function translateUpdate(
         },
       ]
 
-    // mode/config/usage/command updates, and the echo of the user's own
-    // message aren't part of the chat surface.
+    case 'available_commands_update':
+      // The agent's advertised slash commands / skills. Not chat content — the
+      // client caches these for the Settings → Skills surface.
+      return [
+        {
+          type: 'commands',
+          commands: update.availableCommands.map((c) => ({
+            name: c.name,
+            description: c.description ?? undefined,
+          })),
+        },
+      ]
+
+    // mode/config/usage updates, and the echo of the user's own message aren't
+    // part of the chat surface.
     default:
       return []
   }

@@ -8,7 +8,7 @@
 // env. We never originate or store a credential. See docs/COMPLIANCE.md.
 
 import { AcpAgent, resolveAdapterBin } from './acp-agent.js'
-import { type AdapterSpec } from './acp-client.js'
+import { type AdapterSpec, type McpServerProvider } from './acp-client.js'
 import type { AgentConfig } from './agent.js'
 
 function resolveAdapter(config: AgentConfig): AdapterSpec {
@@ -21,9 +21,9 @@ function resolveAdapter(config: AgentConfig): AdapterSpec {
   // plain Node/Bun runtime.)
   const env: Record<string, string> = { ELECTRON_RUN_AS_NODE: '1' }
   if (config.auth.mode === 'api-key') {
-    const key = process.env[config.auth.envVar]
-    if (!key) throw new Error(`API key env var ${config.auth.envVar} is not set`)
-    env.OPENAI_API_KEY = key
+    // The key is the user's own (encrypted in our store, or from their env); we
+    // pass it to the child's env, never persisting it ourselves. See COMPLIANCE.md.
+    env.OPENAI_API_KEY = config.auth.key
   }
   // subscription mode: inject nothing; the adapter uses the user's `codex login`
   // (~/.codex), the same credential the `codex` CLI uses.
@@ -32,7 +32,7 @@ function resolveAdapter(config: AgentConfig): AdapterSpec {
 }
 
 export class CodexAgent extends AcpAgent {
-  constructor(config: AgentConfig) {
-    super('codex', () => resolveAdapter(config))
+  constructor(config: AgentConfig, userMcpServers?: McpServerProvider) {
+    super('codex', () => resolveAdapter(config), userMcpServers)
   }
 }

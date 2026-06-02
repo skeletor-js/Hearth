@@ -4,7 +4,7 @@
 // from whichever agent is live and re-points them on switch. The per-window
 // session also lives here, so a switch transparently starts a fresh session.
 
-import type { Agent, AgentKind, AgentSession, ModelState, PermissionRequest, SessionUpdate } from './agent.js'
+import type { Agent, AgentKind, AgentSession, AuthMethodInfo, AvailableCommand, ModelState, PermissionRequest, SessionUpdate } from './agent.js'
 
 export type AgentFactory = (kind: AgentKind) => Agent
 type UpdateHandler = (sessionId: string, update: SessionUpdate) => void
@@ -137,6 +137,28 @@ export class AgentHost {
     await this.teardown()
     this.currentKind = kind
     await this.connect()
+  }
+
+  /** Rebuild the current backend from scratch — used when its credential changed
+   * after connect (a new/cleared API key only takes effect on a fresh spawn). */
+  async reconnect(): Promise<void> {
+    await this.teardown()
+    await this.connect()
+  }
+
+  /** True once the current backend's adapter is spawned + initialized. */
+  isConnected(): boolean {
+    return this.agent != null
+  }
+
+  /** Auth methods the current backend advertised at initialize (empty if down). */
+  authMethods(): AuthMethodInfo[] {
+    return this.agent?.authMethods?.() ?? []
+  }
+
+  /** Slash commands / skills the current backend has advertised. */
+  advertisedCommands(): AvailableCommand[] {
+    return this.agent?.advertisedCommands?.() ?? []
   }
 
   private async teardown(): Promise<void> {

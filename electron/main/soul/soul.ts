@@ -100,4 +100,15 @@ export class SoulService {
     const block = readBlock(content, 'memory')
     return block ? block.replace(/^## Memory\n*/, '').trim() : ''
   }
+
+  /** Replace the Memory block across all backends (Settings → Memory clear).
+   * Leaves the Operating + Soul block and the user's own content untouched. */
+  async setMemory(memory: string): Promise<void> {
+    for (const b of this.backends) {
+      const path = globalInstructionsPath(b)
+      const content = upsertBlock(await readMaybe(path), 'memory', `## Memory\n\n${memory.trim() || '_(empty)_'}`)
+      await mkdir(dirname(path), { recursive: true })
+      await writeFile(path, content)
+    }
+  }
 }

@@ -46,7 +46,38 @@ export type SessionUpdate =
   | { type: 'tool-call'; id: string; title: string; status: 'pending' | 'running' | 'done' | 'error'; parentToolCallId?: string }
   | { type: 'diff'; path: string; oldText: string | null; newText: string; parentToolCallId?: string }
   | { type: 'plan'; entries: PlanEntry[] }
+  | { type: 'commands'; commands: AvailableCommand[] }
   | { type: 'end'; stopReason: string }
+
+/** A slash command / skill the agent advertises (mirrors ACP `AvailableCommand`). */
+export interface AvailableCommand {
+  name: string
+  description?: string
+}
+
+/** An auth method the backend's ACP adapter advertises in its initialize response. */
+export interface AuthMethodInfo {
+  id: string
+  name: string
+  description?: string
+}
+
+/** What the renderer needs to show truthful per-backend auth state. We never claim
+ * a subscription is "verified" — we report which credential mode is in effect and
+ * whether the adapter connected. See docs/COMPLIANCE.md. */
+export interface AuthState {
+  kind: AgentKind
+  /** Credential mode actually in effect for this backend. */
+  mode: 'api-key' | 'subscription'
+  /** Where the API key came from, when mode is api-key. */
+  keySource?: 'secret' | 'env'
+  /** The ACP handshake completed (the adapter spawned + initialized). */
+  connected: boolean
+  /** Connect error, when the adapter failed to come up. */
+  error?: string
+  /** Auth methods the adapter advertises (drives the login affordances). */
+  methods: AuthMethodInfo[]
+}
 
 /** One option the user can pick when answering a permission ask. */
 export interface PermissionOption {

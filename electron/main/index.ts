@@ -1,14 +1,18 @@
 // App entry. Wires services and opens the window. Thin by design — all feature
 // logic lives in the renderer (which is self-editable) or in the named services.
 
-import { app, BrowserWindow } from 'electron'
+import { app, safeStorage, BrowserWindow } from 'electron'
 import { createMainWindow, createSnapshotWindow } from './window.js'
 import { registerIpc } from './ipc.js'
 import { ClaudeAgent } from './agents/claude.js'
 import { CodexAgent } from './agents/codex.js'
 import { FakeAgent } from './agents/fake.js'
-import { AgentHost } from './agents/agent-host.js'
-import type { Agent, AgentAuth, AgentKind } from './agents/agent.js'
+import { AgentHost, type AgentFactory } from './agents/agent-host.js'
+import type { Agent, AgentKind } from './agents/agent.js'
+import { resolveAuth } from './agents/auth-config.js'
+import { SecretStore, safeStorageBackend } from './secrets/secret-store.js'
+import { McpRegistry } from './mcp/registry.js'
+import { toAcpServers } from './mcp/to-acp.js'
 import { SelfModService } from './self-mod/self-mod-service.js'
 import { HmrController } from './self-mod/hmr.js'
 import { BootWatchdog } from './self-mod/boot-watchdog.js'
@@ -32,25 +36,20 @@ function resolveBackend(): AgentKind {
   return process.env.HEARTH_AGENT?.toLowerCase() === 'codex' ? 'codex' : 'claude'
 }
 
-// Pick the auth mode from the environment, no code edit required. The API-key env
-// var is backend-specific; if it's set we use BYO-key (the deterministic,
-// COMPLIANCE-blessed path), otherwise subscription — the adapter reads the user's
-// existing `claude login` / `codex login` (env token or the OS Keychain).
-// We never originate or store a credential — see docs/COMPLIANCE.md.
-function resolveAuth(backend: AgentKind): AgentAuth {
-  const envVar = backend === 'codex' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY'
-  if (process.env[envVar]) return { mode: 'api-key', envVar }
-  return { mode: 'subscription' }
-}
-
-// Build the right backend on demand. HEARTH_FAKE_AGENT=1 forces the scripted
-// agent (UI/permission dev without a live model). Auth is resolved per kind.
-function createAgent(kind: AgentKind): Agent {
-  if (process.env.HEARTH_FAKE_AGENT) return new FakeAgent()
-  const auth = resolveAuth(kind)
-  return kind === 'codex'
-    ? new CodexAgent({ kind: 'codex', cwd: REPO_ROOT, auth })
-    : new ClaudeAgent({ kind: 'claude', cwd: REPO_ROOT, auth })
+// Build the agent factory. Auth resolves per kind (stored BYO key → env key →
+// subscription; see auth-config). The user's configured MCP servers are supplied
+// to each backend, resolved (secrets injected) lazily at session creation so
+// tokens never sit in a config file. HEARTH_FAKE_AGENT=1 forces the scripted
+// agent (UI/permission dev without a live model).
+function makeAgentFactory(secrets: SecretStore, mcp: McpRegistry): AgentFactory {
+  const userMcpServers = async () => toAcpServers(mcp.list(), secrets).servers
+  return (kind: AgentKind): Agent => {
+    if (process.env.HEARTH_FAKE_AGENT) return new FakeAgent()
+    const auth = resolveAuth(kind, secrets)
+    return kind === 'codex'
+      ? new CodexAgent({ kind: 'codex', cwd: REPO_ROOT, auth }, userMcpServers)
+      : new ClaudeAgent({ kind: 'claude', cwd: REPO_ROOT, auth }, userMcpServers)
+  }
 }
 
 async function bootstrap(): Promise<void> {
@@ -76,9 +75,16 @@ async function bootstrap(): Promise<void> {
 
   const window = createMainWindow()
 
+  // Encrypted secret store (BYO API keys + MCP env) and the user's MCP server
+  // registry. Both live under userData. Created before the host because the agent
+  // factory reads them to resolve auth + MCP servers.
+  const dataDir = app.getPath('userData')
+  const secrets = new SecretStore(join(dataDir, 'secrets.json'), safeStorageBackend(safeStorage))
+  const mcp = new McpRegistry(join(dataDir, 'mcp-servers.json'))
+
   // The host owns the current backend and swaps it at runtime; IPC talks to it,
   // not to a fixed agent. Starts on the env-selected backend (default Claude).
-  const host = new AgentHost(createAgent, resolveBackend())
+  const host = new AgentHost(makeAgentFactory(secrets, mcp), resolveBackend())
   console.log(`[hearth] backend: ${host.kind}`)
 
   const hmr = new HmrController({
@@ -125,7 +131,6 @@ async function bootstrap(): Promise<void> {
 
   // Workspaces + sessions persist under userData so they survive restarts and
   // never pollute the repo. Hearth itself is the built-in workspace at REPO_ROOT.
-  const dataDir = app.getPath('userData')
   const workspaces = new WorkspaceRegistry(join(dataDir, 'workspaces.json'), REPO_ROOT)
   const sessions = new SessionStore(join(dataDir, 'sessions'))
 
@@ -138,7 +143,7 @@ async function bootstrap(): Promise<void> {
   // Route captures use a hidden window so the user's view is never disturbed.
   startAgentBridge({ mainWindow: window, createSnapshotWindow, browser }, REPO_ROOT)
 
-  registerIpc({ repoRoot: REPO_ROOT, host, selfMod, workspaces, sessions, browser, window })
+  registerIpc({ repoRoot: REPO_ROOT, host, selfMod, workspaces, sessions, browser, window, secrets, mcp })
 
   // Connect the current backend in the background; the UI renders immediately.
   // A failed connect must surface, not crash boot.

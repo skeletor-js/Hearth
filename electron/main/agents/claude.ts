@@ -7,7 +7,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { type AdapterSpec } from './acp-client.js'
+import { type AdapterSpec, type McpServerProvider } from './acp-client.js'
 import { AcpAgent, resolveAdapterBin } from './acp-agent.js'
 import type { AgentConfig } from './agent.js'
 
@@ -60,9 +60,9 @@ function resolveAdapter(config: AgentConfig): AdapterSpec {
   // plain Node/Bun runtime this var is simply ignored.)
   const env: Record<string, string> = { ELECTRON_RUN_AS_NODE: '1' }
   if (config.auth.mode === 'api-key') {
-    const key = process.env[config.auth.envVar]
-    if (!key) throw new Error(`API key env var ${config.auth.envVar} is not set`)
-    env.ANTHROPIC_API_KEY = key
+    // The key is the user's own (encrypted in our store, or from their env); we
+    // pass it to the child's env, never persisting it ourselves. See COMPLIANCE.md.
+    env.ANTHROPIC_API_KEY = config.auth.key
   }
   // subscription mode: inject nothing; the adapter uses the user's login.
 
@@ -70,9 +70,9 @@ function resolveAdapter(config: AgentConfig): AdapterSpec {
 }
 
 export class ClaudeAgent extends AcpAgent {
-  constructor(config: AgentConfig) {
+  constructor(config: AgentConfig, userMcpServers?: McpServerProvider) {
     // Lazy spec factory: resolution runs in connect() (see AcpAgent) so a missing
     // bin or auth failure surfaces through connect()'s rejection, not construction.
-    super('claude', () => resolveAdapter(config))
+    super('claude', () => resolveAdapter(config), userMcpServers)
   }
 }

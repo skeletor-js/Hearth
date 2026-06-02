@@ -2,7 +2,8 @@
 // Channel names are shared with the preload bridge via the HEARTH_CHANNELS map
 // so the two can't drift.
 
-import { app, dialog, ipcMain, type BrowserWindow } from 'electron'
+import { app, dialog, ipcMain, shell, type BrowserWindow } from 'electron'
+import { createRequire } from 'node:module'
 import { scaffoldMicroApp } from './micro-apps/scaffold.js'
 import { startMicroApp, stopMicroApp } from './micro-apps/server.js'
 import type { WorkspaceRegistry } from './workspaces/registry.js'
@@ -33,7 +34,12 @@ import { runTypecheck } from './self-mod/validate.js'
 import { isSourceMutatingShell } from './self-mod/shell-guard.js'
 import { relative, isAbsolute } from 'node:path'
 import type { AgentHost } from './agents/agent-host.js'
-import type { AgentKind, BackendStatus, PermissionRequest } from '../shared/protocol.js'
+import type { AgentKind, AuthState, BackendStatus, PermissionRequest } from '../shared/protocol.js'
+import type { SecretStore } from './secrets/secret-store.js'
+import { McpRegistry, type McpServerInput } from './mcp/registry.js'
+import { probeServer } from './mcp/probe.js'
+import { resolveAuth, apiKeyRefs } from './agents/auth-config.js'
+import { listSkills, globalSkillsDir } from './skills/list.js'
 
 let runSeq = 0
 
@@ -48,10 +54,12 @@ export interface MainServices {
   sessions: SessionStore
   browser: BrowserManager
   window: BrowserWindow
+  secrets: SecretStore
+  mcp: McpRegistry
 }
 
 export function registerIpc(services: MainServices): void {
-  const { repoRoot, host, selfMod, workspaces, sessions, browser, window } = services
+  const { repoRoot, host, selfMod, workspaces, sessions, browser, window, secrets, mcp } = services
 
   // Self-mod run tracking (W0): attribute streamed writes to subagents, drive the
   // concurrency gate, and pin the overlay during parallel-subagent phases.
@@ -293,6 +301,107 @@ export function registerIpc(services: MainServices): void {
     return selfMod.commitManaged(['.hearth/personality.json'], 'update personality', 'soul')
   })
   ipcMain.handle(HEARTH_CHANNELS.memoryGet, () => soul.getMemory())
+  ipcMain.handle(HEARTH_CHANNELS.memoryClear, () => soul.setMemory(''))
+
+  // Secrets: encrypted local store. The renderer sets/clears and lists names only;
+  // values are read only by main (auth + MCP env resolution).
+  ipcMain.handle(HEARTH_CHANNELS.secretsList, () => secrets.list())
+  ipcMain.handle(HEARTH_CHANNELS.secretsSet, (_e, key: string, value: string) => secrets.set(key, value))
+  ipcMain.handle(HEARTH_CHANNELS.secretsDelete, (_e, key: string) => secrets.delete(key))
+  ipcMain.handle(HEARTH_CHANNELS.secretsEncryptionAvailable, () => secrets.encryptionAvailable)
+
+  // Auth: truthful per-backend status + guided login. We render no OAuth and store
+  // no subscription token (docs/COMPLIANCE.md) — login drops the user into a real
+  // shell to run the CLI themselves; we only re-check status after.
+  const authStatusFor = async (kind: AgentKind, reconnect: boolean): Promise<AuthState> => {
+    const auth = resolveAuth(kind, secrets)
+    const base: AuthState = {
+      kind,
+      mode: auth.mode,
+      keySource: auth.mode === 'api-key' ? auth.source : undefined,
+      connected: false,
+      methods: [],
+    }
+    // Live connection state only applies to the active backend (the only one with
+    // a spawned adapter). The inactive backend reports its credential mode only.
+    if (kind !== host.kind) return base
+    if (reconnect) {
+      try {
+        await host.reconnect()
+      } catch {
+        /* surfaced via the connect attempt below */
+      }
+    }
+    try {
+      await host.connect()
+      return { ...base, connected: host.isConnected(), methods: host.authMethods() }
+    } catch (err) {
+      return { ...base, error: String(err instanceof Error ? err.message : err) }
+    }
+  }
+  ipcMain.handle(HEARTH_CHANNELS.authStatus, (_e, kind: AgentKind, reconnect?: boolean) =>
+    authStatusFor(kind, !!reconnect),
+  )
+  // The login command the user runs themselves (in Hearth's terminal or their own).
+  ipcMain.handle(HEARTH_CHANNELS.authLogin, (_e, kind: AgentKind) => ({
+    command: kind === 'codex' ? 'codex login' : 'claude login',
+  }))
+  ipcMain.handle(HEARTH_CHANNELS.authLogout, async (_e, kind: AgentKind) => {
+    const auth = resolveAuth(kind, secrets)
+    if (auth.mode === 'api-key' && auth.source === 'secret') {
+      // Our stored key — we can actually clear it, then rebuild so the change takes.
+      secrets.delete(apiKeyRefs(kind).secretKey)
+      if (kind === host.kind) await host.reconnect().catch(() => {})
+      window.webContents.send(HEARTH_CHANNELS.authChanged, await authStatusFor(kind, false))
+      return { cleared: true }
+    }
+    // Subscription (or env key): the credential is the CLI's, not ours to delete —
+    // hand back the command for the user to run.
+    return { command: kind === 'codex' ? 'codex logout' : 'claude logout' }
+  })
+
+  // MCP servers the user adds (merged into each new ACP session).
+  ipcMain.handle(HEARTH_CHANNELS.mcpList, () => mcp.list())
+  ipcMain.handle(HEARTH_CHANNELS.mcpAdd, (_e, input: McpServerInput) => mcp.add(input))
+  ipcMain.handle(HEARTH_CHANNELS.mcpUpdate, (_e, id: string, patch: Partial<McpServerInput>) => mcp.update(id, patch))
+  ipcMain.handle(HEARTH_CHANNELS.mcpRemove, (_e, id: string) => mcp.remove(id))
+  ipcMain.handle(HEARTH_CHANNELS.mcpSetEnabled, (_e, id: string, enabled: boolean) => mcp.setEnabled(id, enabled))
+  ipcMain.handle(HEARTH_CHANNELS.mcpTest, async (_e, id: string) => {
+    const cfg = mcp.get(id)
+    if (!cfg) return { ok: false, error: 'Server not found' }
+    return probeServer(cfg, secrets)
+  })
+
+  // Skills: read-only discovery (global + the active workspace).
+  ipcMain.handle(HEARTH_CHANNELS.skillsList, (_e, cwd?: string) => ({
+    skills: listSkills(cwd || repoRoot),
+    commands: host.advertisedCommands(),
+  }))
+  ipcMain.handle(HEARTH_CHANNELS.skillsReveal, () => void shell.openPath(globalSkillsDir()))
+
+  // Data & privacy: reveal the on-disk data folder backing the "stays on your
+  // machine" claim.
+  ipcMain.handle(HEARTH_CHANNELS.dataReveal, () => void shell.openPath(app.getPath('userData')))
+
+  // About: app + adapter/SDK versions.
+  ipcMain.handle(HEARTH_CHANNELS.aboutInfo, () => {
+    const require = createRequire(import.meta.url)
+    const ver = (pkg: string): string | null => {
+      try {
+        return (require(`${pkg}/package.json`) as { version?: string }).version ?? null
+      } catch {
+        return null
+      }
+    }
+    return {
+      app: app.getVersion(),
+      electron: process.versions.electron,
+      node: process.versions.node,
+      acpSdk: ver('@agentclientprotocol/sdk'),
+      claudeAdapter: ver('@zed-industries/claude-agent-acp'),
+      codexAdapter: ver('@agentclientprotocol/codex-acp'),
+    }
+  })
 
   // Double-clicking the title-bar strip zooms the window to fill the screen, and
   // again restores the previous frame (macOS "zoom"). maximize/unmaximize remembers
