@@ -100,14 +100,18 @@ export function selfModOverlay(repoRoot: string): Plugin {
   // catches every source (index.html, new route files, route-tree regen, change),
   // unlike handleHotUpdate which misses HTML and file-add reloads. hmr `update`
   // messages still pass through, so component edits keep hot-swapping live.
-  let turnActive = false
+  // Refcount, not a boolean: overlapping turns (e.g. a rapid re-send, or a retry
+  // after an error) must not let one turn's end disable suppression for another.
+  let turnCount = 0
   let turnTimer: ReturnType<typeof setTimeout> | null = null
   const setTurn = (active: boolean) => {
-    turnActive = active
+    turnCount = active ? turnCount + 1 : Math.max(0, turnCount - 1)
     if (turnTimer) clearTimeout(turnTimer)
     turnTimer = null
-    if (active) turnTimer = setTimeout(() => { turnActive = false }, TURN_AUTOCLEAR_MS)
+    // Auto-clear if a turn-end is ever missed (crash mid-turn) — never suppress forever.
+    if (turnCount > 0) turnTimer = setTimeout(() => { turnCount = 0 }, TURN_AUTOCLEAR_MS)
   }
+  const turnActive = () => turnCount > 0
 
   // Wrap an HMR channel's `send` so `full-reload` messages are dropped while a turn
   // is active. Idempotent. Best-effort: if the shape changes, we just don't suppress.
@@ -116,7 +120,7 @@ export function selfModOverlay(repoRoot: string): Plugin {
     const orig = ch.send.bind(ch)
     ch.send = (...args: unknown[]) => {
       const msg = args[0] as { type?: string } | undefined
-      if (turnActive && msg && typeof msg === 'object' && msg.type === 'full-reload') return
+      if (turnActive() && msg && typeof msg === 'object' && msg.type === 'full-reload') return
       return orig(...args)
     }
     ch.__hearthWrapped = true
