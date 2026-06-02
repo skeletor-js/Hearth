@@ -75,6 +75,10 @@ export function Rail() {
             <Icon name="clock-counter-clockwise" />
             <span className="ri-label">History</span>
           </Link>
+          <Link to="/demo-calendar" className={itemClass(pathname === '/demo-calendar')}>
+            <Icon name="calendar-blank" />
+            <span className="ri-label">CLICK THIS</span>
+          </Link>
         </div>
 
         <div className="rail-group">
