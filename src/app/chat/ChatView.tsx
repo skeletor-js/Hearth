@@ -181,6 +181,10 @@ export function ChatView() {
           }
           return rebuild([...steps, { kind: 'edit', status: 'done', title: `Edit ${basename(u.path)}`, diff }], curEdits + 1)
         }
+        case 'commands':
+          // The agent's advertised slash commands / skills are captured for
+          // Settings, never rendered into the chat transcript.
+          return prev
         case 'end': {
           openText.current = false
           // Attach a result summary to the turn's last trace block (a closing

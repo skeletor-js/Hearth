@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { Icon } from '@/shell/Icon'
 import { useShell, ACCENT_OPTIONS, type Accent } from '@/shell/store'
 import { Seg, SetRow, Switch, SecLabel } from '@/app/settings/controls'
+import { AuthSection } from '@/app/settings/sections/AuthSection'
+import { ConnectorsSection } from '@/app/settings/sections/ConnectorsSection'
+import { SkillsSection } from '@/app/settings/sections/SkillsSection'
+import { SecretsSection } from '@/app/settings/sections/SecretsSection'
+import { MemorySection, SelfModSection, DataPrivacySection, AboutSection } from '@/app/settings/sections/SystemSections'
 import type { AgentKind, ModelState } from '../../electron/shared/protocol'
 import type { SoulConfig } from '../../electron/main/soul/soul'
 
@@ -16,11 +20,12 @@ function SettingsScreen() {
   const [memory, setMemory] = useState('')
 
   const loadModels = () => void window.hearth.agent.getModels().then(setModels)
+  const loadMemory = () => void window.hearth.memory.get().then(setMemory)
   useEffect(() => {
     void window.hearth.agent.getBackend().then(setBackend)
     loadModels()
     void window.hearth.personality.get().then(setSoul)
-    void window.hearth.memory.get().then(setMemory)
+    loadMemory()
     const offBe = window.hearth.agent.onBackendChanged((st) => {
       setBackend(st.kind)
       loadModels()
@@ -52,22 +57,13 @@ function SettingsScreen() {
       <div className="screen-inner narrow">
         <h1 className="screen-title">Settings</h1>
         <p className="screen-sub">
-          Your files and conversations stay on your machine. Hearth only talks to the agents you connect.
+          Your files and conversations stay on your machine. Hearth drives the agents you sign into — it never hosts
+          them or stores their credentials.
         </p>
 
-        <SecLabel icon="user-circle">Account</SecLabel>
-        <SetRow k="Signed in" h="Local profile · this machine">
-          <span className="chip">
-            <Icon name="user" /> you@hearth.local
-          </span>
-        </SetRow>
-        <SetRow k="Keys" h="Bring your own subscription or API keys — nothing core is gated.">
-          <span className="chip">
-            <span className="dot ok" /> Bring-your-own keys
-          </span>
-        </SetRow>
+        <AuthSection />
 
-        <SecLabel icon="plugs-connected">Agent</SecLabel>
+        <SecLabel icon="robot">Agent</SecLabel>
         <SetRow k="Default backend" h="Which ACP agent new sessions start with.">
           <Seg<AgentKind> value={backend} options={[['claude', 'Claude'], ['codex', 'Codex']]} onChange={setBe} />
         </SetRow>
@@ -94,25 +90,9 @@ function SettingsScreen() {
           />
         </SetRow>
 
-        <SecLabel icon="palette">Appearance</SecLabel>
-        <SetRow k="Theme">
-          <Seg value={s.theme} options={[['light', 'Light'], ['dark', 'Dark']]} onChange={s.setTheme} />
-        </SetRow>
-        <SetRow k="Accent">
-          <div className="swatch-row">
-            {ACCENT_OPTIONS.map((c: Accent) => (
-              <button
-                key={c}
-                className={'swatch' + (s.accent === c ? ' on' : '')}
-                style={{ background: c }}
-                onClick={() => s.setAccent(c)}
-              />
-            ))}
-          </div>
-        </SetRow>
-        <SetRow k="Reduce motion" h="Pause the ember and other ambient animation.">
-          <Switch on={s.reduceMotion} onChange={s.setReduceMotion} />
-        </SetRow>
+        <ConnectorsSection />
+        <SkillsSection />
+        <SecretsSection />
 
         <SecLabel icon="chat-text">Personality</SecLabel>
         {soul && (
@@ -133,17 +113,31 @@ function SettingsScreen() {
           </>
         )}
 
-        <SecLabel icon="brain">Memory</SecLabel>
-        <SetRow k="Long-term memory" h="Managed through chat — say “remember this” or “forget that”. Read every session.">
-          <span className="chip">
-            <Icon name="file-text" /> {memory ? 'In use' : 'Empty'}
-          </span>
+        <MemorySection memory={memory} onChanged={loadMemory} />
+        <SelfModSection />
+        <DataPrivacySection />
+
+        <SecLabel icon="palette">Appearance</SecLabel>
+        <SetRow k="Theme">
+          <Seg value={s.theme} options={[['light', 'Light'], ['dark', 'Dark']]} onChange={s.setTheme} />
         </SetRow>
-        {memory && (
-          <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'var(--mono)', fontSize: 'var(--t-11_5)', color: 'var(--subtle)', padding: '4px 2px' }}>
-            {memory}
-          </pre>
-        )}
+        <SetRow k="Accent">
+          <div className="swatch-row">
+            {ACCENT_OPTIONS.map((c: Accent) => (
+              <button
+                key={c}
+                className={'swatch' + (s.accent === c ? ' on' : '')}
+                style={{ background: c }}
+                onClick={() => s.setAccent(c)}
+              />
+            ))}
+          </div>
+        </SetRow>
+        <SetRow k="Reduce motion" h="Pause the ember and other ambient animation.">
+          <Switch on={s.reduceMotion} onChange={s.setReduceMotion} />
+        </SetRow>
+
+        <AboutSection />
       </div>
     </div>
   )
