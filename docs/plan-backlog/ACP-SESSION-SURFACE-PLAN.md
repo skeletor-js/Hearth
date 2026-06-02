@@ -111,15 +111,15 @@ Each phase is independently shippable and independently `/goal`-able. Workstream
 (`W1`–`W12`) are preserved as stable labels; the phases organize them by dependency
 and value.
 
-| Phase | What | Workstreams | Risk / tier |
+| Phase | What | Workstreams | Status |
 |---|---|---|---|
-| **1A** | Session/composer surface — renderer only | rail rename + New Session, chip rework, agent-settings popover | Renderer-only, hot-reload, low risk |
-| **1B** | Plumb modes + config options + usage generically | W4, W5, W8 | Main + shared, one restart |
-| **2** | Richer prompt input + command palette | W1, W6 | Renderer-leaning, low cost |
-| **3** | Terminal capability | W2 | Main, medium cost, verify-first |
-| **4** | Session persistence / resume / fork / list | W3, W9 | Main + UI, highest surface area |
-| **opportunistic** | Elicitation | W7 | Build when a use case demands it |
-| **context** | MCP path, fs broker, `_meta` options | W10, W11, W12 | Not new work; catalogued |
+| **1A** | Session/composer surface — renderer only | rail rename + New Session, chip rework, agent-settings popover | ✅ done (`a88e494`) |
+| **1B** | Plumb modes + config options + usage generically | W4, W5, W8 | ✅ done (`12c3e7e`) |
+| **2** | Richer prompt input + command palette | W1, W6 | ✅ done (`e9fe40f`) |
+| **3** | Terminal capability | W2 | ⛔ verified inert with current adapters — not built |
+| **4** | Session persistence / resume + titles | W3, W9 | ✅ done (resume + titles; fork/list deferred) |
+| **opportunistic** | Elicitation | W7 | not built (no use case yet) |
+| **context** | MCP path, fs broker, `_meta` options | W10, W11, W12 | catalogued, not new work |
 
 Rationale for the order: Phase 1A fixes visible bugs with zero restart cost and
 builds the **agent-settings popover** that 1B fills. Phase 1B is the shared
@@ -701,3 +701,33 @@ The only achievable lever today is Claude's `_meta.terminal_output` *visibility*
 channel (no control/cancel/sandbox; Claude-only `_meta`, not parity-clean, and
 largely duplicative of the tool-call trace that already shows Bash steps).
 Deprioritized for the same reasons as W12. No code written for Phase 3.
+
+### Phase 4 — W3 session resume + W9 titles (done)
+
+- **W3** (`sessions/store`, `agent`/`acp-agent`/`acp-client`/`agent-host`, `ipc`):
+  persist the ACP session id per Hearth session (`SessionMeta.acpSessionId`, set on
+  the first turn via `ipc` → `store.setAcpSessionId`). When a reopened session's
+  in-memory ACP session is gone (app restart / backend switch), the host resumes
+  real agent context via ACP `loadSession` (`agent.resumeSession`) instead of a cold
+  `newSession`, falling back to fresh on failure. `acp-client.resumeSession`
+  suppresses the adapter's replay notifications (`replaying` flag + `CHAT_CONTENT_UPDATES`)
+  because Hearth already renders the transcript from its own store — so reopened
+  sessions restore context without double-rendering. Refactored `acp-client` to share
+  `buildSession()` between new and resumed sessions. A resumed session keeps its
+  persisted model/mode (no Default-baseline reset).
+
+  **Verified live across a real app restart** (the meaningful test, since resume only
+  triggers once the in-memory cache is gone): turn 1 stored "BANANA77"; the ACP id
+  persisted to the store; a forced main restart cleared the host cache; turn 2 on the
+  same session recalled "BANANA77" via `loadSession`, and the chat showed only the
+  new reply — no replayed flood (suppression confirmed).
+
+- **W9** (`protocol`/`acp-translate`/`ChatView`): translate `session_info_update` →
+  `info` update; ChatView renames the active session to the agent-supplied title and
+  refreshes the rail. Claude (0.23.1) doesn't emit it — Hearth's first-user-line
+  auto-title still covers Claude; Codex emits it. Pure translate unit-tested.
+
+- **Not done (lower-tier W3 extras):** `session/fork` (branch a conversation —
+  Claude-only) and `session/list` (enumerate the adapter's own sessions — Hearth
+  already has its own session index, so low incremental value). Both are clean
+  follow-ons on the `resumeSession` foundation if a use case arises.
