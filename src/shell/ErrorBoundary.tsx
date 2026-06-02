@@ -2,7 +2,7 @@
 // forwarded build errors / post-edit typecheck failures, and shows the CrashSurface
 // with Reload / Repair / Undo. The authoritative recovery net is main-anchored
 // (index.ts watches render-process-gone) so it survives even if this boundary is
-// itself broken by a self-edit. See docs/SELF-MOD-HARDENING-PLAN.md (W3).
+// itself broken by a self-edit. See docs/completed-plans/SELF-MOD-HARDENING-PLAN.md (W3).
 
 import { Component, type ReactNode } from 'react'
 import { CrashSurface } from './CrashSurface'

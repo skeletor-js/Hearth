@@ -2,7 +2,7 @@
 // when a self-edit crashes the renderer or fails to build. Offers Reload, Ask
 // Hearth to repair (one guarded auto-attempt + a manual button), and Undo latest.
 // The authoritative net is main-anchored (see index.ts render-process-gone) — this
-// is the in-renderer UX. See docs/SELF-MOD-HARDENING-PLAN.md (W3).
+// is the in-renderer UX. See docs/completed-plans/SELF-MOD-HARDENING-PLAN.md (W3).
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 

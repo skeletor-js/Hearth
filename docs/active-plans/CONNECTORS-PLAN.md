@@ -26,7 +26,7 @@ Verified, this already works end-to-end:
 
 - **Claude** (`@zed-industries/claude-agent-acp`): the adapter sets
   `settingSources: ["user","project","local"]`
-  ([acp-agent.js:954](../node_modules/@zed-industries/claude-agent-acp/dist/acp-agent.js))
+  ([acp-agent.js:954](../../node_modules/@zed-industries/claude-agent-acp/dist/acp-agent.js))
   and merges those MCP servers with Hearth's:
   `mcpServers: { ...userProvidedOptions?.mcpServers, ...mcpServers }` (line 967).
   So anything from `claude mcp add` (`~/.claude.json`), project `.mcp.json`, or
@@ -35,8 +35,8 @@ Verified, this already works end-to-end:
 - **Codex** (`@agentclientprotocol/codex-acp`): `createSessionConfig` reads
   `~/.codex/config.toml` `mcp_servers` via `configRead({ includeLayers: true })`
   and merges Hearth's ACP servers on top, deduped by name
-  ([index.js:19235+](../node_modules/@agentclientprotocol/codex-acp/dist/index.js)).
-- **Terminal** ([pty.ts](../electron/main/terminal/pty.ts)): spawns the user's real
+  ([index.js:19235+](../../node_modules/@agentclientprotocol/codex-acp/dist/index.js)).
+- **Terminal** ([pty.ts](../../electron/main/terminal/pty.ts)): spawns the user's real
   `$SHELL` with inherited `HOME`/env and `cwd = workspace`. So
   `claude mcp add …` / `codex mcp …` run in the Hearth terminal write to the exact
   config the adapters read. No new wiring needed for the happy path.
@@ -45,8 +45,8 @@ Verified, this already works end-to-end:
 
 1. **The ceiling is the vendored adapter, not the CLI release.** Hearth is pinned
    to `@zed-industries/claude-agent-acp` and `codex-acp@0.0.44`
-   ([claude.ts](../electron/main/agents/claude.ts),
-   [codex.ts](../electron/main/agents/codex.ts)). "Always current" requires
+   ([claude.ts](../../electron/main/agents/claude.ts),
+   [codex.ts](../../electron/main/agents/codex.ts)). "Always current" requires
    deliberately bumping those. → Track A4.
 2. **Backend-asymmetric (per-CLI config).** A server set up in Claude won't appear
    under Codex, because delegation puts each connector in that CLI's own config
@@ -54,9 +54,9 @@ Verified, this already works end-to-end:
    everywhere" is really "works per-CLI." This is a config-ownership consequence,
    **not** a transport limitation: both adapters accept connectors over ACP —
    Claude advertises `mcpCapabilities { http: true, sse: true }`
-   ([acp-agent.js:124](../node_modules/@zed-industries/claude-agent-acp/dist/acp-agent.js)),
+   ([acp-agent.js:124](../../node_modules/@zed-industries/claude-agent-acp/dist/acp-agent.js)),
    Codex advertises `{ http: true, sse: false }`
-   ([index.js:19905](../node_modules/@agentclientprotocol/codex-acp/dist/index.js)).
+   ([index.js:19905](../../node_modules/@agentclientprotocol/codex-acp/dist/index.js)).
    The only push-time gap is that Codex throws on **SSE** servers (a deprecated MCP
    transport; modern remote servers use Streamable HTTP, which Codex accepts), and
    that only matters in the deferred-broker path where Hearth pushes servers
@@ -72,18 +72,18 @@ Verified, this already works end-to-end:
 ## Already built (verified — do not rebuild)
 
 - **Browser as a persistent, shared, authenticated session.**
-  [browser-view.ts](../electron/main/browser/browser-view.ts) uses a
+  [browser-view.ts](../../electron/main/browser/browser-view.ts) uses a
   `persist:hearth-browser` partition (cookies/logins survive restarts) and the
   agent drives the **same** webContents via `browser_navigate/read/screenshot/
-  click/fill/eval` ([hearth-mcp-server.mjs:222+](../electron/main/agent-tools/hearth-mcp-server.mjs#L222)).
+  click/fill/eval` ([hearth-mcp-server.mjs:222+](../../electron/main/agent-tools/hearth-mcp-server.mjs#L222)).
   The tool description states it operates "behind the user's login." This is the
   primary answer for any service without a good MCP server.
 - **Panel toggles already exist** in the titlebar `tb-right`
-  ([__root.tsx Titlebar](../src/routes/__root.tsx)) and the work panel already
+  ([__root.tsx Titlebar](../../src/routes/__root.tsx)) and the work panel already
   separates `ALWAYS_TABS = {files, scratchpad, terminal, browser}` from
-  session-contextual tabs ([WorkPanel.tsx](../src/app/workbench/WorkPanel.tsx)).
+  session-contextual tabs ([WorkPanel.tsx](../../src/app/workbench/WorkPanel.tsx)).
   They are simply gated behind `isSession` (`pathname === '/chat'`).
-- **Custom MCP server registry** ([registry.ts](../electron/main/mcp/registry.ts)
+- **Custom MCP server registry** ([registry.ts](../../electron/main/mcp/registry.ts)
   + Settings → Connectors) still exists for stdio/http servers Hearth itself
   injects. It keeps working; it's just no longer the headline path. The known bugs
   (id-keyed secrets, cleanup on remove) are folded into Track A as low-priority
@@ -99,7 +99,7 @@ Goal: setting up a connector is a guided action inside Hearth, and the user can
 - **A0 — Truthful per-backend auth status for BOTH backends (prerequisite).**
   Today `authStatusFor` only verifies a live connection for the **active** backend;
   the inactive one returns `connected: false` and renders as "Inactive backend"
-  ([ipc.ts:330-341](../electron/main/ipc.ts#L330)). That's misleading: a user who
+  ([ipc.ts:330-341](../../electron/main/ipc.ts#L330)). That's misleading: a user who
   ran **both** `claude login` and `codex login` can't see that both are ready and
   that they can switch freely. Fix it so each backend reports a real, independent
   state:
@@ -111,10 +111,10 @@ Goal: setting up a connector is a guided action inside Hearth, and the user can
     `~/.codex/auth.json` — verify exact path/format per vendored version). Optional
     authoritative confirm-on-demand: a short-lived ACP `initialize` probe of that
     backend's adapter (spawn → initialize → tear down, like
-    [probe.ts](../electron/main/mcp/probe.ts) does for MCP), cached so it isn't run
+    [probe.ts](../../electron/main/mcp/probe.ts) does for MCP), cached so it isn't run
     on every render.
   - **Compliance:** presence/expiry check **only** — never read, store, broker, or
-    log the token value ([COMPLIANCE.md](COMPLIANCE.md)). We confirm a login
+    log the token value ([COMPLIANCE.md](../COMPLIANCE.md)). We confirm a login
     exists; we do not touch its contents.
   - **UI:** replace the "Inactive backend" badge with a per-backend state —
     *Authorized (login)* / *Authorized (API key)* / *Not signed in* — shown for
@@ -174,10 +174,10 @@ Goal: setting up a connector is a guided action inside Hearth, and the user can
   bump-reminder, not auto-update.
 - **A5 — Registry hygiene (low priority).** If we keep the custom registry: key
   secrets by server `id` not `slug(name)`
-  ([ConnectorsSection.tsx:148](../src/app/settings/sections/ConnectorsSection.tsx#L148)),
-  delete `mcp.<id>.*` on remove ([ipc.ts:371](../electron/main/ipc.ts#L371)), and
+  ([ConnectorsSection.tsx:148](../../src/app/settings/sections/ConnectorsSection.tsx#L148)),
+  delete `mcp.<id>.*` on remove ([ipc.ts:371](../../electron/main/ipc.ts#L371)), and
   surface `toAcpServers().skipped` instead of dropping silently
-  ([index.ts:64](../electron/main/index.ts#L64)).
+  ([index.ts:64](../../electron/main/index.ts#L64)).
 
 Non-goals: Hearth-brokered OAuth, a Hearth token store for third parties, an
 in-app catalog that bypasses the CLI.
@@ -187,7 +187,7 @@ in-app catalog that bypasses the CLI.
 Goal: the user can open the browser, terminal, files, and scratchpad **without**
 being in a chat session — to browse, run a command, or edit a markdown/text file.
 
-- **B1 — Ungate the top-right toggles.** In [__root.tsx](../src/routes/__root.tsx)
+- **B1 — Ungate the top-right toggles.** In [__root.tsx](../../src/routes/__root.tsx)
   `Titlebar`, render the bottom/right `PanelBtn`s regardless of route (not just
   `isSession`). Keep the left sidebar toggle as-is.
 - **B2 — Render panels off-session.** Drop the `isSession` gate on the right
@@ -208,7 +208,7 @@ being in a chat session — to browse, run a command, or edit a markdown/text fi
 
 - **C1 — Discoverability.** The browser tab is an always-tab; with Track B it's
   reachable anywhere. Make sure it has a usable address/nav affordance
-  ([BrowserTab.tsx](../src/app/workbench/BrowserTab.tsx)) for manual login.
+  ([BrowserTab.tsx](../../src/app/workbench/BrowserTab.tsx)) for manual login.
 - **C2 — Session clarity.** A small indicator that the agent shares this exact
   logged-in browser (so users understand logging in here grants the agent access),
   and a way to open a fresh/cleared partition if they want isolation. Optional v2.
@@ -242,7 +242,7 @@ Track A main-process work.
 ## `/goal` block (paste below)
 
 ```
-Implement docs/CONNECTORS-PLAN.md. The DIRECTION is decided: Hearth delegates MCP
+Implement docs/active-plans/CONNECTORS-PLAN.md. The DIRECTION is decided: Hearth delegates MCP
 connector auth to the ACP backends (Claude Code / Codex) — it does NOT build an
 OAuth broker or a connector catalog, and stores NO third-party tokens. Do not
 revive the deferred broker in the appendix. Apply the plan; don't re-derive it.
@@ -317,7 +317,7 @@ revive the deferred broker in the appendix. Apply the plan; don't re-derive it.
   with only one backend set up, it does not.
 - `claude`/`codex` resolve in the Hearth terminal regardless of launch method.
 - typecheck + lint + build + test clean; live app verified.
-- docs/CONNECTORS-PLAN.md status boxes updated + an Implementation log appended
+- docs/active-plans/CONNECTORS-PLAN.md status boxes updated + an Implementation log appended
   (per phase: what changed, files touched, verification). Restore the live app to
   a clean state when finished.
 ```
@@ -336,7 +336,7 @@ must-have connector has no CLI path, or if cross-backend parity (a connector
 usable identically under both Claude and Codex, managed in-app) becomes a hard
 requirement. If revived: brokered tokens live encrypted in the secret store keyed
 by server id, injected as `Authorization: Bearer` in `to-acp.ts`, refreshed in the
-async provider at [index.ts:64](../electron/main/index.ts#L64). The full broker
+async provider at [index.ts:64](../../electron/main/index.ts#L64). The full broker
 spec (discovery/DCR/PKCE/flow/tokens module breakdown, per-connector endpoint +
 auth table for the six providers) can be reconstructed from this summary; it is not
 preserved elsewhere, so re-spec it from scratch if revived.

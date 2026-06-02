@@ -1,14 +1,14 @@
 # Hearth UI — Implementation Plan (for `/goal`)
 
 Paste the block below into `/goal`. It drives a follow-up agent to implement the fixes
-in [`docs/ui-review.md`](./ui-review.md). The review doc is the granular spec (every
+in [`docs/completed-plans/ui-review.md`](./ui-review.md). The review doc is the granular spec (every
 finding has file + selector + line + `current → proposed` + token); this plan locks the
 decisions, sequencing, verification bar, and guardrails.
 
 ---
 
 ```
-Implement the fixes in docs/ui-review.md across the live Hearth app. That doc is the
+Implement the fixes in docs/completed-plans/ui-review.md across the live Hearth app. That doc is the
 authoritative spec: every finding (F1–F23, S1–S6) has a severity, the exact component
 file + selector + line, and a current → proposed change with real values/tokens. Apply
 them — do not re-derive the analysis, and do not write another review. Code changes only.
@@ -60,7 +60,7 @@ them — do not re-derive the analysis, and do not write another review. Code ch
 - typecheck + lint + build + test are clean; the contrast probes pass AA in both themes;
   the live app renders every changed surface correctly in both themes (before/after
   captured).
-- docs/ui-review.md is updated: mark each finding ✅ Done (or note any intentional
+- docs/completed-plans/ui-review.md is updated: mark each finding ✅ Done (or note any intentional
   deviation and why), and add a short "Implementation log" at the bottom — per phase:
   what changed, files touched, and the final contrast numbers.
 - Restore the live app to a clean state (light theme, a normal session view) when finished.

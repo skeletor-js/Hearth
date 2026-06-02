@@ -8,7 +8,7 @@
 // stays small and the Vite server can still resolve bare imports.
 //
 // In dev this module is unused: REPO_ROOT is the project checkout and Vite is
-// electron-vite's own server. See docs/V2-PACKAGING-PLAN.md (WS2-1).
+// electron-vite's own server. See docs/completed-plans/V2-PACKAGING-PLAN.md (WS2-1).
 
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'

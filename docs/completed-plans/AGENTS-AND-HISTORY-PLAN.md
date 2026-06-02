@@ -8,7 +8,7 @@ Closes the two honest gaps left after the UI build ([UI-PLAN.md](UI-PLAN.md)):
   the registry / `AgentKind` generalization / "connect a server" form are explicitly out.
 - **Track B — P6-1:** History — **Model-A redo** (revert-the-revert) and **revert-conflict
   auto-resolve** (hand the conflict to Hearth's own agent), with the clean-tree guard.
-  Undo already ships; this finishes the model per [SELF-EVOLUTION-HISTORY.md](SELF-EVOLUTION-HISTORY.md).
+  Undo already ships; this finishes the model per [SELF-EVOLUTION-HISTORY.md](../SELF-EVOLUTION-HISTORY.md).
 
 The two tracks are independent (file-disjoint) and can be run as one `/goal` or two.
 
@@ -19,7 +19,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[!]` blocked
 ## Grounding (current state — verified)
 
 - `AgentKind = 'claude' | 'codex'` stays as-is. `createAgent(kind)` in
-  [electron/main/index.ts](../electron/main/index.ts) hard-builds `ClaudeAgent`/`CodexAgent`; no change.
+  [electron/main/index.ts](../../electron/main/index.ts) hard-builds `ClaudeAgent`/`CodexAgent`; no change.
 - ACP SDK exposes models: `NewSessionResponse.models` → `SessionModelState`
   (`availableModels: ModelInfo[]`, `currentModelId`) and a `session/set_model` method
   (`connection.setSessionModel`). `AcpClient.newSession` currently ignores `models`.

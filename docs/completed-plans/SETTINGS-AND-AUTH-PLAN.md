@@ -2,7 +2,7 @@
 
 Status: proposed. Covers the Settings rebuild plus the four systems it depends
 on: an ACP-native **auth experience**, a **secrets store**, **MCP server
-management**, and **skills**. Read [COMPLIANCE.md](./COMPLIANCE.md) first — it
+management**, and **skills**. Read [COMPLIANCE.md](../COMPLIANCE.md) first — it
 constrains the auth design hard.
 
 ## Why
@@ -13,12 +13,12 @@ matter:
 - **Account → "Signed in: you@hearth.local"** and **"Keys: Bring-your-own
   keys"** are hardcoded JSX with no backing. There is no account system and no
   way to see or change auth.
-- **Auth is invisible and boot-only.** [`resolveAuth`](../electron/main/index.ts)
+- **Auth is invisible and boot-only.** [`resolveAuth`](../../electron/main/index.ts)
   picks subscription vs. api-key once at startup from env vars. The renderer
   never learns whether the agent is actually authenticated. A user with no
   `claude login` and no API key gets a silent failure at first prompt.
 - **No MCP management.** Only the built-in `hearth` bridge server is injected
-  (`bridgeMcpServers()` in [acp-client.ts](../electron/main/agents/acp-client.ts)).
+  (`bridgeMcpServers()` in [acp-client.ts](../../electron/main/agents/acp-client.ts)).
   Users can't add their own servers.
 - **No skills surface.** Skills live in `~/.claude/skills`; the app inherits
   them but shows nothing.
@@ -32,7 +32,7 @@ model.
 
 ## Compliance guardrails (non-negotiable)
 
-From [COMPLIANCE.md](./COMPLIANCE.md):
+From [COMPLIANCE.md](../COMPLIANCE.md):
 
 1. **Never render the Claude OAuth flow.** We do not build a "Sign in with
    Claude" button or host the web flow. The user runs `claude login` themselves;
@@ -63,15 +63,15 @@ plaintext after being set.
   returns key names + presence only, never values.
 - Keys namespaced: `apikey.anthropic`, `apikey.openai`, `mcp.<server>.<VAR>`.
 
-**IPC** (new channels in [ipc.ts](../electron/main/ipc.ts), exposed in
-[preload](../electron/preload/index.ts) as `window.hearth.secrets`):
+**IPC** (new channels in [ipc.ts](../../electron/main/ipc.ts), exposed in
+[preload](../../electron/preload/index.ts) as `window.hearth.secrets`):
 - `list()` → `{ key, hasValue }[]`
 - `set(key, value)` → void
 - `delete(key)` → void
 - Getters live in main only. The renderer sets/clears but never reads a secret
   back — it only sees presence.
 
-**Wiring into auth.** `resolveAuth` ([index.ts](../electron/main/index.ts)) gains
+**Wiring into auth.** `resolveAuth` ([index.ts](../../electron/main/index.ts)) gains
 a secrets-store check before the env-var check: a stored `apikey.anthropic` /
 `apikey.openai` becomes `{ mode: 'api-key' }`, injected into the adapter env at
 spawn (claude.ts / codex.ts already read `config.auth`). Env var stays as an
@@ -84,7 +84,7 @@ override for headless/CI.
 ### What the ACP layer already gives us
 
 `connection.initialize()` returns `InitializeResponse.authMethods: AuthMethod[]`
-— but [acp-client.ts](../electron/main/agents/acp-client.ts) **discards the
+— but [acp-client.ts](../../electron/main/agents/acp-client.ts) **discards the
 return value today.** Auth method kinds:
 - `AuthMethodTerminal` — "client runs an interactive terminal for the user to
   authenticate via a TUI" (this is the `claude login` / `codex login` path).
@@ -121,7 +121,7 @@ signal, or rely on `initialize` returning auth methods + a failing newSession).
 **Subscription / terminal login (Claude, Codex).** Compliance-safe path:
 1. User clicks **"Log in to Claude"** in Settings.
 2. We open the existing **Terminal tab** (PTY already exists,
-   [pty.ts](../electron/main/terminal/pty.ts)) seeded with `claude login`
+   [pty.ts](../../electron/main/terminal/pty.ts)) seeded with `claude login`
    (`codex login` for Codex) and focus it.
 3. The user runs it; the CLI opens *their* browser for OAuth. Hearth renders
    nothing of the flow — it just hosts a real shell the user drives. Credential
@@ -156,7 +156,7 @@ Per backend (Claude, Codex), one row group:
 
 ### Insertion point
 
-`AcpClient.bridgeMcpServers()` ([acp-client.ts](../electron/main/agents/acp-client.ts))
+`AcpClient.bridgeMcpServers()` ([acp-client.ts](../../electron/main/agents/acp-client.ts))
 returns the array passed to `newSession({ mcpServers })`. Today it returns just
 the `hearth` bridge. We **merge user servers into that array.**
 
@@ -206,7 +206,7 @@ Lighter than MCP — skills are files in `~/.claude/skills` (global) and
 `<workspace>/.claude/skills` (project), inherited because we use the user's real
 config dir. The ACP stream also advertises them: `AvailableCommandsUpdate` /
 `AvailableCommand` arrive via `session/update` (we currently drop these in
-[acp-translate.ts](../electron/main/agents/acp-translate.ts)).
+[acp-translate.ts](../../electron/main/agents/acp-translate.ts)).
 
 **Scope for v1 (discovery + access, not authoring):**
 - Capture `availableCommands` updates → new `SessionUpdate` variant → renderer.
@@ -222,7 +222,7 @@ config dir. The ACP stream also advertises them: `AvailableCommandsUpdate` /
 
 ## Settings IA — the rebuilt page
 
-Order top to bottom (replaces current [settings.tsx](../src/routes/settings.tsx)):
+Order top to bottom (replaces current [settings.tsx](../../src/routes/settings.tsx)):
 
 1. **Account & Auth** — per-backend status + login/api-key/logout. *(replaces
    the two fake rows)*

@@ -1,9 +1,9 @@
 # Hearth — UI Build Plan & Tracker (the real product UI)
 
 Target: build the Hearth UI from the Claude Design handoff (mirrored in
-[design/handoff/](../design/handoff/) — read `Hearth.html` for the full token + CSS
+[design/handoff/](../../design/handoff/) — read `Hearth.html` for the full token + CSS
 system, then the `hearth-*.jsx` components). Supersedes the minimal v1 shell. v1
-plumbing ([BUILD-PLAN.md](BUILD-PLAN.md)) — ACP client, permission flow, self-mod,
+plumbing ([BUILD-PLAN.md](../BUILD-PLAN.md)) — ACP client, permission flow, self-mod,
 backend switch, agent see/control MCP — stays; this re-skins the renderer and adds
 the backends the new UI implies.
 
@@ -49,8 +49,8 @@ self-edit regardless of cwd. `captureTurn` always targets `REPO_ROOT`.
   **Personality** = soul changes; **Memory** = memory changes. Never mixed.
 - **History undo / redo:** **Model A** (append-only `git revert`), revert conflicts
   **auto-resolved by Hearth's agent**, no checkout-style "Restore" for now. Signed
-  off — see [SELF-EVOLUTION-HISTORY.md](SELF-EVOLUTION-HISTORY.md).
-- **Soul (personality) + Memory** (signed off — [SOUL-AND-MEMORY.md](SOUL-AND-MEMORY.md)):
+  off — see [SELF-EVOLUTION-HISTORY.md](../SELF-EVOLUTION-HISTORY.md).
+- **Soul (personality) + Memory** (signed off — [SOUL-AND-MEMORY.md](../SOUL-AND-MEMORY.md)):
   one managed-block writer for **both** backends, targeting each one's native global
   instructions (Claude's isolated `CLAUDE_CONFIG_DIR/CLAUDE.md`; the user's
   `~/.codex/AGENTS.md`, surgical block). Memory is **global + per-workspace**
@@ -218,7 +218,7 @@ the pad onto every turn. The agent may read it but treats it as read-only.
 - [x] **P5-1.** ∥ Settings screen: Account (display), Appearance (✅ wire),
       Agent (default backend/model, command-approval → `HEARTH_PERMISSION_MODE`).
       **No self-evolution toggles.**
-- [x] **P5-2.** ∥ Personality + Memory per [SOUL-AND-MEMORY.md](SOUL-AND-MEMORY.md)
+- [x] **P5-2.** ∥ Personality + Memory per [SOUL-AND-MEMORY.md](../SOUL-AND-MEMORY.md)
       (signed off): one managed-block writer → each backend's native global
       instructions (Claude's isolated `CLAUDE_CONFIG_DIR/CLAUDE.md`; surgical block in
       `~/.codex/AGENTS.md`). Move Hearth's operating instructions there too (so they
@@ -232,7 +232,7 @@ the pad onto every turn. The agent may read it but treats it as read-only.
 
 ### P6 — History/Personality/Memory + ⌘K + onboarding + polish
 - [x] **P6-1. History** (the code self-mod timeline) — build
-      per [SELF-EVOLUTION-HISTORY.md](SELF-EVOLUTION-HISTORY.md) (signed off: **Model A**
+      per [SELF-EVOLUTION-HISTORY.md](../SELF-EVOLUTION-HISTORY.md) (signed off: **Model A**
       append-only revert; revert **conflicts auto-handed to Hearth's agent**; no
       checkout-style "Restore" for now). Timeline (applied/undone, current-build
       boundary derived from net-effect), undo/redo, conflict→agent-resolve, clean-tree

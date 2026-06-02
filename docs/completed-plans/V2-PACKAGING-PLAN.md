@@ -7,13 +7,13 @@ Code-complete and statically verified (254 tests pass; typecheck, lint, and
 
 | Item | Status |
 |---|---|
-| WS1-1 env-scrub harness | ✅ Done — [child-env.ts](../electron/main/agents/child-env.ts), wired in [acp-client.ts](../electron/main/agents/acp-client.ts), `HEARTH_SCRUB_INHERITED_KEYS=1` |
-| WS2-1 writable workspace (option A) | ✅ Done — [workspace.ts](../electron/main/packaging/workspace.ts), seed/reuse/reseed tested against real git |
-| WS2-2 runtime Vite server | ✅ Done — [renderer-server.ts](../electron/main/packaging/renderer-server.ts), externalized in the main bundle |
-| WS2-3 lifecycle + static fallback | ✅ Done — [dev-server.ts](../electron/main/dev-server.ts) `prepareRenderer()`, [window.ts](../electron/main/window.ts), quit cleanup in [index.ts](../electron/main/index.ts) |
-| WS2-4 electron-builder config | ✅ Written — `build` block in [package.json](../package.json); needs a real `bun run dist` to validate |
-| WS2-5 entitlements + notarize | ✅ Written — [entitlements.mac.plist](../build/entitlements.mac.plist), [notarize.cjs](../build/notarize.cjs) afterSign hook (gated on Apple creds) |
-| WS3 skills enable/disable | ✅ Done — [list.ts](../electron/main/skills/list.ts) `setSkillEnabled`, IPC + preload + [SkillsSection](../src/app/settings/sections/SkillsSection.tsx) toggle |
+| WS1-1 env-scrub harness | ✅ Done — [child-env.ts](../../electron/main/agents/child-env.ts), wired in [acp-client.ts](../../electron/main/agents/acp-client.ts), `HEARTH_SCRUB_INHERITED_KEYS=1` |
+| WS2-1 writable workspace (option A) | ✅ Done — [workspace.ts](../../electron/main/packaging/workspace.ts), seed/reuse/reseed tested against real git |
+| WS2-2 runtime Vite server | ✅ Done — [renderer-server.ts](../../electron/main/packaging/renderer-server.ts), externalized in the main bundle |
+| WS2-3 lifecycle + static fallback | ✅ Done — [dev-server.ts](../../electron/main/dev-server.ts) `prepareRenderer()`, [window.ts](../../electron/main/window.ts), quit cleanup in [index.ts](../../electron/main/index.ts) |
+| WS2-4 electron-builder config | ✅ Written — `build` block in [package.json](../../package.json); needs a real `bun run dist` to validate |
+| WS2-5 entitlements + notarize | ✅ Written — [entitlements.mac.plist](../../build/entitlements.mac.plist), [notarize.cjs](../../build/notarize.cjs) afterSign hook (gated on Apple creds) |
+| WS3 skills enable/disable | ✅ Done — [list.ts](../../electron/main/skills/list.ts) `setSkillEnabled`, IPC + preload + [SkillsSection](../../src/app/settings/sections/SkillsSection.tsx) toggle |
 | WS4 doc reconciliation | ✅ Done — MILESTONE-V1 boxes, BUILD-PLAN deferred line, this table |
 
 **Environment-gated (cannot complete in the build sandbox):**
@@ -34,9 +34,9 @@ enable/disable**, and reconcile stale plan docs.
 The big piece is the packaged build. Unlike a normal Electron app, Hearth's
 packaged build must **run Vite at runtime** — it ships renderer *source* and a
 live Vite server, not a frozen bundle, because that server is what makes agent
-self-edits hot-reload. See [ARCHITECTURE.md](./ARCHITECTURE.md) (the renderer is
+self-edits hot-reload. See [ARCHITECTURE.md](../ARCHITECTURE.md) (the renderer is
 "served by a *live Vite dev server* — not a frozen bundle"). Today
-[`resolveRendererTarget()`](../electron/main/dev-server.ts) falls back to the
+[`resolveRendererTarget()`](../../electron/main/dev-server.ts) falls back to the
 static bundle in packaged builds (`TODO(v2)`), which works for `electron-vite
 preview` but kills self-evolution in production.
 
@@ -51,7 +51,7 @@ preview` but kills self-evolution in production.
   is a `TODO(v2)`. `ARCHITECTURE.md:68` notes the intent: "port Stella's
   `dev-url.ts`."
 - **`v1` is unverified, not unbuilt.** Per [hearth-v1-status] and
-  [BUILD-PLAN.md](./BUILD-PLAN.md) (`P2-4`, `Tag v1`), the live loop
+  [BUILD-PLAN.md](../BUILD-PLAN.md) (`P2-4`, `Tag v1`), the live loop
   (talk → self-edit → HMR → undo) and auth smoke test have never run because the
   Claude Code sandbox leaks `ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL` into spawned
   agents and the gateway rejects them (see [acp-integration-gotchas]).
@@ -84,9 +84,9 @@ caveat permanently.
 
 - Scrub at the agent-spawn boundary, not globally — Hearth itself may legitimately
   read those vars elsewhere. Likely in the adapter `env` assembly
-  ([acp-agent.ts](../electron/main/agents/acp-agent.ts) /
-  [claude.ts](../electron/main/agents/claude.ts) /
-  [codex.ts](../electron/main/agents/codex.ts)), gated behind a
+  ([acp-agent.ts](../../electron/main/agents/acp-agent.ts) /
+  [claude.ts](../../electron/main/agents/claude.ts) /
+  [codex.ts](../../electron/main/agents/codex.ts)), gated behind a
   `HEARTH_SCRUB_INHERITED_KEYS=1` opt-in so normal BYO-key flows are untouched.
 - Acceptance: with the flag on inside a sandbox shell, a spawned agent uses only
   the user-provided credential and the gateway accepts the turn.
@@ -122,8 +122,8 @@ On first launch of a packaged build (detected by absence of
 `ELECTRON_RENDERER_URL` **and** a packaged flag), copy the shipped renderer
 source tree + a git repo into `userData/<app>/workspace/`. Subsequent launches
 reuse it. This becomes Vite's `root` and the cwd for every self-mod `git`
-operation ([self-mod-service.ts](../electron/main/self-mod/self-mod-service.ts),
-[git.ts](../electron/main/self-mod/git.ts)).
+operation ([self-mod-service.ts](../../electron/main/self-mod/self-mod-service.ts),
+[git.ts](../../electron/main/self-mod/git.ts)).
 
 - **Update story:** when the shipped app version is newer than the workspace's
   recorded version, reconcile (e.g. re-seed from the bundle while preserving the
@@ -134,16 +134,16 @@ operation ([self-mod-service.ts](../electron/main/self-mod/self-mod-service.ts),
 
 ### WS2-2. Runtime Vite server (port Stella's `dev-url.ts`)
 
-In [`resolveRendererTarget()`](../electron/main/dev-server.ts), when there is no
+In [`resolveRendererTarget()`](../../electron/main/dev-server.ts), when there is no
 `ELECTRON_RENDERER_URL`, programmatically `createServer()` from `vite` using the
 renderer config from
-[electron.vite.config.ts](../electron.vite.config.ts) — **including the
+[electron.vite.config.ts](../../electron.vite.config.ts) — **including the
 `selfModOverlay` plugin** — with `root` = the WS2-1 workspace. Listen on an
 ephemeral port, write the URL to `.vite-dev-url`, return `{ url }`.
 
 - The `selfModOverlay` + HMR + crash-surface plumbing
-  ([self-mod-overlay.ts](../electron/vite-plugins/self-mod-overlay.ts),
-  [vite-error-recovery.ts](../src/lib/vite-error-recovery.ts)) must attach to this
+  ([self-mod-overlay.ts](../../electron/vite-plugins/self-mod-overlay.ts),
+  [vite-error-recovery.ts](../../src/lib/vite-error-recovery.ts)) must attach to this
   production server exactly as they do to electron-vite's dev server.
 - Acceptance: packaged app loads the renderer over `http://localhost:<port>` and a
   self-edit hot-reloads with no restart.
@@ -151,8 +151,8 @@ ephemeral port, write the URL to `.vite-dev-url`, return `{ url }`.
 ### WS2-3. Server lifecycle + static fallback
 
 Start the Vite server before the `BrowserWindow` loads
-([window.ts](../electron/main/window.ts) /
-[index.ts](../electron/main/index.ts)); stop it on `app` quit; handle port
+([window.ts](../../electron/main/window.ts) /
+[index.ts](../../electron/main/index.ts)); stop it on `app` quit; handle port
 conflicts. **On any boot failure, fall back to today's static-bundle path** —
 keep the current `{ file }` branch as the safety net, do not delete it.
 
@@ -190,10 +190,10 @@ Required for distribution, not for local self-evolving runs — do it last.
 
 ## WS3 — Skills enable/disable (optional)
 
-[`SkillsSection`](../src/app/settings/sections/SkillsSection.tsx) is read-only by
+[`SkillsSection`](../../src/app/settings/sections/SkillsSection.tsx) is read-only by
 design (v1 scope). Enabling/disabling means moving skill files between an active
 dir and a staging dir, or maintaining a disabled-list the agent config honors
-([skills/list.ts](../electron/main/skills/list.ts)). Self-contained. Only build
+([skills/list.ts](../../electron/main/skills/list.ts)). Self-contained. Only build
 if the toggle is actually wanted — otherwise the documented v1 scope stands.
 
 **Depends on:** nothing.
@@ -203,11 +203,11 @@ if the toggle is actually wanted — otherwise the documented v1 scope stands.
 ## WS4 — Doc reconciliation (continuous, cheap)
 
 - Re-check the stale `- [ ]` boxes in
-  [MILESTONE-V1.md:25-34](./MILESTONE-V1.md) — that work shipped; the doc
+  [MILESTONE-V1.md:25-34](../MILESTONE-V1.md) — that work shipped; the doc
   misrepresents state.
 - After WS2 lands: flip the `TODO(v2)` in
-  [dev-server.ts:25](../electron/main/dev-server.ts) and the deferred line in
-  [BUILD-PLAN.md](./BUILD-PLAN.md).
+  [dev-server.ts:25](../../electron/main/dev-server.ts) and the deferred line in
+  [BUILD-PLAN.md](../BUILD-PLAN.md).
 
 **Depends on:** WS2 for the dev-server line; the MILESTONE fix is free now.
 

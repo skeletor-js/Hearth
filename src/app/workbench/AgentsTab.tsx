@@ -1,7 +1,7 @@
 // Live subagent activity panel (W4). Subscribes to self-mod:activity and shows,
 // for the current turn, each subagent lane (Task), its status, and the files it's
 // touching — plus a warning when two subagents write the same file. Clears when the
-// run finalizes. See docs/SELF-MOD-HARDENING-PLAN.md (W4).
+// run finalizes. See docs/completed-plans/SELF-MOD-HARDENING-PLAN.md (W4).
 
 import { useEffect, useState } from 'react'
 import { Icon } from '@/shell/Icon'

@@ -24,24 +24,24 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[!]` blocked
 ## Grounding (current state — verified)
 
 Hearth side:
-- **Reload tiers** ([path-relevance.ts](../electron/main/self-mod/path-relevance.ts)):
+- **Reload tiers** ([path-relevance.ts](../../electron/main/self-mod/path-relevance.ts)):
   `hmr` (most of `src/`), `full-reload` (`index.html`, `src/routeTree.gen.ts`,
   `src/routes/`), `process-restart` (`electron/main/**`, `electron/preload/**`,
   configs). `classifyBatch` returns the strongest.
-- **HmrController** ([hmr.ts](../electron/main/self-mod/hmr.ts)): on `full-reload`
+- **HmrController** ([hmr.ts](../../electron/main/self-mod/hmr.ts)): on `full-reload`
   calls `reloadWindow()` → `window.webContents.reload()`; on `process-restart`
   relaunches (packaged) or reloads (dev). We just added `viteServed` so the
   redundant hard reload is skipped when Vite already reloads.
-- **Router** ([main.tsx](../src/main.tsx)): `createRouter({ routeTree, history:
+- **Router** ([main.tsx](../../src/main.tsx)): `createRouter({ routeTree, history:
   createMemoryHistory() })`, rendered via `<RouterProvider>`. **No
   `import.meta.hot` accept** — so a `routeTree.gen.ts` change propagates to the
   entry and Vite full-reloads.
-- **Self-mod overlay plugin** ([self-mod-overlay.ts](../electron/vite-plugins/self-mod-overlay.ts)):
+- **Self-mod overlay plugin** ([self-mod-overlay.ts](../../electron/vite-plugins/self-mod-overlay.ts)):
   already pins module baselines and applies atomically *for parallel-subagent
   turns* via a dev endpoint + `server.reloadModule`. Single-writer turns don't pin.
 - **Screen capture already exists**: `webContents.capturePage().toPNG()` is used in
-  [agent-bridge.ts](../electron/main/agent-bridge.ts) for snapshots.
-- **Windows** ([window.ts](../electron/main/window.ts)): main window
+  [agent-bridge.ts](../../electron/main/agent-bridge.ts) for snapshots.
+- **Windows** ([window.ts](../../electron/main/window.ts)): main window
   `backgroundColor: '#0b0b0e'`; a separate snapshot window already exists. Nav
   guards (deny window.open / off-origin nav) were just added.
 - `index.html` paints `#0b0b0e` from first frame (last fix), so any residual flash
@@ -93,21 +93,21 @@ case) are fully coverable.
 ## Part A — Route-tree HMR  *(the quick win)*
 
 ### A1 — HMR boundary in the router
-- `[ ]` In [main.tsx](../src/main.tsx), after `createRouter`, add the Stella
+- `[ ]` In [main.tsx](../../src/main.tsx), after `createRouter`, add the Stella
   pattern: `if (import.meta.hot) import.meta.hot.accept('./routeTree.gen', (m) => {
   if (m?.routeTree) { router.update({ routeTree: m.routeTree }); void
   router.invalidate() } })`. Match the import specifier exactly. Memory history
   means the current location is preserved across the swap.
-- **Files:** [main.tsx](../src/main.tsx).
+- **Files:** [main.tsx](../../src/main.tsx).
 - **Acceptance:** with the dev app running, adding a new `src/routes/*.tsx` and
   navigating to it works with **no full reload** (verify: no blank, router state
   preserved; watch via computer-use / the eval bridge).
 
 ### A2 — Reclassify routes off the full-reload tier
-- `[ ]` In [path-relevance.ts](../electron/main/self-mod/path-relevance.ts), remove
+- `[ ]` In [path-relevance.ts](../../electron/main/self-mod/path-relevance.ts), remove
   `src/routes/` and `src/routeTree.gen.ts` from the `full-reload` classification so
   they fall to `hmr` (Vite + the A1 accept handle them). Leave `index.html` as the
-  only `full-reload` exact. Update [path-relevance.test.ts](../electron/main/self-mod/path-relevance.test.ts)
+  only `full-reload` exact. Update [path-relevance.test.ts](../../electron/main/self-mod/path-relevance.test.ts)
   and the self-mod-service route-edit tests accordingly.
 - **Files:** path-relevance.ts (+ tests), self-mod-service.test.ts.
 - **Acceptance:** `classifyBatch(['src/routes/foo.tsx'])` → `hmr`; a route-adding
@@ -135,7 +135,7 @@ so each piece is testable and the app stays shippable between steps.
 ### B2 — Capture + signal plumbing
 - `[ ]` Main-side capture helper: `captureMainFrame()` →
   `window.webContents.capturePage().toPNG()` → data URL (reuse the
-  [agent-bridge](../electron/main/agent-bridge.ts) pattern).
+  [agent-bridge](../../electron/main/agent-bridge.ts) pattern).
 - `[ ]` IPC contract (`electron/shared/channels.ts` + preload): main → overlay
   `morph:cover({oldFrame})`, `morph:handoff({newFrame})`; overlay → main
   `morph:overlay-ready`, `morph:cover-painted`, `morph:done`. Timeouts so a stuck
@@ -179,13 +179,13 @@ so each piece is testable and the app stays shippable between steps.
   flicker-free) **unless** a batch also includes a `full-reload` path. Optionally
   add a very short cover for multi-file HMR batches to guarantee atomic reveal —
   evaluate after B4.
-- **Files:** [hmr.ts](../electron/main/self-mod/hmr.ts),
-  [index.ts](../electron/main/index.ts) (construct overlay + controller, inject).
+- **Files:** [hmr.ts](../../electron/main/self-mod/hmr.ts),
+  [index.ts](../../electron/main/index.ts) (construct overlay + controller, inject).
 - **Acceptance:** editing `index.html` (or any full-reload-tier file) via a self-mod
   shows a morph, never a black flash. `hmr`-tier edits still hot-swap with no cover.
 
 ### B6 — Atomic apply for single-writer turns *(optional, evaluate after B5)*
-- `[ ]` Extend the existing [overlay plugin](../electron/vite-plugins/self-mod-overlay.ts)
+- `[ ]` Extend the existing [overlay plugin](../../electron/vite-plugins/self-mod-overlay.ts)
   to pin during single-writer turns too, so the user never sees half-written
   intermediate states mid-turn (the agent's own `view_app` can still opt out / see
   live). Apply atomically at turn end, under the morph cover when a reload is needed.

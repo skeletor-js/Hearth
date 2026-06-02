@@ -44,7 +44,7 @@ running outside the sandbox; see docs/V2-PACKAGING-PLAN.md WS1).
 
 - ~~Codex backend~~ — DONE post-v1 ([codex.ts](../electron/main/agents/codex.ts)).
 - ~~Packaged/notarized build that ships its own Vite server~~ — IMPLEMENTED (v2,
-  see [V2-PACKAGING-PLAN.md](./V2-PACKAGING-PLAN.md) WS2:
+  see [V2-PACKAGING-PLAN.md](completed-plans/V2-PACKAGING-PLAN.md) WS2:
   [workspace.ts](../electron/main/packaging/workspace.ts),
   [renderer-server.ts](../electron/main/packaging/renderer-server.ts),
   electron-builder config + entitlements). A real `bun run dist` + notarization

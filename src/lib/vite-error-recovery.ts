@@ -3,7 +3,7 @@
 // Vite's built-in red overlay is disabled (electron.vite.config.ts: hmr.overlay
 // false); we forward `vite:error` payloads as window CustomEvents so build / parse
 // errors from a self-edit get the same Reload / Repair / Undo controls as a runtime
-// render crash. See docs/SELF-MOD-HARDENING-PLAN.md (W3).
+// render crash. See docs/completed-plans/SELF-MOD-HARDENING-PLAN.md (W3).
 
 export const HEARTH_BUILD_ERROR = 'hearth:build-error'
 export const HEARTH_BUILD_ERROR_CLEARED = 'hearth:build-error-cleared'

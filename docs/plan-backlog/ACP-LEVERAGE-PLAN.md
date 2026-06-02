@@ -8,7 +8,7 @@ today, and the concrete ways to leverage the rest**, tiered by value.
 
 Each workstream is independently shippable and independently `/goal`-able; a
 recommended sequence and a Tier-1 `/goal` block are at the bottom. Connector/MCP
-leverage is covered separately in [CONNECTORS-PLAN.md](CONNECTORS-PLAN.md) and only
+leverage is covered separately in [CONNECTORS-PLAN.md](../active-plans/CONNECTORS-PLAN.md) and only
 cross-referenced here (W10).
 
 Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[!]` blocked
@@ -20,12 +20,12 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[!]` blocked
 - **ACP → Claude Agent SDK → Claude Code engine.** The Claude adapter
   (`@zed-industries/claude-agent-acp`) imports `query`, `listSessions`,
   `getSessionMessages` from **`@anthropic-ai/claude-agent-sdk@0.2.83`**
-  ([acp-agent.js:2](../node_modules/@zed-industries/claude-agent-acp/dist/acp-agent.js))
+  ([acp-agent.js:2](../../node_modules/@zed-industries/claude-agent-acp/dist/acp-agent.js))
   and drives the SDK's `query()` (which bundles the Claude Code `cli.js`). It is
   **not** the interactive `claude` CLI. Codex is the analogous shape via its own
   app-server SDK. **Consequence:** subscription usage runs through the Agent SDK's
   **metered credit pool**, not the full interactive allowance — see
-  [COMPLIANCE.md](COMPLIANCE.md). This makes W4 (usage metering) more than cosmetic.
+  [COMPLIANCE.md](../COMPLIANCE.md). This makes W4 (usage metering) more than cosmetic.
 
 - **ACP wire surface (from the SDK schema).** Methods, verified present:
   `session/new · prompt · cancel · load · resume · fork · list · close ·
@@ -38,30 +38,30 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[!]` blocked
   session_info_update · usage_update`.
 
 - **What the adapters advertise.**
-  - Claude ([acp-agent.js:116-150](../node_modules/@zed-industries/claude-agent-acp/dist/acp-agent.js)):
+  - Claude ([acp-agent.js:116-150](../../node_modules/@zed-industries/claude-agent-acp/dist/acp-agent.js)):
     `promptCapabilities { image, embeddedContext }`, `mcpCapabilities { http, sse }`,
     `loadSession: true`, `sessionCapabilities { fork, list, resume, close }`.
-  - Codex ([index.js:19893+](../node_modules/@agentclientprotocol/codex-acp/dist/index.js)):
+  - Codex ([index.js:19893+](../../node_modules/@agentclientprotocol/codex-acp/dist/index.js)):
     `promptCapabilities { image }`, `mcpCapabilities { http, sse:false }`,
     `loadSession: true`, `sessionCapabilities { resume, list }`, `auth { logout }`.
 
 - **What Hearth uses today (verified).**
   - Declares only `clientCapabilities: { fs: { readTextFile, writeTextFile } }`
-    ([acp-client.ts:151](../electron/main/agents/acp-client.ts#L151)) — **no
+    ([acp-client.ts:151](../../electron/main/agents/acp-client.ts#L151)) — **no
     terminal capability**.
   - Sends **text-only** prompts: `prompt: [{ type: 'text', text }]`
-    ([acp-client.ts:216](../electron/main/agents/acp-client.ts#L216)); composer is a
-    plain textarea ([Composer.tsx](../src/app/chat/Composer.tsx)).
+    ([acp-client.ts:216](../../electron/main/agents/acp-client.ts#L216)); composer is a
+    plain textarea ([Composer.tsx](../../src/app/chat/Composer.tsx)).
   - Handles `agent_message_chunk · agent_thought_chunk · tool_call ·
     tool_call_update · plan · available_commands_update`
-    ([acp-translate.ts:99-166](../electron/main/agents/acp-translate.ts#L99)) and
+    ([acp-translate.ts:99-166](../../electron/main/agents/acp-translate.ts#L99)) and
     **explicitly drops** `current_mode_update · config_option_update · usage_update`
     (translate.ts:166).
-  - Uses `set_model` ([acp-client.ts:220](../electron/main/agents/acp-client.ts#L220))
+  - Uses `set_model` ([acp-client.ts:220](../../electron/main/agents/acp-client.ts#L220))
     and `cancel`. **Does not** use `session/load · resume · fork · list` — every
     session is created fresh.
   - Pins permission mode by writing `.claude/settings.local.json` before connect
-    ([claude.ts ensureProjectPermissionMode](../electron/main/agents/claude.ts)),
+    ([claude.ts ensureProjectPermissionMode](../../electron/main/agents/claude.ts)),
     rather than driving `set_mode` live.
 
 ---
@@ -72,7 +72,7 @@ Computer use is **not** an ACP capability and not a native Claude Code feature �
 ACP has no screen/mouse/keyboard primitive. It's an Anthropic *model/API* tool, and
 it reaches an agent as an **MCP server** (the `mcp__computer-use__*` tools are
 exactly that). So "computer use through ACP" = add a computer-use MCP server via the
-connector path ([CONNECTORS-PLAN.md](CONNECTORS-PLAN.md)); ACP just carries the tool
+connector path ([CONNECTORS-PLAN.md](../active-plans/CONNECTORS-PLAN.md)); ACP just carries the tool
 calls. Hearth already ships the browser-scoped version of this (the agent drives the
 authenticated embedded browser via `browser_*`). **Capabilities ride on MCP; ACP is
 the transport + session control plane.** That's the lens for everything below.
@@ -87,7 +87,7 @@ the transport + session control plane.** That's the lens for everything below.
   `promptCapabilities.image`; Claude also `embeddedContext`. Hearth sends text only.
   - Build: composer accepts pasted/dropped **images** (screenshots) and **file/
     resource** context; send them as ACP content blocks alongside text
-    ([acp-client.ts:216](../electron/main/agents/acp-client.ts#L216)). Gate on the
+    ([acp-client.ts:216](../../electron/main/agents/acp-client.ts#L216)). Gate on the
     advertised capability per backend (Codex: image yes, embeddedContext no).
   - Value: this is the real "show the agent what's on screen" — pair it with the
     browser's `browser_screenshot` for a screenshot→agent loop. High value, low
@@ -98,7 +98,7 @@ the transport + session control plane.** That's the lens for everything below.
   invisibly inside the adapter. ACP lets the agent call `terminal/create · output ·
   wait_for_exit · kill · release` **on the client**.
   - Build: advertise `terminal: true`; implement the handlers on top of the existing
-    [TerminalManager](../electron/main/terminal/pty.ts) so agent commands run in a
+    [TerminalManager](../../electron/main/terminal/pty.ts) so agent commands run in a
     Hearth-owned PTY — visible in the always-available terminal panel, cancellable,
     and gateable.
   - Value: visibility + control + sandbox alignment (mirrors the fs broker
@@ -129,7 +129,7 @@ the transport + session control plane.** That's the lens for everything below.
 
 - **W6 — Slash commands / skills as a first-class palette
   (`available_commands_update`).** Hearth already captures advertised commands
-  ([acp-client.ts:168](../electron/main/agents/acp-client.ts#L168)) but doesn't
+  ([acp-client.ts:168](../../electron/main/agents/acp-client.ts#L168)) but doesn't
   surface them richly.
   - Build: expose the agent's advertised commands/skills in the command palette /
     composer (e.g. `/compact`, custom skills), updating on
@@ -154,12 +154,12 @@ the transport + session control plane.** That's the lens for everything below.
 - **W10 — MCP as the capability-extension path (incl. computer use).** Not new
   work here — the mechanism for adding tool families (computer use, Playwright,
   data, etc.) is the connector/MCP path in
-  [CONNECTORS-PLAN.md](CONNECTORS-PLAN.md). Listed so the ACP picture is complete:
+  [CONNECTORS-PLAN.md](../active-plans/CONNECTORS-PLAN.md). Listed so the ACP picture is complete:
   ACP carries tool calls; MCP supplies the tools.
 
 - **W11 — fs broker mediation as a sandbox lever (context).** Hearth already routes
   agent fs reads/writes through a broker via `clientCapabilities.fs`
-  ([acp-client.ts:99-151](../electron/main/agents/acp-client.ts#L99)). W2 extends the
+  ([acp-client.ts:99-151](../../electron/main/agents/acp-client.ts#L99)). W2 extends the
   same "mediate the client-side capability" pattern to the terminal. Noted so W2 is
   built consistently with the existing model, not as a one-off.
 
@@ -192,7 +192,7 @@ area.
 ## `/goal` block — early wins (W1 + W4 + W6)
 
 ```
-Implement workstreams W1, W4, and W6 from docs/ACP-LEVERAGE-PLAN.md. That doc has
+Implement workstreams W1, W4, and W6 from docs/plan-backlog/ACP-LEVERAGE-PLAN.md. That doc has
 the verified ACP surface, what Hearth uses today (with file:line refs), and the per-
 backend advertised capabilities. Apply those three; do not start W2/W3/W5 (separate
 goals). Don't re-derive the analysis.
@@ -241,7 +241,7 @@ goals). Don't re-derive the analysis.
 - Images/context can be sent to the agent (capability-gated per backend); usage is
   visible and truthful; advertised commands are usable from the UI.
 - typecheck + lint + build + test clean; live app verified in both themes.
-- docs/ACP-LEVERAGE-PLAN.md status boxes updated + an Implementation log appended
+- docs/plan-backlog/ACP-LEVERAGE-PLAN.md status boxes updated + an Implementation log appended
   (per workstream: what changed, files touched, verification). Restore the live app
   to a clean state when finished.
 ```

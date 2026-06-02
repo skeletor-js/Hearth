@@ -8,7 +8,7 @@
 // own Vite server on launch, rooted at the writable workspace (see workspace.ts),
 // and loads that URL — so the same hot-reload path exists in production. If the
 // server fails to start, it falls back to the static bundle so the app still
-// launches (without live self-evolution). See docs/V2-PACKAGING-PLAN.md (WS2-2/3).
+// launches (without live self-evolution). See docs/completed-plans/V2-PACKAGING-PLAN.md (WS2-2/3).
 
 import { join } from 'node:path'
 import { startRendererServer } from './packaging/renderer-server.js'

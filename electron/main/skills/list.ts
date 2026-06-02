@@ -6,7 +6,7 @@
 // Claude Code discovers skills from disk, so "disabling" one means moving its
 // folder out of the discovery path: Hearth parks it in a sibling `skills-disabled/`
 // and moves it back to re-enable. Disabled skills are still surfaced here (with
-// enabled:false) so the UI can toggle them. See docs/V2-PACKAGING-PLAN.md (WS3).
+// enabled:false) so the UI can toggle them. See docs/completed-plans/V2-PACKAGING-PLAN.md (WS3).
 
 import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'

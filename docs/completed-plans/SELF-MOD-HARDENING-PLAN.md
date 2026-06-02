@@ -25,9 +25,9 @@ mode). This is the active, tested enforcement path.
 
 Hearth lets an agent rewrite its own running renderer. The *versioning* layer is
 solid — commit-per-turn with trailers, Model A net-effect revert undo/redo, and
-soul/memory categorization ([git.ts](../electron/main/self-mod/git.ts),
-[self-mod-service.ts](../electron/main/self-mod/self-mod-service.ts),
-[SELF-EVOLUTION-HISTORY.md](SELF-EVOLUTION-HISTORY.md)). The *application* and
+soul/memory categorization ([git.ts](../../electron/main/self-mod/git.ts),
+[self-mod-service.ts](../../electron/main/self-mod/self-mod-service.ts),
+[SELF-EVOLUTION-HISTORY.md](../SELF-EVOLUTION-HISTORY.md)). The *application* and
 *recovery* layers are thin. A comparison against Stella surfaced four gaps, and a
 fifth requirement emerged in review:
 
@@ -53,9 +53,9 @@ multiple subagents editing files in parallel.
 > collapse, (2) change the heading to *My Hearth*, (3) make the right sidebar default
 > to Scratchpad."
 
-**Today:** one `host.prompt` ([ipc.ts:72](../electron/main/ipc.ts)); the backend spawns
+**Today:** one `host.prompt` ([ipc.ts:72](../../electron/main/ipc.ts)); the backend spawns
 3 subagents; every edit streams as a `diff` nested in a `tool_call` under one
-`sessionId` ([acp-translate.ts:153](../electron/main/agents/acp-translate.ts)). Vite
+`sessionId` ([acp-translate.ts:153](../../electron/main/agents/acp-translate.ts)). Vite
 hot-swaps each file the instant it's written, so the live UI lurches through partial
 states and can crash mid-turn if one subagent's file references another's not-yet-written
 symbol. `captureTurn` commits all three as **one** commit. No typecheck, no visualization.
@@ -85,12 +85,12 @@ These were the open risks; each is now settled (see code grounding):
 - **Per-subagent attribution is feasible, not just degradable.** The Claude adapter
   attaches the parent Task id to every tool-call update:
   `update._meta.claudeCode.parentToolUseId` (`@zed-industries/claude-agent-acp/dist/acp-agent.js`).
-  Our [acp-translate.ts](../electron/main/agents/acp-translate.ts) currently drops `_meta`;
+  Our [acp-translate.ts](../../electron/main/agents/acp-translate.ts) currently drops `_meta`;
   threading it through gives real per-subagent attribution. (Codex: same `_meta` hatch
   exists; if unpopulated, that backend degrades to a single "main" group — no breakage.)
 - **Baseline = git HEAD blob, not the stream's `oldText`.** Robust against shell-based
   writes (`sed`/`echo`) that emit no `diff`, and valid because the tree is clean at run
-  start (the invariant [SELF-EVOLUTION-HISTORY.md](SELF-EVOLUTION-HISTORY.md) already relies
+  start (the invariant [SELF-EVOLUTION-HISTORY.md](../SELF-EVOLUTION-HISTORY.md) already relies
   on). `oldText` is just a fast path. Path discovery for pinning = (diff-stream paths) ∪
   (paths that went clean→dirty during the run, via `listDirty`).
 - **Commit grouping = file-disjoint connected components of (subagent ↔ file).** Subagents
@@ -140,12 +140,12 @@ These were the open risks; each is now settled (see code grounding):
   they can't share memory (mirrors Stella's `/__stella/self-mod/hmr`).
 - **Overlay covers only Vite-served paths (`src/**`).** Non-renderer edits keep flowing
   through the existing `HmrController` full-reload / process-restart tiers
-  ([hmr.ts](../electron/main/self-mod/hmr.ts), [path-relevance.ts](../electron/main/self-mod/path-relevance.ts)).
+  ([hmr.ts](../../electron/main/self-mod/hmr.ts), [path-relevance.ts](../../electron/main/self-mod/path-relevance.ts)).
 - **Model A revert is extended additively** — the per-commit net-effect engine is unchanged;
   run-grouping is a presentation + batch-undo layer on top.
 - **Reuse:** `commitSelfMod({ paths })`, the revert graph, `toast()`
-  ([toast.tsx](../src/shell/toast.tsx)), `selfMod.*`, `agent.prompt`, `sessions.list()`, and
-  the [channels.ts](../electron/shared/channels.ts) → preload → `window.hearth` pattern.
+  ([toast.tsx](../../src/shell/toast.tsx)), `selfMod.*`, `agent.prompt`, `sessions.list()`, and
+  the [channels.ts](../../electron/shared/channels.ts) → preload → `window.hearth` pattern.
 
 ## Workstreams
 
@@ -157,17 +157,17 @@ clean commit).
   `recordWrite(runId, path, { parentToolCallId, oldText })`, `endRun(runId) → { groups }`
   where `groups` are the file-disjoint components (each `{ paths, subagentLabel }`). Holds
   touched paths, per-path subagent attribution, and baselines.
-- Extend `SessionUpdate` ([protocol.ts](../electron/shared/protocol.ts)): add optional
+- Extend `SessionUpdate` ([protocol.ts](../../electron/shared/protocol.ts)): add optional
   `parentToolCallId` to the `tool-call` and `diff` variants. In
-  [acp-translate.ts](../electron/main/agents/acp-translate.ts), read
+  [acp-translate.ts](../../electron/main/agents/acp-translate.ts), read
   `update._meta?.claudeCode?.parentToolUseId` and thread it through.
-- Tap the stream at [ipc.ts:49](../electron/main/ipc.ts): map `sessionId → active runId`; on
+- Tap the stream at [ipc.ts:49](../../electron/main/ipc.ts): map `sessionId → active runId`; on
   `diff`, `recordWrite` with its `parentToolCallId`; on `tool_call`, track Task lanes (for W4)
   and the **in-flight writer count** — the signal that drives W1's concurrency gate (1 writer →
   immediate HMR; 2+ → atomic mode).
 - Baseline: capture lazily per path from `git show HEAD:<path>` (cache per run); fall back to
   stream `oldText`; new files (absent from HEAD) are unpinned.
-- [ipc.ts:72](../electron/main/ipc.ts) `agentPrompt`: mint `runId`, `beginRun`, `endRun`; pass
+- [ipc.ts:72](../../electron/main/ipc.ts) `agentPrompt`: mint `runId`, `beginRun`, `endRun`; pass
   groups to `captureTurn`.
 - **Incomplete-run recovery:** at run start, if the tree is dirty with uncommitted changes (a
   prior turn that died before `captureTurn`), auto-commit them as a **recovered** run (own
@@ -177,7 +177,7 @@ clean commit).
   baseline capture, clean→dirty discovery, new-file null, incomplete-run recovery.
 
 ### W0b — Write-mediation broker + source-write enforcement  *(layered; spike adapter first)*
-- **Mediate.** Flip the ACP fs capability in [acp-client.ts](../electron/main/agents/acp-client.ts)
+- **Mediate.** Flip the ACP fs capability in [acp-client.ts](../../electron/main/agents/acp-client.ts)
   from `false` to `true`, and implement the client `readTextFile` / `writeTextFile` handlers
   (the adapter calls them — `acp-agent.js:689/693`). `readTextFile`: serve disk + record the
   version this caller read. `writeTextFile`: record/confirm baseline, feed
@@ -191,12 +191,12 @@ clean commit).
 - **Force source writes onto the mediated path.** So shell writes can't silently bypass the
   broker:
   - *Claude:* write a **PreToolUse hook** into the managed `.claude` config (Hearth already
-    manages it — [claude.ts](../electron/main/agents/claude.ts)) that denies source-mutating
+    manages it — [claude.ts](../../electron/main/agents/claude.ts)) that denies source-mutating
     shell (`sed -i`, `tee`, `>`/`>>` into `src/**`,`electron/**`, `cp`/`mv` onto tracked
     source) → the agent must use the Edit/Write tool, which is mediated. Runs regardless of
     permission mode.
   - *Codex:* no hook mechanism, so auto-reject the same commands at `host.onPermission`
-    ([ipc.ts:57](../electron/main/ipc.ts)) using `req.toolCall.rawInput.command` (confirmed
+    ([ipc.ts:57](../../electron/main/ipc.ts)) using `req.toolCall.rawInput.command` (confirmed
     present in codex-acp).
   - *Both:* Vite's existing file watcher is the universal **detection** backstop — any write
     that still slips through is caught post-hoc (overlay gives it atomic visibility; typecheck
@@ -210,7 +210,7 @@ clean commit).
 
 ### W1 — Snapshot overlay Vite plugin (concurrency-gated atomic apply)  *(core fix; spike first)*
 - New `electron/vite-plugins/self-mod-overlay.ts` in `renderer.plugins`
-  ([electron.vite.config.ts](../electron.vite.config.ts)):
+  ([electron.vite.config.ts](../../electron.vite.config.ts)):
   - `configureServer`: `/__hearth/self-mod` middleware accepting `pin {path, baseline}` /
     `apply {paths}` / `release {paths}`; holds `Map<path, baseline>`.
   - `load(id)`: pinned path → return baseline instead of disk.
@@ -222,7 +222,7 @@ clean commit).
   intact). On entering concurrent mode, pin further writes with **baseline = current disk at
   pin time** (the last coherently-visible content; git-HEAD is the clean-start case). `apply`
   when the parallel phase resolves (or at `endRun`).
-- New `isViteTrackablePath` in [path-relevance.ts](../electron/main/self-mod/path-relevance.ts).
+- New `isViteTrackablePath` in [path-relevance.ts](../../electron/main/self-mod/path-relevance.ts).
 - Main posts `pin`/`apply` from RunTracker per the concurrency state. Non-renderer paths go
   through `HmrController.apply`.
 - **Spike first:** prove single-file pin→edit→release keeps React state and HMRs cleanly on
@@ -237,7 +237,7 @@ clean commit).
   Subject from the Task tool-call title, fallback to first changed file. Single-group turns =
   today's one-commit behavior (zero regression).
 - `git.ts` `recentSelfMods`: return `runId` + subagent label per entry (parse the new trailers).
-- `History.tsx` ([History.tsx](../src/app/history/History.tsx)): group rows by `runId`; a
+- `History.tsx` ([History.tsx](../../src/app/history/History.tsx)): group rows by `runId`; a
   multi-member run renders expandable with **Undo all** (revert members in reverse via the
   existing `step()`/conflict→agent path) + per-member Undo. Single-member runs unchanged.
 - Model A engine (`buildRevertGraph`/`isApplied`) untouched.
@@ -247,7 +247,7 @@ clean commit).
 Two layers, because main is itself editable (full Stella model) so the in-renderer surface
 can't be the only net:
 - **First line (in-renderer UX):** `src/shell/ErrorBoundary.tsx` wrapping `<RouterProvider>`
-  ([main.tsx](../src/main.tsx)) + `src/shell/CrashSurface.tsx`. Catches React render errors and
+  ([main.tsx](../../src/main.tsx)) + `src/shell/CrashSurface.tsx`. Catches React render errors and
   forwarded build errors. Actions: **Reload**; **Ask Hearth to repair** (pre-written prompt via
   `window.hearth.agent.prompt`, session = newest from `sessions.list()`); **Undo latest**
   (`selfMod.history()` → newest applied → `selfMod.undo`; run-grouping lets it target the whole
@@ -268,9 +268,9 @@ can't be the only net:
 - Broadcast `self-mod:activity` (new channel) from RunTracker: `{ runId, sessionId,
   lanes: [{ toolCallId, title, status, paths }] }` — paths attributed per subagent via
   `parentToolCallId`; flag same-path-across-lanes collisions.
-- `selfMod.onActivity(cb)` in [preload/index.ts](../electron/preload/index.ts).
+- `selfMod.onActivity(cb)` in [preload/index.ts](../../electron/preload/index.ts).
 - New dedicated panel in the WorkPanel (alongside Review / Self / History,
-  [src/app/workbench](../src/app/workbench/)): live subagent lanes + their files + collision
+  [src/app/workbench](../../src/app/workbench/)): live subagent lanes + their files + collision
   warnings; clears on finalize.
 - Attribution sources: Claude via `_meta.claudeCode.parentToolUseId` (W0). Codex via a
   vendored fork-patch attaching `threadId → _meta` (the signal exists — `subAgentThreadSpawn`
@@ -278,8 +278,8 @@ can't be the only net:
   Panel degrades to a combined-file view on any backend that doesn't supply attribution.
 
 ### W5 — Validation gate (enforced + advisory)
-- **Advisory** — [AGENTS.md](../AGENTS.md): a *Design* section (use
-  [hearth.css](../src/styles/hearth.css) tokens, reuse icon/component vocabulary, full-canvas
+- **Advisory** — [AGENTS.md](../../AGENTS.md): a *Design* section (use
+  [hearth.css](../../src/styles/hearth.css) tokens, reuse icon/component vocabulary, full-canvas
   pages, anti-slop rules, human copy); a *Parallel subagents* rule (partition by disjoint
   files; sequence shared-file work); a *Validation* line (`bun run typecheck`); and a *Live
   view semantics* note — single-agent edits hot-reload into `view_app` immediately, but during
@@ -302,7 +302,7 @@ The renderer crash surface can't recover a broken main-process edit (main is dow
   restart never reached ready) — or crashes within ~10s — **auto-revert that self-mod commit**
   (`git revert`, the existing safe path) and relaunch clean. Bounded retry count so a poisoned
   revert can't loop into its own crash cycle (after N, boot to a minimal safe-mode shell).
-- Files: watchdog in main bootstrap ([index.ts](../electron/main/index.ts)) + a small
+- Files: watchdog in main bootstrap ([index.ts](../../electron/main/index.ts)) + a small
   `electron/main/self-mod/boot-watchdog.ts` (marker read/write, crash-window timer, revert
   call); blocking-gate hook in `HmrController.apply` / `SelfModService`.
 - Tests: `boot-watchdog.test.ts` — marker lifecycle, crash-window revert, retry cap.
@@ -410,7 +410,7 @@ much restart-tier (`electron/**`) self-editing.
 
 ## Follow-ups
 
-- ~~**Update [ARCHITECTURE.md](ARCHITECTURE.md)** to match the decided scope.~~ **Done** — the
+- ~~**Update [ARCHITECTURE.md](../ARCHITECTURE.md)** to match the decided scope.~~ **Done** — the
   one-idea section, process boundaries, the self-evolution engine section, the diagram, and the
   "do NOT do" list now state: the agent may edit any repo source except the hard-blocked denylist
   and the protected safety-net island; main edits are live but guarded by the boot watchdog +

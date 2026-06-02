@@ -11,7 +11,7 @@
 //
 // This module is part of the protected island itself and MUST stay dependency-free
 // (node builtins only) so the agent can never break it indirectly by editing a
-// transitive import. See docs/SELF-MOD-HARDENING-PLAN.md (W7).
+// transitive import. See docs/completed-plans/SELF-MOD-HARDENING-PLAN.md (W7).
 
 import path from 'node:path'
 import os from 'node:os'

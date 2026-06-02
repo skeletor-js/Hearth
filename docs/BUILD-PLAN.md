@@ -41,6 +41,36 @@ uninstalled, there are **no git commits**, and the ACP client throws
 
 ---
 
+## Plan docs index (updated 2026-06-01)
+
+Planning docs are filed by status under `docs/`. Reference docs
+([ARCHITECTURE](ARCHITECTURE.md), [COMPLIANCE](COMPLIANCE.md),
+[MILESTONE-V1](MILESTONE-V1.md), [SOUL-AND-MEMORY](SOUL-AND-MEMORY.md),
+[SELF-EVOLUTION-HISTORY](SELF-EVOLUTION-HISTORY.md)) and this tracker stay at the
+`docs/` root.
+
+- **Active** — [`docs/active-plans/`](active-plans/):
+  [Connectors, Browser & Panels](active-plans/CONNECTORS-PLAN.md) ·
+  [Seamless Self-Mod](active-plans/SEAMLESS-SELF-MOD-PLAN.md)
+- **Backlog** — [`docs/plan-backlog/`](plan-backlog/):
+  [ACP Leverage](plan-backlog/ACP-LEVERAGE-PLAN.md)
+- **Completed** — [`docs/completed-plans/`](completed-plans/):
+  [UI Build](completed-plans/UI-PLAN.md) ·
+  [UI Review](completed-plans/ui-review.md) +
+  [UI Implementation](completed-plans/ui-implementation-plan.md) ·
+  [Settings/Auth/MCP/Secrets](completed-plans/SETTINGS-AND-AUTH-PLAN.md) ·
+  [Scratchpad](completed-plans/SCRATCHPAD-PLAN.md) ·
+  [Agents & History](completed-plans/AGENTS-AND-HISTORY-PLAN.md) ·
+  [Self-Mod Hardening](completed-plans/SELF-MOD-HARDENING-PLAN.md) ·
+  [Micro-App Sandbox Hardening](completed-plans/MICRO-APP-SANDBOX-HARDENING-PLAN.md) ·
+  [V2 Packaging](completed-plans/V2-PACKAGING-PLAN.md)
+
+New connector/ACP work supersedes the earlier in-app OAuth-broker idea; see the
+[Connectors plan](active-plans/CONNECTORS-PLAN.md) (delegation via the ACP
+backends) and the [ACP Leverage backlog](plan-backlog/ACP-LEVERAGE-PLAN.md).
+
+---
+
 ## Phase 0 — Boot the skeleton (GATE — blocks everything)
 
 Serial. Nothing else is real until `bun dev` opens a window and typecheck is
@@ -155,7 +185,7 @@ end to end before Track A is done.
       registers `agent.onPermission`, holds the resolver keyed by request id, and
       completes it on the renderer's reply (so the turn never hangs); preload
       `permission.{onRequest,respond}`; renderer
-      [PermissionPrompt](../src/app/chat/PermissionPrompt.tsx) with allow /
+      [the permission prompt](../src/app/chat/ChatView.tsx) (now `ApproveCard`) with allow /
       allow-always / reject. Verified at the agent level (FakeAgent gates on the
       answer) and boots clean; live-model verification deferred with P2.
 - [x] **P1-B2. git service tests + harden.** 18 tests against throwaway temp
@@ -173,7 +203,7 @@ end to end before Track A is done.
       [MicroAppFrame](../src/shell/MicroAppFrame.tsx) is a sandboxed iframe host
       (`sandbox="allow-scripts allow-same-origin"`, no-referrer) with loading/error
       states. Live serve is exercised in P4.
-- [x] **P1-B5. Richer chat rendering.** [ChatApp.tsx](../src/app/chat/ChatApp.tsx)
+- [x] **P1-B5. Richer chat rendering.** [ChatView.tsx](../src/app/chat/ChatView.tsx)
       renders all five update variants: coalesced assistant messages, italic
       thoughts, in-place tool-call status (○◐●✕), and diff chips with +/- line
       counts; auto-scrolls. Drops `agentUpdate` through the typed `AgentUpdatePayload`.
@@ -229,7 +259,7 @@ on the real app, computer-use driven.)
 - [x] **P3-3. Fixed the `undo` changed-paths bug.** `undo` reads
       `diffPaths(repoRoot, revertCommit)` not a post-revert `listDirty`. VERIFIED
       LIVE: clicking Undo reverted the file and the sidebar rolled back to HEARTH.
-- [x] **P3-4. History UI.** [HistoryApp](../src/app/history/HistoryApp.tsx) +
+- [x] **P3-4. History UI.** [History](../src/app/history/History.tsx) +
       `/history` route + sidebar link, per-entry Undo. Also surfaces **reverted**
       state (strike-through + REVERTED badge + "Undone") so an undo has visible
       confirmation — `recentSelfMods` flags self-mods that a later revert undid.
@@ -253,7 +283,7 @@ Depends on P1-B4.
 > the *only* isolation today and is not enough under a malicious-agent model.
 > Hardening (drop `allow-same-origin`, per-app user-approved egress, install-time
 > RCE containment, credential broker) is scoped in
-> [MICRO-APP-SANDBOX-HARDENING-PLAN.md](MICRO-APP-SANDBOX-HARDENING-PLAN.md).
+> [MICRO-APP-SANDBOX-HARDENING-PLAN.md](completed-plans/MICRO-APP-SANDBOX-HARDENING-PLAN.md).
 
 ---
 
@@ -322,11 +352,11 @@ Carried from MILESTONE-V1's out-of-scope list — do not let these creep in:
   ([workspace.ts](../electron/main/packaging/workspace.ts),
   [renderer-server.ts](../electron/main/packaging/renderer-server.ts)), with an
   electron-builder config + hardened-runtime entitlements. See
-  [V2-PACKAGING-PLAN.md](./V2-PACKAGING-PLAN.md). A real `bun run dist` +
+  [V2-PACKAGING-PLAN.md](completed-plans/V2-PACKAGING-PLAN.md). A real `bun run dist` +
   notarization run is environment-gated.
 - Auto-update, an app store, multi-window, voice, mobile bridge.
 - ~~Sandbox hardening beyond the iframe `sandbox` attribute.~~ — DONE. Layered
   isolation (opaque-origin frame, Hearth-injected per-app CSP, deny-by-default
   permissions, main-window nav guards, install-script containment, user-approved
   egress grants, credential broker) per
-  [MICRO-APP-SANDBOX-HARDENING-PLAN.md](MICRO-APP-SANDBOX-HARDENING-PLAN.md).
+  [MICRO-APP-SANDBOX-HARDENING-PLAN.md](completed-plans/MICRO-APP-SANDBOX-HARDENING-PLAN.md).

@@ -26,7 +26,7 @@ edits can't hot-reload, so they ride a guarded path (blocking typecheck + a boot
 watchdog that auto-reverts a boot-breaking edit). Safety comes from
 *recoverability*, not from fencing the agent out. See
 [the self-evolution engine](#the-self-evolution-engine-electronmainself-mod) and
-[SELF-MOD-HARDENING-PLAN.md](SELF-MOD-HARDENING-PLAN.md).
+[SELF-MOD-HARDENING-PLAN.md](completed-plans/SELF-MOD-HARDENING-PLAN.md).
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -129,7 +129,7 @@ When the agent edits a canvas path, four things happen:
    startup. An async typecheck after canvas edits surfaces type breakage.
 
 `self-mod-service.ts` orchestrates these and exposes `commit` / `revert` to IPC.
-Full design + rationale in [SELF-MOD-HARDENING-PLAN.md](SELF-MOD-HARDENING-PLAN.md).
+Full design + rationale in [SELF-MOD-HARDENING-PLAN.md](completed-plans/SELF-MOD-HARDENING-PLAN.md).
 
 ## Micro-apps (`electron/main/micro-apps/` + `templates/micro-app/`)
 
