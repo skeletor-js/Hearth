@@ -66,6 +66,24 @@ export async function listDirty(repoRoot: string): Promise<string[]> {
   return paths
 }
 
+/** Tracked working-tree changes only (staged or unstaged) — untracked files are
+ * excluded. This is what a `git revert` can actually conflict with: a revert never
+ * touches untracked files, so the undo/redo guard must check THIS, not listDirty.
+ * (listDirty includes untracked because the commit flow needs to capture new files
+ * an agent creates; the guard has the opposite requirement.) */
+export async function listTrackedDirty(repoRoot: string): Promise<string[]> {
+  const out = await git(repoRoot, ['status', '--porcelain', '-z'])
+  const records = out.split('\0').filter(Boolean)
+  const paths: string[] = []
+  for (let i = 0; i < records.length; i++) {
+    const rec = records[i]
+    const status = rec.slice(0, 2)
+    if (status !== '??') paths.push(rec.slice(3))
+    if (status[0] === 'R' || status[0] === 'C') i++ // consume the old-path field
+  }
+  return paths
+}
+
 /** Which surface a self-mod belongs to (derived from the files it changed). */
 export type SelfModKind = 'code' | 'soul' | 'memory'
 

@@ -8,6 +8,7 @@ import { exec as gitExec } from 'dugite'
 
 import {
   listDirty,
+  listTrackedDirty,
   commitSelfMod,
   revertCommit,
   recentSelfMods,
@@ -19,6 +20,31 @@ import {
   effectiveRevertOf,
   tryRevert,
 } from './git'
+
+describe('listTrackedDirty (undo/redo guard)', () => {
+  test('ignores untracked files but reports tracked modifications', async () => {
+    const repo = mkdtempSync(join(tmpdir(), 'hearth-tracked-'))
+    const run = (args: string[]) => gitExec(args, repo)
+    await run(['init', '-b', 'main'])
+    await run(['config', 'user.email', 't@h.dev'])
+    await run(['config', 'user.name', 'T'])
+    writeFileSync(join(repo, 'tracked.txt'), 'v1\n')
+    await run(['add', '-A'])
+    await run(['commit', '-m', 'base'])
+
+    // An untracked file alone must NOT count as dirty for the revert guard...
+    writeFileSync(join(repo, 'UNTRACKED.md'), 'wip\n')
+    expect(await listTrackedDirty(repo)).toEqual([])
+    // ...even though listDirty (used by the commit flow) does see it.
+    expect(await listDirty(repo)).toContain('UNTRACKED.md')
+
+    // A modification to a tracked file DOES count.
+    writeFileSync(join(repo, 'tracked.txt'), 'v2\n')
+    expect(await listTrackedDirty(repo)).toContain('tracked.txt')
+
+    rmSync(repo, { recursive: true, force: true })
+  })
+})
 
 describe('tryRevert conflict handling', () => {
   test('a conflicting revert reports the files and leaves a clean tree', async () => {

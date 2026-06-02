@@ -8,7 +8,7 @@
 
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { commitSelfMod, diffPaths, listDirty, recentSelfMods, redoTarget, restorePaths, tryRevert, type SelfModKind, type SelfModLogEntry } from './git.js'
+import { commitSelfMod, diffPaths, listDirty, listTrackedDirty, recentSelfMods, redoTarget, restorePaths, tryRevert, type SelfModKind, type SelfModLogEntry } from './git.js'
 import { HmrController } from './hmr.js'
 import { classifyBatch, type ReloadKind } from './path-relevance.js'
 import { MAIN_LABEL, type CommitGroup } from './run-tracker.js'
@@ -207,7 +207,9 @@ export class SelfModService {
   }
 
   private async step(originalHash: string, revertHash: string): Promise<StepResult> {
-    if ((await listDirty(this.repoRoot)).length > 0) return { status: 'dirty' }
+    // Only TRACKED changes block a revert — untracked files are never touched by
+    // `git revert`, so an unrelated untracked file must not jam undo/redo.
+    if ((await listTrackedDirty(this.repoRoot)).length > 0) return { status: 'dirty' }
     const outcome = await tryRevert(this.repoRoot, revertHash)
     if (!outcome.ok) return { status: 'conflict', hash: originalHash, files: outcome.files }
     const changedPaths = await diffPaths(this.repoRoot, outcome.commit)
