@@ -181,7 +181,7 @@ function GuidedConnectors({ active, onRefresh }: { active: ActiveConnectors; onR
       <p className="set-note">
         Hearth runs the right command in your terminal and the CLI handles sign-in — no tokens are stored here.
         Connectors are configured <b>per backend</b>, so with both Claude Code and Codex set up you authorize each
-        connector twice.
+        connector twice. Which connectors and features are available tracks the vendored adapter versions (see About).
       </p>
       {backends.length === 0 && (
         <p className="set-note warn">Neither claude nor codex resolves on your PATH — install one to add connectors.</p>

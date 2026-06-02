@@ -82,6 +82,12 @@ export function BrowserTab() {
         >
           <Icon name="arrow-square-out" />
         </button>
+        <span
+          className="chip chip-sm"
+          title="The agent shares this exact browser session — anything you sign into here is visible to it."
+        >
+          <Icon name="users-three" /> shared
+        </span>
       </div>
       {/* The native browser view is painted over this region by main. */}
       <div ref={regionRef} className="bview-canvas" style={{ background: 'var(--bg-inset)' }} />

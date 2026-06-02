@@ -319,7 +319,8 @@ being in a chat session — to browse, run a command, or edit a markdown/text fi
    (2026-06-02).** The terminal-command shortcuts + the six labeled connectors, and
    the authorize-twice walkthrough when both backends are set up. Depends on P2's PATH
    fix and P2's per-backend config readers being in place.
-4. **P4 — Track A4 + C1/C2 polish + A5 hygiene (optional).**
+4. **P4 — Track A4 + C1/C2 polish + A5 hygiene (optional). ✅ DONE (2026-06-02)**
+   for the cheap, high-value items; two A5 fixes deliberately deferred (see log).
 
 Each phase is buildable and shippable on its own. P1 is file-disjoint from the
 Track A main-process work.
@@ -577,4 +578,41 @@ With one backend, a single silent step.
   command, backend sequencing, and PTY delivery are proven; the OAuth round-trip is
   the user-in-the-loop step (per this plan's P3 verify caveat).
 
-_(append per phase: what changed, files touched, verification results)_
+### P4 — A4 + C1/C2 + A5 hygiene · 2026-06-02
+
+Done (cheap, high-value):
+- **A4** — vendored adapter/SDK versions were already surfaced in Settings → About
+  (Claude adapter, Codex adapter, ACP SDK). Added a note in the guided-connectors
+  copy that connector/feature currency tracks those versions.
+- **C1** — already complete: `BrowserTab` has back/forward/reload, an editable
+  address bar, and open-in-default-browser. No new work.
+- **C2 (indicator)** — added a "shared" chip in the browser toolbar with a tooltip
+  explaining the agent shares this exact session and sign-ins here are visible to
+  it. (The "open a fresh/cleared partition" half stays v2 per the plan.)
+- **A5.2** — `mcpRemove` now deletes the server's stored `env[].secretKey` secrets
+  so they don't orphan in the keyring.
+
+Deferred (deliberately — secondary registry path; risk/scope > polish value):
+- **A5.1 (id-keyed secrets)** — secrets are still keyed by `mcp.<slug(name)>.<var>`.
+  Keying by server `id` needs a create-then-set-secret refactor (a new server has
+  no id at save time); not worth the regression risk on the now-secondary registry
+  path. A5.2 covers the orphan-on-remove case; rename still orphans.
+- **A5.3 (surface `toAcpServers().skipped`)** — servers skipped for a missing
+  secret are still dropped silently from a session's MCP set; surfacing needs UI
+  plumbing of the skipped list. Low priority on the secondary path.
+
+**Files:** `electron/main/ipc.ts` (A5.2), `src/app/workbench/BrowserTab.tsx` (C2),
+`src/app/settings/sections/ConnectorsSection.tsx` (A4 note).
+
+**Verification:** C2 chip renders in the browser toolbar without disturbing the URL
+bar layout (snapshot). typecheck + lint + build + 306 tests green.
+
+---
+
+## Plan complete (2026-06-02)
+
+All phases shipped: P1 (panels global), P2 (A0/A2/A3), P3 (A1/A1b), P4 (A4 note,
+C1 already done, C2 indicator, A5.2). Deferred by design and recorded above: A5.1,
+A5.3, and C2's clear-partition (v2). The two locked non-goals hold throughout —
+Hearth brokers no OAuth and stores no third-party tokens; connector auth stays the
+backends' job.

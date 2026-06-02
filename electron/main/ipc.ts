@@ -388,7 +388,12 @@ export function registerIpc(services: MainServices): void {
   ipcMain.handle(HEARTH_CHANNELS.mcpList, () => mcp.list())
   ipcMain.handle(HEARTH_CHANNELS.mcpAdd, (_e, input: McpServerInput) => mcp.add(input))
   ipcMain.handle(HEARTH_CHANNELS.mcpUpdate, (_e, id: string, patch: Partial<McpServerInput>) => mcp.update(id, patch))
-  ipcMain.handle(HEARTH_CHANNELS.mcpRemove, (_e, id: string) => mcp.remove(id))
+  ipcMain.handle(HEARTH_CHANNELS.mcpRemove, (_e, id: string) => {
+    // A5: clean up the server's stored secrets so they don't orphan in the keyring.
+    const cfg = mcp.get(id)
+    if (cfg) for (const e of cfg.env) if (e.secretKey) secrets.delete(e.secretKey)
+    return mcp.remove(id)
+  })
   ipcMain.handle(HEARTH_CHANNELS.mcpSetEnabled, (_e, id: string, enabled: boolean) => mcp.setEnabled(id, enabled))
   ipcMain.handle(HEARTH_CHANNELS.mcpTest, async (_e, id: string) => {
     const cfg = mcp.get(id)
