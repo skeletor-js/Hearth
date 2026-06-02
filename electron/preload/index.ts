@@ -229,6 +229,21 @@ const api = {
     revoke: (name: string, host?: string): Promise<void> =>
       ipcRenderer.invoke(CH.microAppRevoke, name, host),
   },
+  // Morph cover — used only by the overlay renderer (src/overlay). Main pushes the
+  // before/after screenshots; the overlay signals progress back.
+  morph: {
+    onCover: (cb: (oldFrame: string) => void) => {
+      const h = (_e: unknown, p: { oldFrame: string }) => cb(p.oldFrame)
+      ipcRenderer.on(CH.morphCover, h)
+      return () => void ipcRenderer.off(CH.morphCover, h)
+    },
+    onHandoff: (cb: (newFrame: string) => void) => {
+      const h = (_e: unknown, p: { newFrame: string }) => cb(p.newFrame)
+      ipcRenderer.on(CH.morphHandoff, h)
+      return () => void ipcRenderer.off(CH.morphHandoff, h)
+    },
+    signal: (type: 'ready' | 'cover-painted' | 'done') => ipcRenderer.send(CH.morphSignal, { type }),
+  },
 }
 
 contextBridge.exposeInMainWorld('hearth', api)

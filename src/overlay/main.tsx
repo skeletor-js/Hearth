@@ -6,11 +6,11 @@ import { MorphTransition } from './MorphTransition'
 // It only ever paints the morph cover; the rest of the time it's an invisible,
 // click-through window floating above the main window.
 
-const w = window as unknown as Record<string, unknown>
-w.__hearthOverlayReady = true
-
 createRoot(document.getElementById('overlay-root')!).render(
   <StrictMode>
     <MorphTransition />
   </StrictMode>,
 )
+
+// Tell main the overlay renderer is live and can receive cover/handoff frames.
+window.hearth?.morph?.signal('ready')

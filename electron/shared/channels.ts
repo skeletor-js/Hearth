@@ -102,6 +102,12 @@ export const HEARTH_CHANNELS = {
   microAppApprove: 'micro-app:approve',
   microAppRevoke: 'micro-app:revoke',
   permissionRespond: 'permission:respond',
+  // Morph cover (seamless self-mod): main → overlay renderer shows/animates a
+  // screenshot cover so a structural reload never flashes black. overlay → main
+  // signals are sent on morphSignal with a {type} discriminator.
+  morphCover: 'morph:cover', // main → overlay: { oldFrame }
+  morphHandoff: 'morph:handoff', // main → overlay: { newFrame }
+  morphSignal: 'morph:signal', // overlay → main: { type: 'ready'|'cover-painted'|'done' }
 
   // main → renderer (send/broadcast)
   agentUpdate: 'agent:update',

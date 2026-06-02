@@ -7,8 +7,11 @@
 // reload never shows a black flash. This module owns only the window lifecycle.
 
 import { join } from 'node:path'
-import { BrowserWindow, screen } from 'electron'
+import { BrowserWindow, ipcMain, screen } from 'electron'
+import { HEARTH_CHANNELS } from '../../shared/channels.js'
 import type { RendererTarget } from '../dev-server.js'
+
+export type MorphSignal = 'ready' | 'cover-painted' | 'done'
 
 // Union bounds of all displays, so one window covers the whole desktop.
 function allDisplaysBounds(): { x: number; y: number; width: number; height: number } {
@@ -37,8 +40,53 @@ export class OverlayWindow {
   private win: BrowserWindow | null = null
   private ready = false
   private readyWaiters: Array<() => void> = []
+  // Resolvers waiting on a specific overlay→main signal (cover-painted / done).
+  private signalWaiters = new Map<MorphSignal, Array<() => void>>()
+  private signalListenerBound = false
 
   constructor(private readonly target: RendererTarget) {}
+
+  // Listen for overlay→main morph signals, filtered to THIS window's webContents.
+  private bindSignalListener(): void {
+    if (this.signalListenerBound) return
+    this.signalListenerBound = true
+    ipcMain.on(HEARTH_CHANNELS.morphSignal, (event, payload: { type?: MorphSignal }) => {
+      if (!this.win || this.win.isDestroyed()) return
+      if (event.sender !== this.win.webContents) return
+      const type = payload?.type
+      if (!type) return
+      const waiters = this.signalWaiters.get(type)
+      if (waiters) {
+        this.signalWaiters.set(type, [])
+        for (const w of waiters) w()
+      }
+    })
+  }
+
+  /** Push a screenshot to the overlay to paint as the cover. */
+  sendCover(oldFrame: string): void {
+    this.ensure().webContents.send(HEARTH_CHANNELS.morphCover, { oldFrame })
+  }
+
+  /** Hand the overlay the post-reload screenshot to morph to. */
+  sendHandoff(newFrame: string): void {
+    this.ensure().webContents.send(HEARTH_CHANNELS.morphHandoff, { newFrame })
+  }
+
+  /** Resolve when the overlay reports `type` (or after timeoutMs, so we never hang). */
+  awaitSignal(type: MorphSignal, timeoutMs: number): Promise<void> {
+    this.bindSignalListener()
+    return new Promise((resolve) => {
+      const t = setTimeout(resolve, timeoutMs)
+      const done = () => {
+        clearTimeout(t)
+        resolve()
+      }
+      const list = this.signalWaiters.get(type) ?? []
+      list.push(done)
+      this.signalWaiters.set(type, list)
+    })
+  }
 
   /** Create the window (idempotent) and begin loading the overlay renderer. */
   ensure(): BrowserWindow {
