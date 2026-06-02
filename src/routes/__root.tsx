@@ -17,6 +17,7 @@ const CRUMB: Record<string, string> = {
   '/new': 'New session',
   '/search': 'Search',
   '/history': 'History',
+  '/demo-calendar': 'CLICK THIS',
   '/settings': 'Settings',
 }
 
