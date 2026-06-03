@@ -107,6 +107,10 @@ export function Rail() {
             <Icon name="squares-four" />
             <span className="ri-label">Tools</span>
           </Link>
+          <Link to="/routines" className={itemClass(pathname === '/routines')}>
+            <Icon name="clock-clockwise" />
+            <span className="ri-label">Routines</span>
+          </Link>
           <Link to="/history" className={itemClass(pathname === '/history')}>
             <Icon name="clock-counter-clockwise" />
             <span className="ri-label">Changes</span>
