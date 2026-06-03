@@ -5,7 +5,7 @@
 // unit-tested without Electron.
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
-import { dirname, basename } from 'node:path'
+import { dirname, basename, resolve, sep } from 'node:path'
 
 export interface Workspace {
   id: string
@@ -72,5 +72,20 @@ export class WorkspaceRegistry {
 
   async get(id: string): Promise<Workspace | null> {
     return (await this.list()).find((w) => w.id === id) ?? null
+  }
+
+  /**
+   * Is `path` inside a registered workspace (or equal to one)? The renderer hands
+   * a cwd to filesystem/git/terminal IPC; main uses this to reject any cwd that
+   * isn't a known workspace, so a compromised renderer can't anchor file ops at an
+   * arbitrary directory.
+   */
+  async contains(path: string): Promise<boolean> {
+    const target = resolve(path)
+    for (const ws of await this.list()) {
+      const root = resolve(ws.path)
+      if (target === root || target.startsWith(root + sep)) return true
+    }
+    return false
   }
 }

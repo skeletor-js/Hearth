@@ -45,6 +45,21 @@ test('adding the repo root returns the built-in Hearth workspace', async () => {
   expect((await reg.list())).toHaveLength(1)
 })
 
+test('contains() accepts the repo root, a registered folder, and paths inside them', async () => {
+  await reg.add('/Users/jordan/dev/ledger-api')
+  expect(await reg.contains(REPO)).toBe(true)
+  expect(await reg.contains(join(REPO, 'src/app'))).toBe(true)
+  expect(await reg.contains('/Users/jordan/dev/ledger-api')).toBe(true)
+  expect(await reg.contains('/Users/jordan/dev/ledger-api/electron/main')).toBe(true)
+})
+
+test('contains() rejects unregistered paths and traversal lookalikes', async () => {
+  await reg.add('/x/proj')
+  expect(await reg.contains('/Users/jordan/.zshrc')).toBe(false)
+  expect(await reg.contains('/x/proj-evil')).toBe(false) // not a child despite the prefix
+  expect(await reg.contains(join('/x/proj', '../../etc/passwd'))).toBe(false)
+})
+
 test('removes a user folder but never Hearth', async () => {
   const ws = await reg.add('/x/proj')
   await reg.remove(ws.id)

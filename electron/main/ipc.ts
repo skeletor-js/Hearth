@@ -264,20 +264,26 @@ export function registerIpc(services: MainServices): void {
   ipcMain.handle(HEARTH_CHANNELS.selfModUndo, (_e, hash: string) => selfMod.undo(hash))
   ipcMain.handle(HEARTH_CHANNELS.selfModRedo, (_e, hash: string) => selfMod.redo(hash))
 
-  // Workbench git surface. `cwd` defaults to the Hearth repo until workspaces
-  // (P3) thread a real per-session cwd.
-  const at = (cwd?: string) => cwd || repoRoot
-  ipcMain.handle(HEARTH_CHANNELS.gitDiff, (_e, cwd?: string, rev?: string) => getDiff(at(cwd), rev))
-  ipcMain.handle(HEARTH_CHANNELS.gitStatus, (_e, cwd?: string) => gitStatus(at(cwd)))
-  ipcMain.handle(HEARTH_CHANNELS.gitStage, (_e, paths: string[], cwd?: string) => gitStage(at(cwd), paths))
-  ipcMain.handle(HEARTH_CHANNELS.gitUnstage, (_e, paths: string[], cwd?: string) => gitUnstage(at(cwd), paths))
-  ipcMain.handle(HEARTH_CHANNELS.gitCommit, (_e, message: string, cwd?: string) => gitCommit(at(cwd), message))
-  ipcMain.handle(HEARTH_CHANNELS.gitBranches, (_e, cwd?: string) => gitBranches(at(cwd)))
-  ipcMain.handle(HEARTH_CHANNELS.gitSwitchBranch, (_e, name: string, create: boolean, cwd?: string) =>
-    gitSwitchBranch(at(cwd), name, create),
+  // Workbench git surface. `cwd` is resolved against the registered workspaces:
+  // an absent cwd defaults to the Hearth repo, and a cwd that isn't inside a known
+  // workspace is rejected so a compromised renderer can't run git in an arbitrary
+  // directory.
+  const at = async (cwd?: string): Promise<string> => {
+    if (!cwd) return repoRoot
+    if (await workspaces.contains(cwd)) return cwd
+    throw new Error(`cwd is not a registered workspace: ${cwd}`)
+  }
+  ipcMain.handle(HEARTH_CHANNELS.gitDiff, async (_e, cwd?: string, rev?: string) => getDiff(await at(cwd), rev))
+  ipcMain.handle(HEARTH_CHANNELS.gitStatus, async (_e, cwd?: string) => gitStatus(await at(cwd)))
+  ipcMain.handle(HEARTH_CHANNELS.gitStage, async (_e, paths: string[], cwd?: string) => gitStage(await at(cwd), paths))
+  ipcMain.handle(HEARTH_CHANNELS.gitUnstage, async (_e, paths: string[], cwd?: string) => gitUnstage(await at(cwd), paths))
+  ipcMain.handle(HEARTH_CHANNELS.gitCommit, async (_e, message: string, cwd?: string) => gitCommit(await at(cwd), message))
+  ipcMain.handle(HEARTH_CHANNELS.gitBranches, async (_e, cwd?: string) => gitBranches(await at(cwd)))
+  ipcMain.handle(HEARTH_CHANNELS.gitSwitchBranch, async (_e, name: string, create: boolean, cwd?: string) =>
+    gitSwitchBranch(await at(cwd), name, create),
   )
-  ipcMain.handle(HEARTH_CHANNELS.gitCreatePr, (_e, title: string, body: string, cwd?: string) =>
-    gitCreatePr(at(cwd), title, body),
+  ipcMain.handle(HEARTH_CHANNELS.gitCreatePr, async (_e, title: string, body: string, cwd?: string) =>
+    gitCreatePr(await at(cwd), title, body),
   )
 
   // Workspaces. `open` shows the folder picker (a UI affordance the user invokes,
@@ -317,9 +323,13 @@ export function registerIpc(services: MainServices): void {
     (id, data) => window.webContents.send(HEARTH_CHANNELS.terminalData, { id, data }),
     (id) => window.webContents.send(HEARTH_CHANNELS.terminalExit, { id }),
   )
-  ipcMain.on(HEARTH_CHANNELS.terminalCreate, (_e, p: { id: string; cwd?: string; cols?: number; rows?: number }) =>
-    terminals.create(p.id, p.cwd || repoRoot, p.cols, p.rows),
-  )
+  ipcMain.on(HEARTH_CHANNELS.terminalCreate, (_e, p: { id: string; cwd?: string; cols?: number; rows?: number }) => {
+    // A PTY spawns a real shell, so anchor it only at a registered workspace; an
+    // unknown cwd is dropped rather than spawned at an arbitrary directory.
+    void at(p.cwd)
+      .then((cwd) => terminals.create(p.id, cwd, p.cols, p.rows))
+      .catch(() => window.webContents.send(HEARTH_CHANNELS.terminalExit, { id: p.id }))
+  })
   ipcMain.on(HEARTH_CHANNELS.terminalWrite, (_e, p: { id: string; data: string }) => terminals.write(p.id, p.data))
   ipcMain.on(HEARTH_CHANNELS.terminalResize, (_e, p: { id: string; cols: number; rows: number }) =>
     terminals.resize(p.id, p.cols, p.rows),
@@ -339,11 +349,12 @@ export function registerIpc(services: MainServices): void {
   ipcMain.on(HEARTH_CHANNELS.browserSetBounds, (_e, rect: Rect) => browser.setBounds(rect))
   ipcMain.on(HEARTH_CHANNELS.browserHide, () => browser.hide())
 
-  // Files (workspace-rooted; cwd defaults to the Hearth repo).
-  ipcMain.handle(HEARTH_CHANNELS.fsList, (_e, cwd: string | undefined, rel?: string) => listDir(cwd || repoRoot, rel))
-  ipcMain.handle(HEARTH_CHANNELS.fsRead, (_e, cwd: string | undefined, rel: string) => fsReadFile(cwd || repoRoot, rel))
-  ipcMain.handle(HEARTH_CHANNELS.fsWrite, (_e, cwd: string | undefined, rel: string, content: string) =>
-    fsWriteFile(cwd || repoRoot, rel, content),
+  // Files (workspace-rooted; cwd defaults to the Hearth repo and is validated
+  // against the registered workspaces — see `at` above).
+  ipcMain.handle(HEARTH_CHANNELS.fsList, async (_e, cwd: string | undefined, rel?: string) => listDir(await at(cwd), rel))
+  ipcMain.handle(HEARTH_CHANNELS.fsRead, async (_e, cwd: string | undefined, rel: string) => fsReadFile(await at(cwd), rel))
+  ipcMain.handle(HEARTH_CHANNELS.fsWrite, async (_e, cwd: string | undefined, rel: string, content: string) =>
+    fsWriteFile(await at(cwd), rel, content),
   )
 
   // Personality (soul) + memory. Personality is versioned in the repo
