@@ -54,6 +54,15 @@ export const HEARTH_CHANNELS = {
   sessionsArchive: 'sessions:archive',
   sessionsDelete: 'sessions:delete',
   sessionsDuplicate: 'sessions:duplicate',
+  // routines: scheduled/background agent tasks. Main schedules + emits 'due';
+  // the renderer runs the prompt through the normal session path.
+  routinesList: 'routines:list',
+  routinesCreate: 'routines:create',
+  routinesUpdate: 'routines:update',
+  routinesSetEnabled: 'routines:set-enabled',
+  routinesDelete: 'routines:delete',
+  routinesRunNow: 'routines:run-now',
+  routineDue: 'routines:due',
   // files: workspace-rooted filesystem for the Files tab + editor.
   fsList: 'fs:list',
   fsRead: 'fs:read',

@@ -11,6 +11,9 @@ import type { CredentialBroker } from './micro-apps/broker.js'
 import type { WorkspaceRegistry } from './workspaces/registry.js'
 import type { SessionStore, TranscriptEntry } from './sessions/store.js'
 import type { CreateSessionInput } from './sessions/store.js'
+import type { RoutineStore } from './routines/store.js'
+import type { RoutineScheduler } from './routines/scheduler.js'
+import type { CreateRoutineInput } from '../shared/protocol.js'
 import { listDir, readFile as fsReadFile, writeFile as fsWriteFile } from './fs/files.js'
 import { TerminalManager } from './terminal/pty.js'
 import type { BrowserManager, Rect } from './browser/browser-view.js'
@@ -63,10 +66,12 @@ export interface MainServices {
   mcp: McpRegistry
   capabilities: CapabilityStore
   broker: CredentialBroker
+  routines: RoutineStore
+  scheduler: RoutineScheduler
 }
 
 export function registerIpc(services: MainServices): void {
-  const { repoRoot, host, selfMod, workspaces, sessions, browser, window, secrets, mcp, capabilities, broker } = services
+  const { repoRoot, host, selfMod, workspaces, sessions, browser, window, secrets, mcp, capabilities, broker, routines, scheduler } = services
 
   // Self-mod run tracking (W0): attribute streamed writes to subagents, drive the
   // concurrency gate, and pin the overlay during parallel-subagent phases.
@@ -322,6 +327,15 @@ export function registerIpc(services: MainServices): void {
   ipcMain.handle(HEARTH_CHANNELS.sessionsAppend, (_e, id: string, entries: TranscriptEntry[]) => sessions.append(id, entries))
   ipcMain.handle(HEARTH_CHANNELS.sessionsRename, (_e, id: string, title: string) => sessions.rename(id, title))
   ipcMain.handle(HEARTH_CHANNELS.sessionsSetKind, (_e, id: string, kind: WorkspaceKind) => sessions.setKind(id, kind))
+
+  // Routines: CRUD on definitions + a manual fire. The schedule timer (started in
+  // index.ts) emits routineDue to the renderer, which runs the prompt.
+  ipcMain.handle(HEARTH_CHANNELS.routinesList, () => routines.list())
+  ipcMain.handle(HEARTH_CHANNELS.routinesCreate, (_e, input: CreateRoutineInput) => routines.create(input))
+  ipcMain.handle(HEARTH_CHANNELS.routinesUpdate, (_e, id: string, patch: Partial<CreateRoutineInput>) => routines.update(id, patch))
+  ipcMain.handle(HEARTH_CHANNELS.routinesSetEnabled, (_e, id: string, enabled: boolean) => routines.setEnabled(id, enabled))
+  ipcMain.handle(HEARTH_CHANNELS.routinesDelete, (_e, id: string) => routines.remove(id))
+  ipcMain.handle(HEARTH_CHANNELS.routinesRunNow, (_e, id: string) => scheduler.runNow(id))
   ipcMain.handle(HEARTH_CHANNELS.sessionsArchive, (_e, id: string) => sessions.archive(id))
   ipcMain.handle(HEARTH_CHANNELS.sessionsDelete, (_e, id: string) => sessions.remove(id))
   ipcMain.handle(HEARTH_CHANNELS.sessionsDuplicate, (_e, id: string) => sessions.duplicate(id))

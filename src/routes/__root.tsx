@@ -10,6 +10,7 @@ import { WorkPanel } from '@/app/workbench/WorkPanel'
 import { CommandPalette, useCommandPalette } from '@/shell/CommandPalette'
 import { Onboarding } from '@/shell/Onboarding'
 import { Toaster } from '@/shell/toast'
+import { useRoutineRunner } from '@/app/routines/runner'
 
 export const Route = createRootRoute({ component: RootLayout })
 
@@ -28,6 +29,8 @@ function RootLayout() {
   useEffect(() => {
     applyTheme(s.theme, s.accent, s.reduceMotion)
   }, [s.theme, s.accent, s.reduceMotion])
+
+  useRoutineRunner()
 
   // Off-session, panels are plain open/closed surfaces — the focus/split machinery
   // (data-layout, scrim) is session-only, so right visibility is just `rightOpen`.

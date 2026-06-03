@@ -21,6 +21,8 @@ import { runTypecheck } from './self-mod/validate.js'
 import { revertCommit } from './self-mod/git.js'
 import { WorkspaceRegistry } from './workspaces/registry.js'
 import { SessionStore } from './sessions/store.js'
+import { RoutineStore } from './routines/store.js'
+import { RoutineScheduler } from './routines/scheduler.js'
 import { BrowserManager } from './browser/browser-view.js'
 import { HEARTH_CHANNELS } from '../shared/channels.js'
 import { join } from 'node:path'
@@ -236,6 +238,15 @@ async function bootstrap(): Promise<void> {
   const workspaces = new WorkspaceRegistry(join(dataDir, 'workspaces.json'), REPO_ROOT)
   const sessions = new SessionStore(join(dataDir, 'sessions'))
 
+  // Routines: scheduled agent tasks. Main only schedules + emits 'due'; the
+  // renderer runs the prompt (the agent is never driven from here). The timer is
+  // additive and wrapped so a routine can never affect boot or an interactive turn.
+  const routines = new RoutineStore(join(dataDir, 'routines'))
+  const scheduler = new RoutineScheduler(routines, (r) =>
+    window.webContents.send(HEARTH_CHANNELS.routineDue, r),
+  )
+  scheduler.start()
+
   // Embedded persistent browser; the agent drives the same view (browser_* tools).
   const browser = new BrowserManager(window, (state) =>
     window.webContents.send(HEARTH_CHANNELS.browserState, state),
@@ -248,7 +259,7 @@ async function bootstrap(): Promise<void> {
     REPO_ROOT,
   )
 
-  registerIpc({ repoRoot: REPO_ROOT, host, selfMod, workspaces, sessions, browser, window, secrets, mcp, capabilities, broker })
+  registerIpc({ repoRoot: REPO_ROOT, host, selfMod, workspaces, sessions, browser, window, secrets, mcp, capabilities, broker, routines, scheduler })
 
   // Connect the current backend in the background; the UI renders immediately.
   // A failed connect must surface, not crash boot.

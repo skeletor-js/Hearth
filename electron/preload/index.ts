@@ -3,7 +3,7 @@
 
 import { contextBridge, ipcRenderer } from 'electron'
 import { HEARTH_CHANNELS as CH } from '../shared/channels.js'
-import type { ActiveConnectors, AgentKind, AgentUpdatePayload, AuthState, AvailableCommand, BackendStatus, ConfigOption, ModelState, ModeState, PermissionRequestPayload, PromptCapabilities, PromptImage, Usage, WorkspaceKind } from '../shared/protocol.js'
+import type { ActiveConnectors, AgentKind, AgentUpdatePayload, AuthState, AvailableCommand, BackendStatus, ConfigOption, CreateRoutineInput, ModelState, ModeState, PermissionRequestPayload, PromptCapabilities, PromptImage, Routine, Usage, WorkspaceKind } from '../shared/protocol.js'
 import type { SecretInfo } from '../main/secrets/secret-store.js'
 import type { McpServerConfig, McpServerInput } from '../main/mcp/registry.js'
 import type { ProbeResult } from '../main/mcp/probe.js'
@@ -152,6 +152,19 @@ const api = {
     archive: (id: string): Promise<void> => ipcRenderer.invoke(CH.sessionsArchive, id),
     delete: (id: string): Promise<void> => ipcRenderer.invoke(CH.sessionsDelete, id),
     duplicate: (id: string): Promise<SessionMeta | null> => ipcRenderer.invoke(CH.sessionsDuplicate, id),
+  },
+  routines: {
+    list: (): Promise<Routine[]> => ipcRenderer.invoke(CH.routinesList),
+    create: (input: CreateRoutineInput): Promise<Routine> => ipcRenderer.invoke(CH.routinesCreate, input),
+    update: (id: string, patch: Partial<CreateRoutineInput>): Promise<Routine | null> => ipcRenderer.invoke(CH.routinesUpdate, id, patch),
+    setEnabled: (id: string, enabled: boolean): Promise<Routine | null> => ipcRenderer.invoke(CH.routinesSetEnabled, id, enabled),
+    remove: (id: string): Promise<void> => ipcRenderer.invoke(CH.routinesDelete, id),
+    runNow: (id: string): Promise<void> => ipcRenderer.invoke(CH.routinesRunNow, id),
+    onDue: (cb: (r: Routine) => void) => {
+      const h = (_e: unknown, r: Routine) => cb(r)
+      ipcRenderer.on(CH.routineDue, h)
+      return () => void ipcRenderer.off(CH.routineDue, h)
+    },
   },
   terminal: {
     create: (id: string, cwd: string | undefined, cols: number, rows: number) =>

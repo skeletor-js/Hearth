@@ -12,6 +12,36 @@ export type AgentKind = 'claude' | 'codex'
  * Inferred at session creation (a repo → code, a plain folder → knowledge). */
 export type WorkspaceKind = 'code' | 'knowledge'
 
+/** When a routine fires. 'daily' at a local HH:MM; 'interval' every N minutes. */
+export type RoutineSchedule =
+  | { type: 'daily'; time: string }
+  | { type: 'interval'; everyMinutes: number }
+
+/** A scheduled/background agent task. Main tracks the schedule and emits a
+ * 'due' event; the renderer runs the prompt through the normal session path. */
+export interface Routine {
+  id: string
+  title: string
+  prompt: string
+  schedule: RoutineSchedule
+  workspaceId: string
+  cwd: string
+  enabled: boolean
+  createdAt: number
+  /** When it last fired (ms epoch), or null if never. */
+  lastRunAt: number | null
+  /** When it's next due (ms epoch); null when disabled. */
+  nextRunAt: number | null
+}
+
+export interface CreateRoutineInput {
+  title: string
+  prompt: string
+  schedule: RoutineSchedule
+  workspaceId: string
+  cwd: string
+}
+
 /** Current-backend status (main → renderer on the backend-changed channel). */
 export interface BackendStatus {
   kind: AgentKind
