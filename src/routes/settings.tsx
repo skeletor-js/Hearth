@@ -6,7 +6,7 @@ import { AuthSection } from '@/app/settings/sections/AuthSection'
 import { ConnectorsSection } from '@/app/settings/sections/ConnectorsSection'
 import { SkillsSection } from '@/app/settings/sections/SkillsSection'
 import { SecretsSection } from '@/app/settings/sections/SecretsSection'
-import { MemorySection, SelfModSection, DataPrivacySection, AboutSection } from '@/app/settings/sections/SystemSections'
+import { MemorySection, SelfModSection, TrustSection, DataPrivacySection, AboutSection } from '@/app/settings/sections/SystemSections'
 import type { AgentKind, ModelState } from '../../electron/shared/protocol'
 import type { SoulConfig } from '../../electron/main/soul/soul'
 
@@ -118,6 +118,7 @@ function SettingsScreen() {
 
         <MemorySection memory={memory} onChanged={loadMemory} />
         <SelfModSection />
+        <TrustSection />
         <DataPrivacySection />
 
         <SecLabel icon="palette">Appearance</SecLabel>
