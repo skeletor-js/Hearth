@@ -65,10 +65,11 @@ export class AcpClient {
   // Prompt input the adapter accepts beyond text (image / embedded context),
   // captured from initialize. Defaults to text-only until proven otherwise.
   private promptCaps: PromptCapabilities = { image: false, embeddedContext: false }
-  // True while a loadSession() replays prior history — chat-content updates are
-  // dropped (Hearth's store already renders the transcript); config/mode/usage/
-  // commands still flow so restored session state reaches the UI.
-  private replaying = false
+  // ACP session ids currently replaying prior history via loadSession(). Chat-
+  // content updates for THESE sessions are dropped (Hearth's store already renders
+  // the transcript); config/mode/usage/commands still flow. Scoped per session so a
+  // concurrent live session on the same connection doesn't lose its updates.
+  private replayingSessions = new Set<string>()
 
   // A factory, not a resolved spec: resolution (which can throw — missing bin,
   // missing API key) is deferred to connect() so it fails through the connect
@@ -138,7 +139,8 @@ export class AcpClient {
           if (update.type === 'commands') this.commands = update.commands
           // During a loadSession replay, drop chat-content updates (the transcript
           // is already on screen from Hearth's store); let session-state updates pass.
-          if (this.replaying && CHAT_CONTENT_UPDATES.has(update.type)) continue
+          // Keyed by session id so only the replaying session is suppressed.
+          if (this.replayingSessions.has(params.sessionId) && CHAT_CONTENT_UPDATES.has(update.type)) continue
           this.emit(params.sessionId, update)
         }
       },
@@ -256,12 +258,12 @@ export class AcpClient {
     // store, so suppress those replayed chat updates (config/mode/usage/commands
     // still flow). The RPC resolves only after the adapter finishes replaying, so
     // this flag brackets exactly the replay notifications.
-    this.replaying = true
+    this.replayingSessions.add(acpSessionId)
     try {
       const res = await connection.loadSession({ sessionId: acpSessionId, cwd: sessionCwd, mcpServers: await this.mcpServersFor() })
       return this.buildSession(acpSessionId, res)
     } finally {
-      this.replaying = false
+      this.replayingSessions.delete(acpSessionId)
     }
   }
 
