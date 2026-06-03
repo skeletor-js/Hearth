@@ -23,7 +23,15 @@ export default defineConfig({
   preload: {
     plugins: [externalizeDepsPlugin()],
     build: {
-      lib: { entry: resolve(__dirname, 'electron/preload/index.ts') },
+      // Emit CommonJS (.cjs), not ESM. Electron's renderer sandbox can only load a
+      // CommonJS preload; an .mjs preload silently fails under sandbox:true and
+      // window.hearth never gets exposed. The preload uses only contextBridge/
+      // ipcRenderer, so CJS output is a drop-in.
+      lib: {
+        entry: resolve(__dirname, 'electron/preload/index.ts'),
+        formats: ['cjs'],
+        fileName: () => 'index.cjs',
+      },
     },
   },
   renderer: {

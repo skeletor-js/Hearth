@@ -3,13 +3,13 @@ import { BrowserWindow, type WebContents } from 'electron'
 import type { RendererTarget } from './dev-server.js'
 
 const WEB_PREFERENCES = {
-  // electron-vite emits the preload as .mjs (package.json is "type":"module").
-  // Electron 28+ loads ESM preloads by extension; pointing at .js loads nothing
-  // and window.hearth ends up undefined.
-  preload: join(__dirname, '../preload/index.mjs'),
+  // The preload is built as CommonJS (.cjs) because a sandboxed renderer can only
+  // load a CJS preload — see electron.vite.config.ts. Pointing at the wrong
+  // extension loads nothing and window.hearth ends up undefined.
+  preload: join(__dirname, '../preload/index.cjs'),
   contextIsolation: true,
   nodeIntegration: false,
-  sandbox: false, // preload needs Node to bridge; renderer stays isolated
+  sandbox: true, // preload uses only contextBridge/ipcRenderer, so keep the OS sandbox on
   // Keep painting when backgrounded so snapshot captures (electron/main/snapshot.ts)
   // stay accurate even when the user is in another app while the agent works.
   backgroundThrottling: false,
