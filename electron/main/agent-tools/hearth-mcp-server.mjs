@@ -10,14 +10,20 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 
 const BRIDGE = process.env.HEARTH_BRIDGE_URL
+const BRIDGE_TOKEN = process.env.HEARTH_BRIDGE_TOKEN ?? ''
 
 function noBridge() {
   return { isError: true, content: [{ type: 'text', text: 'HEARTH_BRIDGE_URL not set; is Hearth running?' }] }
 }
 
+// fetch wrapper that attaches the per-boot bridge token (required by the bridge).
+function bridgeFetch(url, init = {}) {
+  return fetch(url, { ...init, headers: { ...init.headers, 'x-hearth-token': BRIDGE_TOKEN } })
+}
+
 // Run JS in the live renderer and return its (JSON-serializable) result.
 async function evalInApp(code) {
-  const res = await fetch(`${BRIDGE}/eval`, {
+  const res = await bridgeFetch(`${BRIDGE}/eval`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ code }),
@@ -48,7 +54,7 @@ server.registerTool(
     if (!BRIDGE) return noBridge()
     try {
       const url = path ? `${BRIDGE}/snapshot?path=${encodeURIComponent(path)}` : `${BRIDGE}/snapshot`
-      const res = await fetch(url)
+      const res = await bridgeFetch(url)
       if (!res.ok) return errResult(new Error(`snapshot HTTP ${res.status}`))
       const data = Buffer.from(await res.arrayBuffer()).toString('base64')
       return {
@@ -207,7 +213,7 @@ server.registerTool(
 // These drive the embedded WebContentsView via the bridge's /browser/* endpoints,
 // so the agent acts inside the user's authenticated sessions. Works on any backend.
 async function browserCall(action, { method = 'POST', body } = {}) {
-  const res = await fetch(`${BRIDGE}/browser/${action}`, {
+  const res = await bridgeFetch(`${BRIDGE}/browser/${action}`, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: method === 'POST' ? JSON.stringify(body ?? {}) : undefined,
@@ -267,7 +273,7 @@ server.registerTool(
   async () => {
     if (!BRIDGE) return noBridge()
     try {
-      const res = await fetch(`${BRIDGE}/browser/screenshot`)
+      const res = await bridgeFetch(`${BRIDGE}/browser/screenshot`)
       if (!res.ok) return errResult(new Error(`screenshot HTTP ${res.status}`))
       const data = Buffer.from(await res.arrayBuffer()).toString('base64')
       return { content: [{ type: 'text', text: 'Embedded browser:' }, { type: 'image', data, mimeType: 'image/png' }] }

@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const urlFile = join(repoRoot, '.hearth', 'bridge-url')
+const tokenFile = join(repoRoot, '.hearth', 'bridge-token')
 
 if (!existsSync(urlFile)) {
   console.error('Hearth does not appear to be running (no .hearth/bridge-url). Start it with `bun dev`.')
@@ -24,11 +25,12 @@ if (!existsSync(urlFile)) {
 const args = process.argv.slice(2)
 const path = args[0]?.startsWith('/') ? args.shift() : undefined
 const base = readFileSync(urlFile, 'utf-8').trim()
+const token = existsSync(tokenFile) ? readFileSync(tokenFile, 'utf-8').trim() : ''
 const url = path ? `${base}/snapshot?path=${encodeURIComponent(path)}` : `${base}/snapshot`
 const out = resolve(args[0] ?? join(repoRoot, '.hearth', 'snapshot.png'))
 
 try {
-  const res = await fetch(url)
+  const res = await fetch(url, { headers: { 'x-hearth-token': token } })
   if (!res.ok) {
     console.error(`Snapshot request failed: HTTP ${res.status}`)
     process.exit(1)

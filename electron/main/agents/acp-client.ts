@@ -199,6 +199,8 @@ export class AcpClient {
     if (!existsSync(urlFile)) return []
     const bridgeUrl = readFileSync(urlFile, 'utf-8').trim()
     if (!bridgeUrl) return []
+    const tokenFile = join(this.cwd, '.hearth', 'bridge-token')
+    const bridgeToken = existsSync(tokenFile) ? readFileSync(tokenFile, 'utf-8').trim() : ''
     return [
       {
         name: 'hearth',
@@ -207,6 +209,7 @@ export class AcpClient {
         env: [
           { name: 'ELECTRON_RUN_AS_NODE', value: '1' },
           { name: 'HEARTH_BRIDGE_URL', value: bridgeUrl },
+          { name: 'HEARTH_BRIDGE_TOKEN', value: bridgeToken },
         ],
       },
     ]

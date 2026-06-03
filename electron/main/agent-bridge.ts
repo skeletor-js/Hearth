@@ -19,7 +19,8 @@
 // adapter, so the user stays in the loop.
 
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync, chmodSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
 import type { BrowserWindow } from 'electron'
 import { HEARTH_CHANNELS } from '../shared/channels.js'
@@ -59,6 +60,13 @@ const fillJS = (sel: string, value: string) =>
   `(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return { ok:false, error:'no element' }; el.focus(); el.value = ${JSON.stringify(value)}; el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); return { ok:true }; })()`
 
 export function startAgentBridge(deps: AgentBridgeDeps, repoRoot: string): () => void {
+  // Per-boot bearer token. The bridge runs arbitrary JS in the renderer, so
+  // loopback alone is not an auth boundary — any local process could otherwise
+  // read the port and drive the app. The token is written to .hearth/bridge-token
+  // (0600) and required on every request; only processes that can read the file
+  // (our MCP child + the view-app script) can reach the bridge.
+  const token = randomBytes(32).toString('hex')
+
   // One reusable hidden window for route captures, created on first use.
   let offscreen: BrowserWindow | null = null
   const ensureOffscreen = async (): Promise<BrowserWindow> => {
@@ -78,6 +86,11 @@ export function startAgentBridge(deps: AgentBridgeDeps, repoRoot: string): () =>
 
   const server: Server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost')
+    if (req.headers['x-hearth-token'] !== token) {
+      res.writeHead(401, { 'Content-Type': 'text/plain' })
+      res.end('unauthorized')
+      return
+    }
     try {
       if (req.method === 'GET' && url.pathname === '/snapshot') {
         const path = url.searchParams.get('path')
@@ -163,7 +176,17 @@ export function startAgentBridge(deps: AgentBridgeDeps, repoRoot: string): () =>
     const port = typeof addr === 'object' && addr ? addr.port : 0
     const dir = join(repoRoot, '.hearth')
     mkdirSync(dir, { recursive: true })
-    writeFileSync(join(dir, 'bridge-url'), `http://127.0.0.1:${port}\n`)
+    const urlFile = join(dir, 'bridge-url')
+    const tokenFile = join(dir, 'bridge-token')
+    writeFileSync(urlFile, `http://127.0.0.1:${port}\n`)
+    writeFileSync(tokenFile, `${token}\n`)
+    // Restrict to the owner: the token is the only thing gating renderer RCE.
+    try {
+      chmodSync(urlFile, 0o600)
+      chmodSync(tokenFile, 0o600)
+    } catch {
+      // chmod is best-effort (e.g. on filesystems that don't support it).
+    }
   })
 
   return () => {
