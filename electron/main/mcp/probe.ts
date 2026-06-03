@@ -70,19 +70,29 @@ function probeStdio(
         const line = buf.slice(0, nl).trim()
         buf = buf.slice(nl + 1)
         if (!line) continue
-        let msg: { id?: unknown; result?: { tools?: unknown[] } }
+        let msg: { id?: unknown; result?: { tools?: unknown[] }; error?: { message?: string } }
         try {
           msg = JSON.parse(line)
         } catch {
           continue // server log noise, not a JSON-RPC frame
         }
-        if (msg.id === 1 && msg.result) {
-          // initialize ok → ack, then ask for the tool list.
-          send({ jsonrpc: '2.0', method: 'notifications/initialized' })
-          send({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} })
+        if (msg.id === 1) {
+          // A JSON-RPC error to initialize (bad protocol version, auth, etc.) is a
+          // real answer — report it instead of hanging until the timeout.
+          if (msg.error) {
+            finish({ ok: false, error: msg.error.message || 'initialize failed' })
+          } else if (msg.result) {
+            // initialize ok → ack, then ask for the tool list.
+            send({ jsonrpc: '2.0', method: 'notifications/initialized' })
+            send({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} })
+          }
         } else if (msg.id === 2) {
-          const tools = Array.isArray(msg.result?.tools) ? msg.result!.tools!.length : 0
-          finish({ ok: true, tools })
+          if (msg.error) {
+            finish({ ok: false, error: msg.error.message || 'tools/list failed' })
+          } else {
+            const tools = Array.isArray(msg.result?.tools) ? msg.result!.tools!.length : 0
+            finish({ ok: true, tools })
+          }
         }
       }
     })
