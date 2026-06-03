@@ -71,6 +71,7 @@ guardrails even while rewriting the rest of main.
 - `electron/main/agents/` — the ACP layer (see below).
 - `electron/main/self-mod/` — the self-evolution engine (see below).
 - `electron/main/micro-apps/` — scaffolding + lifecycle for embedded apps.
+- `electron/main/routines/` — scheduled-task store + scheduler (see below).
 
 **Preload** (`electron/preload/index.ts`) — `contextBridge` exposing a narrow,
 typed `window.hearth` API. `contextIsolation` on, `nodeIntegration` off.
@@ -138,13 +139,41 @@ app** with its own `package.json`, scaffolded into `micro-apps/<name>/`. It runs
 as its **own Vite dev server** and is embedded in the renderer via a
 **sandboxed `<iframe>`** pointed at that server.
 
-- `scaffold.ts` — copies `templates/micro-app/` → `micro-apps/<name>/`,
-  rewrites placeholders. (Logic mirrors Stella's `create-workspace-app.mjs`.)
+- `scaffold.ts` — copies `templates/micro-app/` → `micro-apps/<name>/`, rewrites
+  placeholders, and optionally overlays a **starter** (`templates/starters/<id>/App.tsx`
+  — a one-file variant, so starters carry no boilerplate). `listStarters` /
+  `listMicroApps` back the **Tools** gallery (`src/routes/tools.tsx`).
 - `server.ts` — starts/stops a Vite server per micro-app, returns its URL.
+
+Two ways a micro-app is born: **new from a starter** in the Tools gallery, or
+**Save as tool** from a chat — which scaffolds an empty app, then has the agent
+build it from the conversation (only on the Hearth self-session, where the agent's
+file tools can reach `micro-apps/`).
 
 Isolation is the point: a micro-app has its own dependency tree, can't reach
 into Hearth's internals, and can't crash the shell. The iframe `sandbox`
 attribute is the wall.
+
+## Routines (`electron/main/routines/`)
+
+Standing tasks the agent runs on a schedule (a morning brief, a daily digest).
+The key constraint: there is **one shared agent host**, and driving it headlessly
+would collide with an interactive turn. So main never runs an agent turn for a
+routine — it only **schedules and notifies**:
+
+- `schedule.ts` — pure schedule math (`computeNextRun` / `dueRoutines` /
+  `validateSchedule`). No I/O; fully unit-tested.
+- `store.ts` — persists routine definitions under userData, keeping `nextRunAt`
+  in sync on create / enable / fire.
+- `scheduler.ts` — a thin timer that finds due routines, advances their schedule
+  (`markRan` *before* notifying, so a closed/busy app drops a fire rather than
+  storming it), and emits `routine:due` to the renderer.
+
+The **renderer** executes a due routine through the same proven path as a History
+revert handoff: start a session in the routine's workspace and queue the prompt
+(`useRoutineRunner` in `src/app/routines/`). Consequences, by design: routines fire
+**only while Hearth is open**, the agent runs on the normal interactive path, and a
+routine can never affect boot or collide with the trusted core.
 
 ## Two kinds of "app" — don't conflate them
 
@@ -155,6 +184,21 @@ attribute is the wall.
 | Added by | drop a folder + route | `create-app` scaffolder |
 | Embedded via | TanStack route | sandboxed `<iframe>` |
 | Use it for | first-class Hearth features | sandboxed/generated apps |
+
+## Workspace kind (code vs knowledge)
+
+A session carries a **kind** that frames the workbench. It's inferred at creation
+(Hearth and any git repo → `code`; a plain folder → `knowledge`) and flippable per
+session, persisted on the session record.
+
+- `code` shows the full developer workbench: Files, Terminal, Git, Review, Self,
+  Agents, Plan.
+- `knowledge` drops the dev seams and shows **Sources** (real connector status from
+  `mcp.active()`, plus one-tap digests routed to the agent — Hearth doesn't broker
+  connector data, so nothing is fetched or faked here), Files, a doc surface, and Plan.
+
+The tab set is a pure function of kind (`selectWorkbenchTabs` in
+`src/app/workbench/WorkPanel.tsx`), so the framing is one switch, not a fork.
 
 ## State
 
