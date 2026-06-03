@@ -16,7 +16,7 @@ export const Route = createRootRoute({ component: RootLayout })
 const CRUMB: Record<string, string> = {
   '/new': 'New session',
   '/search': 'Search',
-  '/history': 'History',
+  '/history': 'Changes',
   '/settings': 'Settings',
 }
 

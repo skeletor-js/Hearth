@@ -51,7 +51,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       { id: 'new', label: 'New session', ic: 'plus', grp: 'Go', run: go('/new') },
       { id: 'chat', label: 'Open session', ic: 'chat-circle', grp: 'Go', run: go('/chat') },
       { id: 'search', label: 'Search', ic: 'magnifying-glass', grp: 'Go', run: go('/search') },
-      { id: 'history', label: 'History', ic: 'clock-counter-clockwise', grp: 'Go', run: go('/history') },
+      { id: 'history', label: 'Changes', ic: 'clock-counter-clockwise', grp: 'Go', run: go('/history') },
       { id: 'settings', label: 'Settings', ic: 'gear', grp: 'Go', run: go('/settings') },
     ]
     const actions: Command[] = [

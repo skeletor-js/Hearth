@@ -105,7 +105,7 @@ export function Rail() {
           </Link>
           <Link to="/history" className={itemClass(pathname === '/history')}>
             <Icon name="clock-counter-clockwise" />
-            <span className="ri-label">History</span>
+            <span className="ri-label">Changes</span>
           </Link>
         </div>
 

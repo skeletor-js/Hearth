@@ -67,7 +67,7 @@ export function SelfTab() {
             >
               <Icon name="arrow-counter-clockwise" className="ico-14" />
               Applied as commit <span style={{ fontFamily: 'var(--mono)' }}>{edit.commit.slice(0, 7)}</span> · roll back from{' '}
-              <span style={{ fontFamily: 'var(--mono)' }}>History</span> too.
+              <span style={{ fontFamily: 'var(--mono)' }}>Changes</span> too.
             </div>
             <button
               className={'btn' + (edit.reverted ? '' : ' btn-primary')}
@@ -86,7 +86,7 @@ export function SelfTab() {
           <h3>No self-edits yet</h3>
           <p>
             This shows the last change Hearth makes to its own code, with a one-click Undo. The full timeline lives in
-            History; the working-tree diff lives in Review.
+            Changes; the working-tree diff lives in Review.
           </p>
         </div>
       )}

@@ -8,9 +8,9 @@ import type { SelfModLogEntry, SelfModKind } from '../../../electron/main/self-m
 
 const TITLE: Record<SelfModKind, { h1: string; sub: string; empty: string }> = {
   code: {
-    h1: 'History',
-    sub: 'Every time Hearth changes its own UI, prompts, or skills, it lands here as a commit. Undo reverts it — the live app follows.',
-    empty: 'No self-edits yet. Ask Hearth to change itself and it shows up here.',
+    h1: 'Changes',
+    sub: 'Everything Hearth changes about itself shows up here. Undo to roll any change back — the live app follows.',
+    empty: 'No changes yet. Ask Hearth to change something and it shows up here.',
   },
   soul: {
     h1: 'Personality',
@@ -107,7 +107,7 @@ export function History() {
       </span>
       <div className="cr-body">
         <div className="cr-title">
-          <span className="evo-name">{e.subagent && nested ? e.subagent : e.subject}</span>
+          <span className="evo-name" title={e.hash.slice(0, 7)}>{e.subagent && nested ? e.subagent : e.subject}</span>
           {e.reverted ? (
             <span className="chip chip-sm evo-badge-undone">
               <Icon name="arrow-counter-clockwise" className="ico-12" /> Undone
@@ -117,9 +117,6 @@ export function History() {
               <Icon name="check" className="ico-12" /> Applied
             </span>
           )}
-        </div>
-        <div className="evo-stats">
-          <span style={{ fontFamily: 'var(--mono)' }}>{e.hash.slice(0, 7)}</span>
         </div>
       </div>
       {e.reverted ? (
@@ -138,7 +135,7 @@ export function History() {
 
   const t = TITLE[kind]
   return (
-    <div className="screen scroll" data-screen-label="History">
+    <div className="screen scroll" data-screen-label="Changes">
       <div className="screen-inner narrow">
         <div className="screen-head">
           <span className="screen-head-ic">
@@ -151,7 +148,7 @@ export function History() {
         <div className="evo-toolbar">
           <Seg<SelfModKind>
             value={kind}
-            options={[['code', 'History'], ['soul', 'Personality'], ['memory', 'Memory']]}
+            options={[['code', 'Changes'], ['soul', 'Personality'], ['memory', 'Memory']]}
             onChange={setKind}
           />
           <span className="evo-state">
