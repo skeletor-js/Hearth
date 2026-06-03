@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Icon } from './Icon'
-import { useShell } from './store'
+import { useShell, ACCENTS, ACCENT_OPTIONS } from './store'
 import { startSession } from '@/app/sessions'
 import { useSession } from '@/app/session-store'
 import { readScratchpad } from '@/app/scratchpad'
@@ -56,8 +56,13 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     ]
     const actions: Command[] = [
       { id: 'theme', label: 'Toggle light / dark theme', ic: 'moon-stars', grp: 'Theme', run: toggleTheme },
-      { id: 'accent-ember', label: 'Accent · Ember', ic: 'palette', grp: 'Theme', run: () => setAccent('#C8542B') },
-      { id: 'accent-sage', label: 'Accent · Sage', ic: 'palette', grp: 'Theme', run: () => setAccent('#5E7A5C') },
+      ...ACCENT_OPTIONS.map((c) => ({
+        id: 'accent-' + c,
+        label: `Accent · ${ACCENTS[c]}`,
+        ic: 'palette',
+        grp: 'Theme',
+        run: () => setAccent(c),
+      })),
     ]
     const ws: Command[] = workspaces.map((w) => ({
       id: 'ws-' + w.id,

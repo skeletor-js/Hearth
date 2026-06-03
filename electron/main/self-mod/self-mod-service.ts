@@ -120,13 +120,16 @@ export class SelfModService {
     rmSync(this.markerPath, { force: true })
     if (allChanged.length === 0) return null
 
-    // W7 commit-time scope enforcement. The mediation broker (W0b) is inert with
-    // the current adapter (it writes disk directly — see acp-client), so the
-    // commit layer is the universal choke point: reject writes to the protected
-    // island or the hard-blocked denylist by restoring them on disk and never
-    // committing them. Canvas paths proceed. (Protected paths could later carry an
-    // explicit approval; for now they're treated as off-limits — the island stays
-    // inviolable regardless of adapter or permission mode.)
+    // W7 commit-time scope enforcement. This is the LIVE protection boundary: the
+    // write-mediation broker (W0b) is dormant — no current adapter writes through
+    // ACP `fs`, they hit disk directly (see acp-client) — so the commit layer is
+    // the universal choke point. Reject writes to the protected island or the
+    // hard-blocked denylist by restoring them on disk and never committing them;
+    // canvas paths proceed. By design the protected island has NO approval escape
+    // hatch: it stays inviolable regardless of adapter or permission mode. That is
+    // a deliberate safety decision, not a missing feature — adding an approval path
+    // would mean introducing a new classifyWrite tier in scope-guard.ts, not a
+    // one-off prompt here.
     const rejectedPaths = allChanged.filter((p) => classifyWrite(p, this.repoRoot).tier !== 'canvas')
     if (rejectedPaths.length > 0) await restorePaths(this.repoRoot, rejectedPaths)
     const changedPaths = allChanged.filter((p) => !rejectedPaths.includes(p))

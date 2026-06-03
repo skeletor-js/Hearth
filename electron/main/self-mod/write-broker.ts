@@ -1,3 +1,14 @@
+// DORMANT — NOT WIRED INTO THE RUNNING APP. This module is fully implemented and
+// unit-tested (write-broker.test.ts) but is never instantiated in production: no
+// current ACP adapter advertises the `fs` capability, so writes land on disk
+// directly and never route through here. The LIVE protection boundary is the
+// commit-time scope filter in self-mod-service.ts `captureTurn` (classifyWrite →
+// restorePaths), which is adapter-agnostic by construction. Treat THAT as the
+// guarantee, not this file. Resurrect this broker only when an adapter that writes
+// through ACP `fs` actually lands — wire it in index.ts behind a capability check
+// and add an end-to-end test through the fs handlers. See SELF-MOD-HARDENING-PLAN W0b.
+//
+// --- original design notes ---
 // Write-mediation broker (W0b). When Hearth advertises the ACP `fs` capability,
 // the agent's Edit/Write tools route file writes THROUGH here instead of straight
 // to disk. That gives one choke point to:

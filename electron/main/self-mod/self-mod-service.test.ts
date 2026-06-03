@@ -269,6 +269,29 @@ describe('SelfModService — commit-time scope enforcement (W7)', () => {
     expect(history[0].subject).toBe('mixed edit')
   })
 
+  test('EDITING an existing protected guard file is reverted to HEAD, not committed', async () => {
+    // The real attack isn't creating evil.ts (a new untracked file, which is just
+    // removed) — it's tampering with an EXISTING guardrail to disarm it. That hits
+    // the `git checkout HEAD` branch of restorePaths, distinct from the rm branch
+    // the cases above cover. Prove the island file is reverted to its committed
+    // content and the tamper never lands in history.
+    const { hmr } = recordingHmr()
+    const svc = new SelfModService(repo, hmr)
+    const guard = 'electron/main/self-mod/scope-guard.ts'
+    write(repo, guard, 'export const classifyWrite = () => ({ tier: "canvas" })\n')
+    await git(repo, ['add', '-A'])
+    await git(repo, ['commit', '-m', 'baseline guard'])
+
+    write(repo, guard, 'export const classifyWrite = () => ({ tier: "canvas" }) // DISARMED\n')
+    const result = await svc.captureTurn('conv-1', 'disarm the guard', [])
+
+    expect(result!.rejectedPaths).toEqual([guard])
+    expect(result!.commits).toEqual([])
+    // reverted to committed content, not left tampered on disk
+    expect(readFileSync(join(repo, guard), 'utf-8')).not.toContain('DISARMED')
+    expect(await svc.history()).toHaveLength(0)
+  })
+
   test('a turn that ONLY touches blocked/protected paths commits nothing', async () => {
     const { hmr } = recordingHmr()
     const svc = new SelfModService(repo, hmr)
