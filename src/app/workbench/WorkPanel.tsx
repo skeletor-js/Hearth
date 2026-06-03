@@ -10,11 +10,13 @@ import { FilesTab } from './FilesTab'
 import { TerminalTab } from './TerminalTab'
 import { BrowserTab } from './BrowserTab'
 import { AgentsTab } from './AgentsTab'
+import { SourcesTab } from './SourcesTab'
 
 // Always-available tools come first (stable, never hidden); session-contextual
 // tabs follow and only appear when they actually have something to show, so they
 // don't slot in front of the tools and shift them around.
 const WB_TABS = [
+  { id: 'sources', icon: 'broadcast', label: 'Sources' },
   { id: 'files', icon: 'folder', label: 'Files' },
   { id: 'scratchpad', icon: 'note-pencil', label: 'Scratchpad' },
   { id: 'terminal', icon: 'terminal-window', label: 'Terminal' },
@@ -31,7 +33,7 @@ const WB_TABS = [
 // appear when `needed` says they have something to show.
 const ALWAYS_BY_KIND = {
   code: new Set(['files', 'scratchpad', 'terminal', 'browser']),
-  knowledge: new Set(['files', 'scratchpad', 'browser']),
+  knowledge: new Set(['sources', 'files', 'scratchpad', 'browser']),
 } as const
 const CONTEXTUAL_BY_KIND = {
   code: new Set(['review', 'self', 'agents', 'plan']),
@@ -53,6 +55,8 @@ export function selectWorkbenchTabs(
 
 function TabBody({ tab, onOpenTab }: { tab: string; onOpenTab: (id: string) => void }) {
   switch (tab) {
+    case 'sources':
+      return <SourcesTab />
     case 'self':
       return <SelfTab />
     case 'agents':

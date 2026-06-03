@@ -9,6 +9,7 @@ test('code workspace shows the full developer workbench', () => {
   expect(ids).toContain('review')
   expect(ids).toContain('self')
   expect(ids).toContain('agents')
+  expect(ids).not.toContain('sources') // Sources is a knowledge-only surface
 })
 
 test('knowledge workspace hides the dev seams', () => {
@@ -17,7 +18,8 @@ test('knowledge workspace hides the dev seams', () => {
   expect(ids).not.toContain('review')
   expect(ids).not.toContain('self')
   expect(ids).not.toContain('agents')
-  // but keeps the shared tools + plan
+  // but keeps the shared tools + plan, and adds Sources
+  expect(ids).toContain('sources')
   expect(ids).toContain('files')
   expect(ids).toContain('scratchpad')
   expect(ids).toContain('browser')
