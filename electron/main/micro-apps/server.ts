@@ -8,7 +8,8 @@
 
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve, sep } from 'node:path'
+import { assertAppName } from './validate.js'
 
 interface RunningApp {
   child: ChildProcess
@@ -30,7 +31,14 @@ export function extractDevUrl(chunk: string): string | null {
 }
 
 function microAppDir(repoRoot: string, name: string): string {
-  return join(repoRoot, 'micro-apps', name)
+  assertAppName(name)
+  const appsDir = join(repoRoot, 'micro-apps')
+  const dir = join(appsDir, name)
+  // Defense in depth: even a regex-passing name must resolve inside micro-apps/.
+  if (!resolve(dir).startsWith(resolve(appsDir) + sep)) {
+    throw new Error(`Invalid app name: ${name}`)
+  }
+  return dir
 }
 
 function viteBin(dir: string): string {

@@ -151,6 +151,15 @@ describe('CapabilityStore', () => {
     })
   })
 
+  test('approve/revoke/readManifest reject an invalid app name', () => {
+    withStore((store) => {
+      expect(() => store.approve('../../x', ['https://a.com'])).toThrow(/invalid app name/i)
+      expect(() => store.revoke('../../x')).toThrow(/invalid app name/i)
+    })
+    // assertAppName fires before any filesystem access, so repoRoot is irrelevant.
+    expect(() => readManifest('/repo', '../../x')).toThrow(/invalid app name/i)
+  })
+
   test('capabilities() splits approved vs pending from the manifest', () => {
     withStore((store, repo) => {
       const dir = join(repo, 'micro-apps', 'inbox')

@@ -4,8 +4,8 @@
 
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve, sep } from 'node:path'
+import { assertAppName } from './validate.js'
 
-const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
 const PLACEHOLDER_FILES = ['package.json', 'index.html', 'src/App.tsx']
 
 export interface ScaffoldResult {
@@ -14,10 +14,7 @@ export interface ScaffoldResult {
 }
 
 export function scaffoldMicroApp(repoRoot: string, rawName: string): ScaffoldResult {
-  const name = rawName.trim()
-  if (!NAME_RE.test(name)) {
-    throw new Error('Invalid app name. Use lowercase letters, numbers, "-" and "_".')
-  }
+  const name = assertAppName(rawName)
 
   const templateDir = join(repoRoot, 'templates', 'micro-app')
   const appsDir = join(repoRoot, 'micro-apps')

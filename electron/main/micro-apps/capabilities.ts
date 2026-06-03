@@ -10,6 +10,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { assertAppName } from './validate.js'
 
 export interface HostRequest {
   /** A normalized https origin, e.g. "https://www.googleapis.com". */
@@ -67,6 +68,7 @@ interface RawManifest {
  * just yields fewer requests). Pure given the filesystem.
  */
 export function readManifest(repoRoot: string, name: string): HostRequest[] {
+  assertAppName(name)
   const path = join(repoRoot, 'micro-apps', name, 'hearth.app.json')
   if (!existsSync(path)) return []
   let parsed: RawManifest
@@ -108,6 +110,7 @@ export class CapabilityStore {
 
   /** Approve a set of hosts for an app. Non-https/invalid hosts are ignored. */
   approve(name: string, hosts: string[]): void {
+    assertAppName(name)
     const valid = hosts.map(normalizeHost).filter((h): h is string => h !== null)
     if (valid.length === 0) return
     const current = new Set(this.approved(name))
@@ -118,6 +121,7 @@ export class CapabilityStore {
 
   /** Revoke one host (or all, if host omitted) for an app. */
   revoke(name: string, host?: string): void {
+    assertAppName(name)
     if (!this.map[name]) return
     if (host === undefined) {
       delete this.map[name]

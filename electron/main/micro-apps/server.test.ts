@@ -2,7 +2,7 @@ import { test, expect, describe } from 'bun:test'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { extractDevUrl, installDeps } from './server'
+import { extractDevUrl, installDeps, startMicroApp } from './server'
 
 describe('extractDevUrl', () => {
   test('matches a plain localhost URL with trailing slash', () => {
@@ -37,6 +37,13 @@ describe('extractDevUrl', () => {
 
   test('ignores non-loopback hosts', () => {
     expect(extractDevUrl('http://example.com:5173/')).toBeNull()
+  })
+})
+
+describe('startMicroApp name validation', () => {
+  test('rejects a traversal name before spawning anything', async () => {
+    await expect(startMicroApp('/repo', '../../etc')).rejects.toThrow(/invalid app name/i)
+    await expect(startMicroApp('/repo', 'has spaces')).rejects.toThrow(/invalid app name/i)
   })
 })
 
