@@ -9,7 +9,7 @@
 
 import { mkdir, readFile, writeFile, appendFile, readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { SessionUpdate } from '../../shared/protocol.js'
+import type { SessionUpdate, WorkspaceKind } from '../../shared/protocol.js'
 
 export type TranscriptEntry = { kind: 'user'; text: string } | { kind: 'update'; update: SessionUpdate }
 
@@ -20,6 +20,8 @@ export interface SessionMeta {
   cwd: string
   /** True when this session targets the Hearth repo itself. */
   self: boolean
+  /** Developer ('code') vs knowledge-worker ('knowledge') framing for the workbench. */
+  kind: WorkspaceKind
   /** The ACP adapter's session id for this conversation, captured on first prompt.
    * Lets a reopened session resume real agent context via ACP `loadSession`
    * instead of starting cold. Absent until the first turn. */
@@ -62,6 +64,7 @@ export interface CreateSessionInput {
   workspaceId: string
   cwd: string
   self: boolean
+  kind?: WorkspaceKind
 }
 
 export class SessionStore {
@@ -134,6 +137,7 @@ export class SessionStore {
       workspaceId: input.workspaceId,
       cwd: input.cwd,
       self: input.self,
+      kind: input.kind ?? (input.self ? 'code' : 'knowledge'),
       createdAt: t,
       updatedAt: t,
       archived: false,

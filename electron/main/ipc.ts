@@ -16,6 +16,7 @@ import { TerminalManager } from './terminal/pty.js'
 import type { BrowserManager, Rect } from './browser/browser-view.js'
 import { SoulService, DEFAULT_SOUL, type SoulConfig } from './soul/soul.js'
 import { mkdir, readFile as nodeReadFile, writeFile as nodeWriteFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { getDiff } from './self-mod/git-diff.js'
 import {
@@ -310,7 +311,13 @@ export function registerIpc(services: MainServices): void {
   // Sessions.
   ipcMain.handle(HEARTH_CHANNELS.sessionsList, () => sessions.list())
   ipcMain.handle(HEARTH_CHANNELS.sessionsSearch, (_e, query: string) => sessions.search(query))
-  ipcMain.handle(HEARTH_CHANNELS.sessionsCreate, (_e, input: CreateSessionInput) => sessions.create(input))
+  ipcMain.handle(HEARTH_CHANNELS.sessionsCreate, (_e, input: CreateSessionInput) => {
+    // Infer the workspace framing when the caller doesn't specify it: Hearth and
+    // any git repo get the developer workbench; a plain folder gets the
+    // knowledge-worker surfaces. The user can still flip it per session.
+    const kind = input.kind ?? (input.self || existsSync(join(input.cwd, '.git')) ? 'code' : 'knowledge')
+    return sessions.create({ ...input, kind })
+  })
   ipcMain.handle(HEARTH_CHANNELS.sessionsGet, (_e, id: string) => sessions.get(id))
   ipcMain.handle(HEARTH_CHANNELS.sessionsAppend, (_e, id: string, entries: TranscriptEntry[]) => sessions.append(id, entries))
   ipcMain.handle(HEARTH_CHANNELS.sessionsRename, (_e, id: string, title: string) => sessions.rename(id, title))

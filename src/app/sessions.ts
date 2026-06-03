@@ -3,7 +3,8 @@ import type { Workspace } from '../../electron/main/workspaces/registry'
 import type { SessionMeta } from '../../electron/main/sessions/store'
 
 function toActive(m: SessionMeta): ActiveSession {
-  return { id: m.id, title: m.title, cwd: m.cwd, workspaceId: m.workspaceId, self: m.self }
+  // Default the framing for sessions persisted before kind existed.
+  return { id: m.id, title: m.title, cwd: m.cwd, workspaceId: m.workspaceId, self: m.self, kind: m.kind ?? (m.self ? 'code' : 'knowledge') }
 }
 
 /** Create a fresh session in a workspace and make it active. */

@@ -7,6 +7,11 @@
 /** The selectable agent backends. */
 export type AgentKind = 'claude' | 'codex'
 
+/** How a workspace is framed. 'code' shows the developer workbench (files,
+ * terminal, git, review); 'knowledge' swaps in the knowledge-worker surfaces.
+ * Inferred at session creation (a repo → code, a plain folder → knowledge). */
+export type WorkspaceKind = 'code' | 'knowledge'
+
 /** Current-backend status (main → renderer on the backend-changed channel). */
 export interface BackendStatus {
   kind: AgentKind

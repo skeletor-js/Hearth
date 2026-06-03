@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { PlanEntry } from '../../electron/shared/protocol'
+import type { PlanEntry, WorkspaceKind } from '../../electron/shared/protocol'
 
 /** The latest self-edit set (what Hearth just changed about itself). */
 export interface SelfEdit {
@@ -17,6 +17,8 @@ export interface ActiveSession {
   workspaceId: string
   /** True when this session targets the Hearth repo itself. */
   self: boolean
+  /** Developer vs knowledge-worker framing for the workbench (see WorkspaceKind). */
+  kind: WorkspaceKind
 }
 
 // Runtime state for the active session — derived from the agent stream and shared
@@ -26,6 +28,8 @@ interface SessionState {
   active: ActiveSession | null
   /** Switch the active session, resetting all per-session derived state. */
   setActive: (a: ActiveSession | null) => void
+  /** Flip the active session's workbench framing (code <-> knowledge). */
+  setActiveKind: (kind: WorkspaceKind) => void
 
   plan: PlanEntry[]
   setPlan: (plan: PlanEntry[]) => void
@@ -76,6 +80,10 @@ export const useSession = create<SessionState>((set, get) => ({
   active: null,
   setActive: (active) =>
     set({ active, plan: [], reviewCount: 0, lastSelfEdit: null, scratchpadNonEmpty: false, diffNonce: get().diffNonce + 1 }),
+  setActiveKind: (kind) => {
+    const active = get().active
+    if (active) set({ active: { ...active, kind } })
+  },
 
   plan: [],
   setPlan: (plan) => set({ plan }),
