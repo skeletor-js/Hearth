@@ -126,6 +126,42 @@ describe('CredentialBroker (end to end, injected fetch)', () => {
     expect(broker!.tokenFor('inbox')).toBe(a)
   })
 
+  test('does not follow a redirect and never re-sends the credential', async () => {
+    tmp = mkdtempSync(join(tmpdir(), 'hearth-broker-'))
+    const caps = new CapabilityStore(join(tmp, 'capabilities.json'))
+    caps.approve('inbox', ['https://api.example.com'])
+    const secrets = { get: (k: string) => (k === 'microapp.https://api.example.com' ? 's3cr3t-token' : undefined) }
+    const calls: string[] = []
+    const fetchImpl = (async (url: string | URL | Request) => {
+      calls.push(String(url))
+      // Approved host responds with a redirect to loopback — the SSRF attempt.
+      return new Response(null, { status: 302, headers: { location: 'http://127.0.0.1:9/' } })
+    }) as unknown as typeof fetch
+    broker = new CredentialBroker({ capabilities: caps, secrets, fetchImpl })
+    await broker.start()
+    const token = broker.tokenFor('inbox')
+
+    const res = await fetch(`${broker.origin()}/proxy`, {
+      method: 'POST',
+      headers: { 'x-hearth-token': token, 'x-hearth-target': 'https://api.example.com/v1/me' },
+    })
+    expect(res.status).toBe(502)
+    // Exactly one upstream call — the redirect target was never fetched.
+    expect(calls).toEqual(['https://api.example.com/v1/me'])
+  })
+
+  test('rejects an over-large request body with 413', async () => {
+    setup('s3cr3t-token')
+    await broker!.start()
+    const token = broker!.tokenFor('inbox')
+    const res = await fetch(`${broker!.origin()}/proxy`, {
+      method: 'POST',
+      headers: { 'x-hearth-token': token, 'x-hearth-target': 'https://api.example.com/v1/me', 'x-hearth-method': 'POST' },
+      body: Buffer.alloc(6 * 1024 * 1024),
+    })
+    expect(res.status).toBe(413)
+  })
+
   test('answers CORS preflight', async () => {
     setup()
     await broker!.start()

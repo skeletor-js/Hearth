@@ -69,6 +69,9 @@ export function resolveProxy(args: {
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 // Request headers we pass through from the frame (never auth — the broker sets that).
 const FORWARDABLE_REQ_HEADERS = ['content-type', 'accept']
+// Caps to keep a hostile/agent-authored frame from ballooning main-process memory.
+const MAX_REQUEST_BYTES = 5 * 1024 * 1024
+const MAX_RESPONSE_BYTES = 25 * 1024 * 1024
 
 export class CredentialBroker {
   private server: Server | null = null
@@ -165,11 +168,29 @@ export class CredentialBroker {
     const secret = this.deps.secrets.get(`microapp.${decision.origin}`)
     if (secret) headers['authorization'] = `Bearer ${secret}`
 
-    const body = method === 'GET' || method === 'DELETE' ? undefined : await readBody(req)
+    let body: Buffer | undefined
+    if (method !== 'GET' && method !== 'DELETE') {
+      try {
+        body = await readBody(req)
+      } catch (err) {
+        res.writeHead(413, { 'content-type': 'text/plain' })
+        res.end(err instanceof Error ? err.message : 'request body too large')
+        req.resume() // drain the rest of the oversized body so the socket closes cleanly
+        return
+      }
+    }
 
     try {
-      const upstream = await this.fetchImpl(decision.target, { method, headers, body })
-      const buf = Buffer.from(await upstream.arrayBuffer())
+      // `redirect: 'manual'` so a 3xx Location (attacker-chosen) is never followed —
+      // following it would bypass the host allowlist + loopback block and re-send the
+      // injected credential. We refuse 3xx outright rather than relay a redirect.
+      const upstream = await this.fetchImpl(decision.target, { method, headers, body, redirect: 'manual' })
+      if (upstream.type === 'opaqueredirect' || upstream.status === 0 || (upstream.status >= 300 && upstream.status < 400)) {
+        res.writeHead(502, { 'content-type': 'text/plain', 'access-control-allow-origin': '*' })
+        res.end('upstream redirect not followed')
+        return
+      }
+      const buf = await readCapped(upstream, MAX_RESPONSE_BYTES)
       const contentType = upstream.headers.get('content-type') ?? 'application/octet-stream'
       res.writeHead(upstream.status, { 'content-type': contentType, 'access-control-allow-origin': '*' })
       res.end(buf)
@@ -188,8 +209,44 @@ function header(req: IncomingMessage, name: string): string | undefined {
 function readBody(req: IncomingMessage): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
-    req.on('data', (c: Buffer) => chunks.push(c))
-    req.on('end', () => resolve(Buffer.concat(chunks)))
+    let size = 0
+    let aborted = false
+    req.on('data', (c: Buffer) => {
+      if (aborted) return
+      size += c.length
+      if (size > MAX_REQUEST_BYTES) {
+        aborted = true
+        reject(new Error('request body too large'))
+        return
+      }
+      chunks.push(c)
+    })
+    req.on('end', () => {
+      if (!aborted) resolve(Buffer.concat(chunks))
+    })
     req.on('error', reject)
   })
+}
+
+/** Read an upstream response body, aborting if it exceeds `max` bytes. */
+async function readCapped(upstream: Response, max: number): Promise<Buffer> {
+  const reader = upstream.body?.getReader()
+  if (!reader) {
+    const buf = Buffer.from(await upstream.arrayBuffer())
+    if (buf.length > max) throw new Error('upstream response too large')
+    return buf
+  }
+  const chunks: Buffer[] = []
+  let size = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    size += value.length
+    if (size > max) {
+      await reader.cancel()
+      throw new Error('upstream response too large')
+    }
+    chunks.push(Buffer.from(value))
+  }
+  return Buffer.concat(chunks)
 }
