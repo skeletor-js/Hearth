@@ -5,7 +5,7 @@
 import { app, dialog, ipcMain, shell, type BrowserWindow } from 'electron'
 import { createRequire } from 'node:module'
 import { scaffoldMicroApp } from './micro-apps/scaffold.js'
-import { startMicroApp, stopMicroApp } from './micro-apps/server.js'
+import { startMicroApp, stopMicroApp, listMicroApps } from './micro-apps/server.js'
 import type { CapabilityStore } from './micro-apps/capabilities.js'
 import type { CredentialBroker } from './micro-apps/broker.js'
 import type { WorkspaceRegistry } from './workspaces/registry.js'
@@ -505,6 +505,7 @@ export function registerIpc(services: MainServices): void {
   ipcMain.handle(HEARTH_CHANNELS.microAppCreate, (_e, name: string) =>
     scaffoldMicroApp(repoRoot, name),
   )
+  ipcMain.handle(HEARTH_CHANNELS.microAppList, () => listMicroApps(repoRoot))
   ipcMain.handle(HEARTH_CHANNELS.microAppStart, async (_e, name: string) => {
     const url = await startMicroApp(repoRoot, name)
     // Hand the frame its per-app broker token + origin so it can make authed calls

@@ -7,13 +7,18 @@
 // install deps on first start if they're missing.
 
 import { spawn, type ChildProcess } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { join, resolve, sep } from 'node:path'
 import { assertAppName } from './validate.js'
 
 interface RunningApp {
   child: ChildProcess
   url: string
+}
+
+export interface MicroAppInfo {
+  name: string
+  running: boolean
 }
 
 const running = new Map<string, RunningApp>()
@@ -146,4 +151,15 @@ export function stopMicroApp(name: string): void {
 
 export function stopAllMicroApps(): void {
   for (const name of running.keys()) stopMicroApp(name)
+}
+
+// List the scaffolded micro-apps (dirs under micro-apps/ that look like a project),
+// with whether each currently has a running dev server. Powers the Tools gallery.
+export function listMicroApps(repoRoot: string): MicroAppInfo[] {
+  const appsDir = join(repoRoot, 'micro-apps')
+  if (!existsSync(appsDir)) return []
+  return readdirSync(appsDir, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && existsSync(join(appsDir, d.name, 'package.json')))
+    .map((d) => ({ name: d.name, running: running.has(d.name) }))
+    .sort((a, b) => a.name.localeCompare(b.name))
 }

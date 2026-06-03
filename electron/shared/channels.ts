@@ -109,6 +109,7 @@ export const HEARTH_CHANNELS = {
   // window chrome: double-click the title-bar strip to zoom (fill) / restore.
   windowZoomToggle: 'window:zoom-toggle',
   microAppCreate: 'micro-app:create',
+  microAppList: 'micro-app:list',
   microAppStart: 'micro-app:start',
   microAppStop: 'micro-app:stop',
   // W6 egress capability grants: read approved+pending hosts, user approves/revokes.

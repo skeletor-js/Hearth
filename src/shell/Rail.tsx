@@ -103,6 +103,10 @@ export function Rail() {
               <kbd>⌘K</kbd>
             </span>
           </Link>
+          <Link to="/tools" className={itemClass(pathname === '/tools')}>
+            <Icon name="squares-four" />
+            <span className="ri-label">Tools</span>
+          </Link>
           <Link to="/history" className={itemClass(pathname === '/history')}>
             <Icon name="clock-counter-clockwise" />
             <span className="ri-label">Changes</span>

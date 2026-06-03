@@ -20,6 +20,7 @@ import type { BrowserState } from '../main/browser/browser-view.js'
 import type { SoulConfig } from '../main/soul/soul.js'
 import type { CreateSessionInput, SessionDetail, SessionMeta, SessionSearchHit, TranscriptEntry } from '../main/sessions/store.js'
 import type { AppCapabilities as MicroAppCapabilities } from '../main/micro-apps/capabilities.js'
+import type { MicroAppInfo } from '../main/micro-apps/server.js'
 
 interface WorkspaceStatus {
   branch: string | null
@@ -250,6 +251,7 @@ const api = {
   },
   microApps: {
     create: (name: string) => ipcRenderer.invoke(CH.microAppCreate, name),
+    list: (): Promise<MicroAppInfo[]> => ipcRenderer.invoke(CH.microAppList),
     start: (name: string): Promise<string> => ipcRenderer.invoke(CH.microAppStart, name),
     stop: (name: string) => ipcRenderer.invoke(CH.microAppStop, name),
     // W6 egress grants: read approved + pending hosts, approve/revoke per app.
