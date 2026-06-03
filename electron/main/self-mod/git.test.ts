@@ -1,5 +1,5 @@
 import { test, expect, describe, beforeEach, afterEach } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 // dugite's exec takes an argv array + cwd and spawns git with NO shell, so this
@@ -311,6 +311,24 @@ describe('revertCommit', () => {
     expect(reverted).not.toBe(before)
     // target.txt should be gone again.
     expect(await listDirty(repo)).toEqual([])
+    expect(await diffPaths(repo, reverted)).toEqual(['target.txt'])
+  })
+
+  test('reverts even when the working tree is dirty (boot recovery)', async () => {
+    writeFileSync(join(repo, 'target.txt'), 'v1\n')
+    const target = await commitSelfMod(repo, { subject: 'add target', conversationId: 'c' })
+
+    // Simulate a bricked boot's leftover state: a modified tracked file plus an
+    // untracked file — both would block a plain `git revert`.
+    writeFileSync(join(repo, 'baseline.txt'), 'tampered\n')
+    writeFileSync(join(repo, 'untracked.txt'), 'stray\n')
+
+    const reverted = await revertCommit(repo, target)
+
+    expect(reverted).toBe(await head(repo))
+    expect(await listDirty(repo)).toEqual([])
+    expect(existsSync(join(repo, 'untracked.txt'))).toBe(false) // clean -fd swept it
+    expect(existsSync(join(repo, 'target.txt'))).toBe(false) // the bad commit was undone
     expect(await diffPaths(repo, reverted)).toEqual(['target.txt'])
   })
 

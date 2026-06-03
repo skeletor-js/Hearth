@@ -157,8 +157,18 @@ export async function restorePaths(repoRoot: string, paths: string[]): Promise<v
   }
 }
 
-/** Revert a specific self-mod commit (does not touch later unrelated commits). */
+/**
+ * Revert a specific self-mod commit (does not touch later unrelated commits).
+ *
+ * Called by the boot watchdog to undo a self-mod that bricked startup. A prior
+ * turn may have left the tree dirty — uncommitted edits, or untracked files that
+ * would block `git revert`. At a bricked boot those changes are either the bad
+ * edit itself or orphaned, so we discard them first to guarantee the revert can
+ * apply. reset/clean leave gitignored paths (node_modules, .hearth) untouched.
+ */
 export async function revertCommit(repoRoot: string, hash: string): Promise<string> {
+  await git(repoRoot, ['reset', '--hard', 'HEAD'])
+  await git(repoRoot, ['clean', '-fd'])
   await git(repoRoot, ['revert', '--no-edit', hash])
   return (await git(repoRoot, ['rev-parse', 'HEAD'])).trim()
 }

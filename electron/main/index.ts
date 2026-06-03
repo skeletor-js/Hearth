@@ -88,9 +88,11 @@ async function bootstrap(): Promise<void> {
   if (decision.action === 'revert') {
     try {
       await revertCommit(REPO_ROOT, decision.commit)
-    } catch {
-      // If the revert itself fails, fall through — the attempt was recorded, so a
-      // repeat will hit the cap and drop to safe-mode rather than loop forever.
+    } catch (err) {
+      // Surface the failure (don't swallow it) but still fall through: the attempt
+      // was recorded, so a repeat hits the cap and drops to safe-mode rather than
+      // looping forever.
+      console.error(`[hearth] boot auto-revert failed for commit ${decision.commit}:`, err)
     }
     if (app.isPackaged) {
       app.relaunch()
