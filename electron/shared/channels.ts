@@ -110,6 +110,7 @@ export const HEARTH_CHANNELS = {
   windowZoomToggle: 'window:zoom-toggle',
   microAppCreate: 'micro-app:create',
   microAppList: 'micro-app:list',
+  microAppStarters: 'micro-app:starters',
   microAppStart: 'micro-app:start',
   microAppStop: 'micro-app:stop',
   // W6 egress capability grants: read approved+pending hosts, user approves/revokes.
