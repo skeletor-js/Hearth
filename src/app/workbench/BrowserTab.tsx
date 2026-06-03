@@ -10,6 +10,14 @@ export function BrowserTab() {
   const [state, setState] = useState<BrowserState>(EMPTY)
   const [draft, setDraft] = useState('')
   const [editing, setEditing] = useState(false)
+  // Mirror `editing` into a ref so the onState subscription — registered once per
+  // workspace and closed over the first render — reads the LIVE value instead of a
+  // stale `false`, which otherwise overwrites the URL bar while the user is typing.
+  const editingRef = useRef(false)
+  const setEditingBoth = (v: boolean) => {
+    editingRef.current = v
+    setEditing(v)
+  }
   const regionRef = useRef<HTMLDivElement>(null)
 
   // The WebContentsView floats above the renderer; keep its bounds glued to the
@@ -31,7 +39,7 @@ export function BrowserTab() {
     const tick = setInterval(sync, 300)
     const off = window.hearth.browser.onState((s) => {
       setState(s)
-      if (!editing) setDraft(s.url)
+      if (!editingRef.current) setDraft(s.url)
     })
     return () => {
       ro.disconnect()
@@ -45,7 +53,7 @@ export function BrowserTab() {
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     window.hearth.browser.navigate(draft, active?.workspaceId)
-    setEditing(false)
+    setEditingBoth(false)
   }
 
   return (
@@ -66,11 +74,11 @@ export function BrowserTab() {
             value={editing ? draft : state.url || draft}
             onChange={(e) => setDraft(e.target.value)}
             onFocus={(e) => {
-              setEditing(true)
+              setEditingBoth(true)
               setDraft(state.url)
               e.target.select()
             }}
-            onBlur={() => setEditing(false)}
+            onBlur={() => setEditingBoth(false)}
             placeholder="Search or enter a URL"
             spellCheck={false}
           />
