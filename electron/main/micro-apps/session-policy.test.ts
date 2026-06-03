@@ -45,4 +45,13 @@ describe('buildShellCsp', () => {
     // it must permit Vite's inline React-refresh preamble or the shell goes blank.
     expect(buildShellCsp()).toContain("script-src 'self' 'unsafe-inline'")
   })
+
+  test('scopes the HMR websocket to loopback, not any host', () => {
+    const connect = buildShellCsp()
+      .split('; ')
+      .find((d) => d.startsWith('connect-src '))!
+    expect(connect).toBe("connect-src 'self' ws://localhost:* ws://127.0.0.1:*")
+    // The old scheme-wide `ws:` (any websocket host) is gone.
+    expect(connect).not.toMatch(/\bws:(?!\/\/)/)
+  })
 })

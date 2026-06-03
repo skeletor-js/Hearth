@@ -55,9 +55,10 @@ export function buildShellCsp(): string {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     // The shell only connects to its own Vite HMR socket (dev + packaged self-
-    // evolving builds both run Vite). Micro-app frames are governed separately by
-    // frame-src below, not connect-src.
-    "connect-src 'self' ws:",
+    // evolving builds both run Vite), which is always loopback — so scope ws to
+    // loopback rather than the scheme-wide `ws:` (which allowed a socket to ANY
+    // host). Micro-app frames are governed separately by frame-src, not connect-src.
+    "connect-src 'self' ws://localhost:* ws://127.0.0.1:*",
     'frame-src http://localhost:* http://127.0.0.1:*',
     "object-src 'none'",
     "base-uri 'self'",
