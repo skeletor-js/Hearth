@@ -84,22 +84,40 @@ export function ChatView() {
       .catch(() => {})
   }
 
+  // ids are allocated OUTSIDE the setMsgs updater. React may invoke an updater
+  // twice (StrictMode/concurrent), and an updater must be pure — minting ids inside
+  // it would burn ids and, worse, hand the live hearth bubble a different key across
+  // invocations (remount/flicker). Allocating before setMsgs keeps the updater pure.
   const id = () => nextId.current++
 
-  const pushUser = (text: string, images?: PromptImage[]) =>
-    setMsgs((p) => [...p, { id: id(), role: 'user', text, images }, { id: id(), role: 'hearth', blocks: [] }])
+  // `spawnTail` adds the empty hearth bubble that receives the streamed reply. Live
+  // sends want it (shows the bubble immediately); replay does not — apply() creates
+  // the tail when the first assistant update arrives, so two consecutive user
+  // entries don't leave a dangling empty hearth row.
+  const pushUser = (text: string, images?: PromptImage[], spawnTail = true) => {
+    const uid = id()
+    const hid = spawnTail ? id() : null
+    setMsgs((p) => {
+      const out: Msg[] = [...p, { id: uid, role: 'user', text, images }]
+      if (hid !== null) out.push({ id: hid, role: 'hearth', blocks: [] })
+      return out
+    })
+  }
 
-  // Ensure there's a hearth message at the tail to receive stream blocks.
-  const withHearthTail = (prev: Msg[]): [Msg[], Extract<Msg, { role: 'hearth' }>] => {
+  // Ensure there's a hearth message at the tail to receive stream blocks. `freshId`
+  // is pre-allocated by the caller (outside the updater) and used only if a new tail
+  // is needed; reusing the existing tail just leaves a harmless id gap.
+  const withHearthTail = (prev: Msg[], freshId: number): [Msg[], Extract<Msg, { role: 'hearth' }>] => {
     const last = prev[prev.length - 1]
     if (last?.role === 'hearth') return [prev, last]
-    const fresh: Msg = { id: id(), role: 'hearth', blocks: [] }
+    const fresh: Msg = { id: freshId, role: 'hearth', blocks: [] }
     return [[...prev, fresh], fresh as Extract<Msg, { role: 'hearth' }>]
   }
 
-  const apply = (u: SessionUpdate, replay = false) =>
+  const apply = (u: SessionUpdate, replay = false) => {
+    const freshTailId = id()
     setMsgs((prev0) => {
-      const [prev, tail] = withHearthTail(prev0)
+      const [prev, tail] = withHearthTail(prev0, freshTailId)
       const blocks = tail.blocks
       const lastBlock = blocks[blocks.length - 1]
       // Any non-thought update ends the current reasoning run.
@@ -227,6 +245,7 @@ export function ChatView() {
         }
       }
     })
+  }
 
   useEffect(() => {
     void window.hearth.agent.getBackend().then(setBackend)
@@ -290,7 +309,7 @@ export function ChatView() {
       if (!live) return
       if (detail) {
         for (const e of detail.entries) {
-          if (e.kind === 'user') pushUser(e.text)
+          if (e.kind === 'user') pushUser(e.text, undefined, false)
           else apply(e.update, true)
         }
       }
