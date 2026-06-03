@@ -1,8 +1,18 @@
 # Hearth Knowledge-Worker Workspace Plan
 
-> **Status: ACTIVE (drafted 2026-06-02).** Not started. Designed for `/goal`:
-> each workstream (W#) is sized to land as one focused, independently-revertable
-> `Hearth-SelfMod` commit, in order. Run the global gate after every W#.
+> **Status: COMPLETE (2026-06-02).** All 14 workstreams landed as focused commits,
+> gate green after each (typecheck, eslint, 368 tests, clean production build).
+> Two honest deviations from the original plan, each documented in its section:
+> - **W10 (Sources):** there is no renderer read-path for connector data (Hearth
+>   deliberately doesn't broker it), so the Sources tab shows real connection
+>   *status* and routes digests to the agent — it never fetches or fakes data.
+> - **W12/W14 (Routines):** the single shared agent host can't be driven headlessly
+>   without colliding with interactive turns, so main only schedules + emits 'due'
+>   and the *renderer* runs the prompt via the proven pendingPrompt path. Routines
+>   fire only while Hearth is open. The pure scheduling core is fully unit-tested;
+>   live agent-firing is unverified in this build (no running app / sandbox auth).
+> - Connector-fed micro-app templates (W7) were deferred — they need real broker
+>   wiring, not a faked feed; the shipped starters are self-contained and working.
 
 ## Why this plan
 
