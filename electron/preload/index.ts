@@ -3,7 +3,7 @@
 
 import { contextBridge, ipcRenderer } from 'electron'
 import { HEARTH_CHANNELS as CH } from '../shared/channels.js'
-import type { ActiveConnectors, AgentKind, AgentUpdatePayload, AuthState, AvailableCommand, BackendStatus, ConfigOption, ModelState, ModeState, PermissionRequestPayload, PromptCapabilities, PromptImage, Usage } from '../shared/protocol.js'
+import type { ActiveConnectors, AgentKind, AgentUpdatePayload, AuthState, AvailableCommand, BackendStatus, ConfigOption, ModelState, ModeState, PermissionRequestPayload, PromptCapabilities, PromptImage, Usage, WorkspaceKind } from '../shared/protocol.js'
 import type { SecretInfo } from '../main/secrets/secret-store.js'
 import type { McpServerConfig, McpServerInput } from '../main/mcp/registry.js'
 import type { ProbeResult } from '../main/mcp/probe.js'
@@ -148,6 +148,7 @@ const api = {
     get: (id: string): Promise<SessionDetail | null> => ipcRenderer.invoke(CH.sessionsGet, id),
     append: (id: string, entries: TranscriptEntry[]): Promise<void> => ipcRenderer.invoke(CH.sessionsAppend, id, entries),
     rename: (id: string, title: string): Promise<SessionMeta | null> => ipcRenderer.invoke(CH.sessionsRename, id, title),
+    setKind: (id: string, kind: WorkspaceKind): Promise<SessionMeta | null> => ipcRenderer.invoke(CH.sessionsSetKind, id, kind),
     archive: (id: string): Promise<void> => ipcRenderer.invoke(CH.sessionsArchive, id),
     delete: (id: string): Promise<void> => ipcRenderer.invoke(CH.sessionsDelete, id),
     duplicate: (id: string): Promise<SessionMeta | null> => ipcRenderer.invoke(CH.sessionsDuplicate, id),

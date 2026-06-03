@@ -37,7 +37,7 @@ import { runTypecheck } from './self-mod/validate.js'
 import { isSourceMutatingShell } from './self-mod/shell-guard.js'
 import { relative, isAbsolute } from 'node:path'
 import type { AgentHost } from './agents/agent-host.js'
-import type { AgentKind, AuthState, BackendStatus, PermissionRequest } from '../shared/protocol.js'
+import type { AgentKind, AuthState, BackendStatus, PermissionRequest, WorkspaceKind } from '../shared/protocol.js'
 import type { SecretStore } from './secrets/secret-store.js'
 import { McpRegistry, type McpServerInput } from './mcp/registry.js'
 import { probeServer } from './mcp/probe.js'
@@ -321,6 +321,7 @@ export function registerIpc(services: MainServices): void {
   ipcMain.handle(HEARTH_CHANNELS.sessionsGet, (_e, id: string) => sessions.get(id))
   ipcMain.handle(HEARTH_CHANNELS.sessionsAppend, (_e, id: string, entries: TranscriptEntry[]) => sessions.append(id, entries))
   ipcMain.handle(HEARTH_CHANNELS.sessionsRename, (_e, id: string, title: string) => sessions.rename(id, title))
+  ipcMain.handle(HEARTH_CHANNELS.sessionsSetKind, (_e, id: string, kind: WorkspaceKind) => sessions.setKind(id, kind))
   ipcMain.handle(HEARTH_CHANNELS.sessionsArchive, (_e, id: string) => sessions.archive(id))
   ipcMain.handle(HEARTH_CHANNELS.sessionsDelete, (_e, id: string) => sessions.remove(id))
   ipcMain.handle(HEARTH_CHANNELS.sessionsDuplicate, (_e, id: string) => sessions.duplicate(id))

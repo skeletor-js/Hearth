@@ -215,6 +215,10 @@ export class SessionStore {
     return this.patch(id, (m) => ({ ...m, title: title.trim() || m.title, updatedAt: this.bumped(m) }))
   }
 
+  async setKind(id: string, kind: WorkspaceKind): Promise<SessionMeta | null> {
+    return this.patch(id, (m) => ({ ...m, kind }))
+  }
+
   async archive(id: string): Promise<void> {
     await this.patch(id, (m) => ({ ...m, archived: true }))
   }
@@ -232,6 +236,7 @@ export class SessionStore {
       workspaceId: detail.meta.workspaceId,
       cwd: detail.meta.cwd,
       self: detail.meta.self,
+      kind: detail.meta.kind,
     })
     await this.append(copy.id, detail.entries)
     return copy

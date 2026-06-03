@@ -50,6 +50,7 @@ export const HEARTH_CHANNELS = {
   sessionsGet: 'sessions:get',
   sessionsAppend: 'sessions:append',
   sessionsRename: 'sessions:rename',
+  sessionsSetKind: 'sessions:set-kind',
   sessionsArchive: 'sessions:archive',
   sessionsDelete: 'sessions:delete',
   sessionsDuplicate: 'sessions:duplicate',

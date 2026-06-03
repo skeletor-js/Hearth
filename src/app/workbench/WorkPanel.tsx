@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '@/shell/Icon'
+import type { WorkspaceKind } from '../../../electron/shared/protocol'
 import { useSession } from '../session-store'
 import { ReviewTab } from './ReviewTab'
 import { PlanTab } from './PlanTab'
@@ -24,8 +25,31 @@ const WB_TABS = [
   { id: 'plan', icon: 'list-checks', label: 'Plan' },
 ] as const
 
-// The four tools are always shown; the rest are contextual (see `needed`).
-const ALWAYS_TABS = new Set(['files', 'scratchpad', 'terminal', 'browser'])
+// Which tabs each workspace kind shows. 'code' is the full developer workbench;
+// 'knowledge' drops the dev seams (terminal, git review, self-mod surfaces) that
+// a non-developer never needs. Always-tools are pinned; contextual tabs only
+// appear when `needed` says they have something to show.
+const ALWAYS_BY_KIND = {
+  code: new Set(['files', 'scratchpad', 'terminal', 'browser']),
+  knowledge: new Set(['files', 'scratchpad', 'browser']),
+} as const
+const CONTEXTUAL_BY_KIND = {
+  code: new Set(['review', 'self', 'agents', 'plan']),
+  knowledge: new Set(['plan']),
+} as const
+
+// Which workbench tabs to show, given the workspace kind and whether each
+// contextual tab currently has something to show. Pure, so it's unit-testable.
+export function selectWorkbenchTabs(
+  kind: WorkspaceKind,
+  opts: { offSession: boolean; needed: (id: string) => boolean },
+): readonly (typeof WB_TABS)[number][] {
+  const always = ALWAYS_BY_KIND[kind]
+  const contextual = CONTEXTUAL_BY_KIND[kind]
+  return WB_TABS.filter(
+    (t) => always.has(t.id) || (!opts.offSession && contextual.has(t.id) && opts.needed(t.id)),
+  )
+}
 
 function TabBody({ tab, onOpenTab }: { tab: string; onOpenTab: (id: string) => void }) {
   switch (tab) {
@@ -65,6 +89,7 @@ export function WorkPanel({
   const reviewCount = useSession((s) => s.reviewCount)
   const planCount = useSession((s) => s.plan.length)
   const lastSelfEdit = useSession((s) => s.lastSelfEdit)
+  const kind = useSession((s) => s.active?.kind ?? 'code')
   const [agentsActive, setAgentsActive] = useState(false)
   useEffect(() => window.hearth.selfMod.onActivity((a) => setAgentsActive(a.lanes.length > 0)), [])
 
@@ -85,11 +110,11 @@ export function WorkPanel({
         return true
     }
   }
-  const tabs = WB_TABS.filter((t) => ALWAYS_TABS.has(t.id) || (!offSession && needed(t.id)))
+  const tabs = selectWorkbenchTabs(kind, { offSession, needed })
 
-  // If the active tab fell out of view (a contextual tab that's no longer needed),
-  // fall back to a sensible always-tool.
-  const fallback = orientation === 'bottom' ? 'terminal' : 'files'
+  // If the active tab fell out of view (a contextual tab that's no longer needed,
+  // or a dev tab hidden in a knowledge workspace), fall back to an always-tool.
+  const fallback = orientation === 'bottom' && ALWAYS_BY_KIND[kind].has('terminal') ? 'terminal' : 'files'
   const tabVisible = tabs.some((t) => t.id === tab)
   useEffect(() => {
     if (!tabVisible) setTab(fallback)

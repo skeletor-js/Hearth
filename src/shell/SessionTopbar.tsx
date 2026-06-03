@@ -49,6 +49,12 @@ export function SessionTopbar() {
     useSession.getState().bumpSessions()
     void navigate({ to: '/new' })
   }
+  const flipKind = () => {
+    const next = active.kind === 'knowledge' ? 'code' : 'knowledge'
+    closeMenu()
+    useSession.getState().setActiveKind(next)
+    void window.hearth.sessions.setKind(active.id, next)
+  }
 
   const menu = (
     <div className="more-wrap">
@@ -64,6 +70,10 @@ export function SessionTopbar() {
             </div>
             <div className="more-item" onClick={() => { closeMenu(); void navigate({ to: '/new' }) }}>
               <Icon name="plus" /> New session
+            </div>
+            <div className="more-item" onClick={flipKind}>
+              <Icon name={active.kind === 'knowledge' ? 'code' : 'briefcase'} />{' '}
+              {active.kind === 'knowledge' ? 'Switch to developer view' : 'Switch to knowledge view'}
             </div>
             <div className="more-sep" />
             <div className="more-item danger" onClick={confirmDel ? del : () => setConfirmDel(true)}>
