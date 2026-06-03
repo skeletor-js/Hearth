@@ -8,6 +8,8 @@ import { ensureActiveSession } from '../sessions'
 import { readScratchpad, wrapForPrompt } from '../scratchpad'
 import { Composer } from './Composer'
 import { humanizePermission } from './permission-verbs'
+import { SaveAsTool } from './SaveAsTool'
+import { toast } from '@/shell/toast'
 import { LiveTrace, inferKind, type DiffRow, type TraceResult, type TraceStep } from './trace'
 import type { TranscriptEntry } from '../../../electron/main/sessions/store'
 import { renderMd, handleCodeCopyClick } from './markdown'
@@ -375,6 +377,26 @@ export function ChatView() {
 
   const stop = () => void window.hearth.agent.cancel()
 
+  // Save the current conversation as a reusable micro-app: scaffold an empty app,
+  // then ask the agent to build it from what we just did. Only offered on the
+  // Hearth self-session, where the agent's file tools can reach micro-apps/.
+  const saveAsTool = async (slug: string) => {
+    try {
+      await window.hearth.microApps.create(slug)
+    } catch (e) {
+      const msg = String(e)
+      toast(msg.includes('Already exists') ? `A tool named “${slug}” already exists` : `Couldn’t create tool: ${msg}`)
+      return
+    }
+    toast(`Building tool “${slug}” — find it under Tools`)
+    void send(
+      `Turn our work in this conversation into a micro-app. I've scaffolded an empty one at micro-apps/${slug} ` +
+        `(its own Vite + React project). Build the tool by editing micro-apps/${slug}/src/App.tsx (add files as needed) ` +
+        `so it captures what we just did as a real, self-contained tool — not a placeholder. Stay within the scaffold's ` +
+        `dependencies unless you genuinely need more.`,
+    )
+  }
+
   // A "send now" request from the Scratchpad, routed through the normal send path.
   // No-op while a turn is in flight (the nonce still advances, so it's dropped, not
   // queued — matches the disabled Send button).
@@ -415,6 +437,7 @@ export function ChatView() {
             ))
           )}
           {permission && <ApproveCard req={permission} onAnswer={answer} />}
+          {!busy && active?.self && msgs.some((m) => m.role === 'hearth') && <SaveAsTool onSave={saveAsTool} />}
         </div>
       </div>
       <Composer
