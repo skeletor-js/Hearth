@@ -6,6 +6,7 @@
 // acts inside the user's authenticated sessions.
 
 import { WebContentsView, type BrowserWindow, type WebContents } from 'electron'
+import { normalizeUrl } from './url.js'
 
 export interface BrowserState {
   url: string
@@ -20,15 +21,6 @@ export interface Rect {
   y: number
   width: number
   height: number
-}
-
-function normalizeUrl(input: string): string {
-  const s = input.trim()
-  if (!s) return 'about:blank'
-  if (/^[a-z]+:\/\//i.test(s) || s.startsWith('about:')) return s
-  // A bare domain/path → https; anything with spaces → a search.
-  if (/\s/.test(s) || !/\.[a-z]{2,}/i.test(s)) return `https://duckduckgo.com/?q=${encodeURIComponent(s)}`
-  return `https://${s}`
 }
 
 export class BrowserManager {
@@ -72,8 +64,9 @@ export class BrowserManager {
     wc.on('did-start-loading', emit)
     wc.on('did-stop-loading', emit)
     // Open target=_blank / window.open in the same view rather than spawning windows.
+    // Run it through normalizeUrl so a page can't pop a file:/chrome: URL.
     wc.setWindowOpenHandler(({ url }) => {
-      void wc.loadURL(url)
+      void wc.loadURL(normalizeUrl(url))
       return { action: 'deny' }
     })
     this.window.contentView.addChildView(view)
