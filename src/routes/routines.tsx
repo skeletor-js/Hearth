@@ -7,6 +7,32 @@ import type { Workspace } from '../../electron/main/workspaces/registry'
 
 export const Route = createFileRoute('/routines')({ component: RoutinesScreen })
 
+interface RoutinePreset {
+  title: string
+  prompt: string
+  schedule: RoutineSchedule
+}
+
+// Canonical starting points. The morning brief is the headline routine: it pulls
+// the day together from whatever sources are connected, through the agent.
+const ROUTINE_PRESETS: RoutinePreset[] = [
+  {
+    title: 'Morning brief',
+    prompt:
+      'Give me my morning brief. Pull together today from my connected tools: calendar (what meetings I have and ' +
+      'anything I need to prep), email and Slack (what needs a reply or my attention), and recent meeting notes ' +
+      '(open follow-ups). Keep it tight and skimmable, grouped by source, with the 3 things that matter most up top.',
+    schedule: { type: 'daily', time: '08:00' },
+  },
+  {
+    title: 'End-of-day wrap',
+    prompt:
+      'Wrap up my day: what got done, what slipped, and what is on deck for tomorrow based on my calendar and any ' +
+      'open threads in email and Slack. End with a short prioritized list for tomorrow morning.',
+    schedule: { type: 'daily', time: '17:00' },
+  },
+]
+
 function scheduleLabel(s: RoutineSchedule): string {
   return s.type === 'daily' ? `Every day at ${s.time}` : `Every ${s.everyMinutes} min`
 }
@@ -18,7 +44,7 @@ function when(at: number | null): string {
 function RoutinesScreen() {
   const [routines, setRoutines] = useState<Routine[] | null>(null)
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
-  const [adding, setAdding] = useState(false)
+  const [adding, setAdding] = useState<{ preset?: RoutinePreset } | null>(null)
 
   const reload = () => void window.hearth.routines.list().then(setRoutines)
   useEffect(() => {
@@ -58,17 +84,30 @@ function RoutinesScreen() {
           <div className="sec-label">
             <Icon name="clock-clockwise" /> Your routines
             <span style={{ flex: 1 }} />
-            <button className="btn btn-sm btn-primary" onClick={() => setAdding(true)}>
+            <button className="btn btn-sm btn-primary" onClick={() => setAdding({})}>
               <Icon name="plus" /> New routine
             </button>
           </div>
 
+          {!adding && (
+            <div className="routine-presets">
+              {ROUTINE_PRESETS.map((p) => (
+                <button key={p.title} className="routine-preset" onClick={() => setAdding({ preset: p })}>
+                  <Icon name="sparkle" fill />
+                  <span>{p.title}</span>
+                  <span className="routine-preset-sub">{scheduleLabel(p.schedule)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           {adding && (
             <RoutineForm
               workspaces={workspaces}
-              onCancel={() => setAdding(false)}
+              preset={adding.preset}
+              onCancel={() => setAdding(null)}
               onCreated={() => {
-                setAdding(false)
+                setAdding(null)
                 reload()
               }}
             />
@@ -114,19 +153,22 @@ function RoutinesScreen() {
 
 function RoutineForm({
   workspaces,
+  preset,
   onCancel,
   onCreated,
 }: {
   workspaces: Workspace[]
+  preset?: RoutinePreset
   onCancel: () => void
   onCreated: () => void
 }) {
-  const [title, setTitle] = useState('')
-  const [prompt, setPrompt] = useState('')
-  const [type, setType] = useState<'daily' | 'interval'>('daily')
-  const [time, setTime] = useState('08:00')
-  const [everyMinutes, setEveryMinutes] = useState(60)
-  const [wsId, setWsId] = useState(workspaces[0]?.id ?? '')
+  const [title, setTitle] = useState(preset?.title ?? '')
+  const [prompt, setPrompt] = useState(preset?.prompt ?? '')
+  const [type, setType] = useState<'daily' | 'interval'>(preset?.schedule.type ?? 'daily')
+  const [time, setTime] = useState(preset?.schedule.type === 'daily' ? preset.schedule.time : '08:00')
+  const [everyMinutes, setEveryMinutes] = useState(preset?.schedule.type === 'interval' ? preset.schedule.everyMinutes : 60)
+  // Default a knowledge workspace (where connected sources live) when one exists.
+  const [wsId, setWsId] = useState((workspaces.find((w) => !w.isHearth) ?? workspaces[0])?.id ?? '')
 
   const ws = workspaces.find((w) => w.id === wsId) ?? workspaces[0]
   const canSave = title.trim() && prompt.trim() && ws
