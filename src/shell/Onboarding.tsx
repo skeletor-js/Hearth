@@ -171,7 +171,7 @@ export function Onboarding() {
               <h1>The hearth is lit</h1>
               <p className="lead" style={{ maxWidth: 380, margin: '0 auto 4px' }}>
                 You’re on {BACKENDS.find((b) => b.id === backend)?.name}
-                {wsId ? `, in ${workspaces.find((w) => w.id === wsId)?.name}` : ''}. Start a session — or ask Hearth to change itself.
+                {wsId ? `, in ${workspaces.find((w) => w.id === wsId)?.name}` : ''}. Start a session — Hearth shapes itself to how you work.
               </p>
             </div>
           )}

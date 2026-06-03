@@ -9,10 +9,10 @@ import type { SessionMeta } from '../../electron/main/sessions/store'
 export const Route = createFileRoute('/new')({ component: HomeScreen })
 
 const STARTERS: [string, string, string][] = [
-  ['flame', 'Evolve Hearth', 'Ask Hearth to change its own UI, prompts, or skills.'],
-  ['folder-open', 'Work in a folder', 'Point a session at a project and start building.'],
+  ['folder-open', 'Work in a folder', 'Point a session at a project and start.'],
   ['lightbulb', 'Explore an idea', 'Think something through with your agent.'],
-  ['list-bullets', 'Plan a build', 'Sketch a plan with Hearth, then build it step by step.'],
+  ['list-bullets', 'Plan something', 'Sketch a plan with Hearth, then work through it step by step.'],
+  ['flame', 'Shape Hearth', 'Ask Hearth to reshape its own UI, tools, or skills to fit you.'],
 ]
 
 function HomeScreen() {
@@ -49,10 +49,10 @@ function HomeScreen() {
         <div className="hero">
           <AsciiEmber fontSize={16} />
           <h1>What are we building?</h1>
-          <p>One ongoing relationship with your coding agent — it keeps the repo, the plan, and how you like to work.</p>
+          <p>One ongoing relationship with your agent — it keeps your work, your plan, and how you like to work.</p>
           <div className="hero-grid">
             {STARTERS.map((c, i) => (
-              <div className="hero-card" key={i} onClick={i === 1 ? openFolder : () => start()}>
+              <div className="hero-card" key={i} onClick={c[1] === 'Work in a folder' ? openFolder : () => start()}>
                 <div className="hc-t">
                   <Icon name={c[0]} fill={c[0] === 'flame'} /> {c[1]}
                 </div>
