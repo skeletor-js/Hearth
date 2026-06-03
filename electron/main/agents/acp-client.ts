@@ -90,8 +90,22 @@ export class AcpClient {
       cwd: spec.cwd,
       env: buildChildEnv(process.env, spec.env, { scrubInheritedKeys: shouldScrubInheritedKeys() }),
       stdio: ['pipe', 'pipe', 'pipe'],
+      // Own process group so dispose() can kill the adapter AND its grandchildren
+      // (the claude/codex CLI + the MCP servers it spawns), not just the adapter.
+      detached: true,
     })
     this.child = child
+
+    // If the adapter dies (crash, or we killed it), null the connection so the next
+    // call fails fast with a clear "not connected" instead of rejecting deep in the
+    // SDK against a dead pipe.
+    child.on('exit', (code, signal) => {
+      if (this.child === child) {
+        this.child = null
+        this.connection = null
+      }
+      if (code) console.error(`[acp adapter] exited with code ${code}${signal ? ` (${signal})` : ''}`)
+    })
 
     // Surface adapter stderr to our log; it's where the agent reports its own
     // startup/auth failures.
@@ -319,10 +333,34 @@ export class AcpClient {
   }
 
   async dispose(): Promise<void> {
-    this.child?.kill()
+    const child = this.child
     this.child = null
     this.connection = null
     this.updateHandlers.clear()
     this.toolTitles.clear()
+    if (!child || child.exitCode !== null || child.signalCode !== null) return
+    killTree(child, 'SIGTERM')
+    // Escalate if it ignores SIGTERM, so a wedged adapter can't leak.
+    const timer = setTimeout(() => killTree(child, 'SIGKILL'), 2000)
+    if (typeof timer.unref === 'function') timer.unref()
+    child.once('exit', () => clearTimeout(timer))
+  }
+}
+
+/** Kill the adapter's whole process group (it was spawned detached), falling back
+ * to a direct kill if the group send fails (e.g. pid already reaped). */
+function killTree(child: ChildProcessWithoutNullStreams, signal: NodeJS.Signals): void {
+  try {
+    if (child.pid !== undefined) {
+      process.kill(-child.pid, signal)
+      return
+    }
+  } catch {
+    // group gone or unsupported — fall through to a direct kill
+  }
+  try {
+    child.kill(signal)
+  } catch {
+    // already gone
   }
 }
