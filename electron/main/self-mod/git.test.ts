@@ -8,6 +8,7 @@ import { exec as gitExec } from 'dugite'
 
 import {
   listDirty,
+  listRenames,
   listTrackedDirty,
   commitSelfMod,
   revertCommit,
@@ -212,6 +213,14 @@ describe('listDirty', () => {
     // split the rename arrow; we only assert it surfaces the rename without
     // dropping it or mangling it into an empty string.
     expect(dirty[0]).toContain('renamed.txt')
+  })
+
+  test('listRenames surfaces both sides of a rename', async () => {
+    await run(repo, ['mv', 'baseline.txt', 'renamed.txt'])
+    expect(await listRenames(repo)).toEqual([{ from: 'baseline.txt', to: 'renamed.txt' }])
+    // A plain edit is not a rename.
+    writeFileSync(join(repo, 'renamed.txt'), 'edited\n')
+    expect(await listRenames(repo)).toEqual([{ from: 'baseline.txt', to: 'renamed.txt' }])
   })
 })
 

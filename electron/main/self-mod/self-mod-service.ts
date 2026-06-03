@@ -8,7 +8,7 @@
 
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { commitSelfMod, diffPaths, listDirty, listTrackedDirty, recentSelfMods, redoTarget, restorePaths, tryRevert, type SelfModKind, type SelfModLogEntry } from './git.js'
+import { commitSelfMod, diffPaths, listDirty, listRenames, listTrackedDirty, recentSelfMods, redoTarget, restorePaths, tryRevert, type SelfModKind, type SelfModLogEntry } from './git.js'
 import { HmrController } from './hmr.js'
 import { classifyBatch, type ReloadKind } from './path-relevance.js'
 import { MAIN_LABEL, type CommitGroup } from './run-tracker.js'
@@ -130,9 +130,21 @@ export class SelfModService {
     // a deliberate safety decision, not a missing feature — adding an approval path
     // would mean introducing a new classifyWrite tier in scope-guard.ts, not a
     // one-off prompt here.
-    const rejectedPaths = allChanged.filter((p) => classifyWrite(p, this.repoRoot).tier !== 'canvas')
+    const rejected = new Set(allChanged.filter((p) => classifyWrite(p, this.repoRoot).tier !== 'canvas'))
+    // A rename's OLD path is omitted from listDirty, so `git mv <protected> <canvas>`
+    // would commit the island deletion under a canvas name. Reject any rename that
+    // touches a non-canvas path on EITHER side, restoring both: the old file is
+    // checked out from HEAD, the new one dropped.
+    for (const { from, to } of await listRenames(this.repoRoot)) {
+      const ok = classifyWrite(from, this.repoRoot).tier === 'canvas' && classifyWrite(to, this.repoRoot).tier === 'canvas'
+      if (!ok) {
+        rejected.add(from)
+        rejected.add(to)
+      }
+    }
+    const rejectedPaths = [...rejected]
     if (rejectedPaths.length > 0) await restorePaths(this.repoRoot, rejectedPaths)
-    const changedPaths = allChanged.filter((p) => !rejectedPaths.includes(p))
+    const changedPaths = allChanged.filter((p) => !rejected.has(p))
     if (changedPaths.length === 0) {
       return rejectedPaths.length > 0
         ? { commit: '', commits: [], changedPaths: [], reload: 'hmr', rejectedPaths }

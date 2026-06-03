@@ -292,6 +292,28 @@ describe('SelfModService — commit-time scope enforcement (W7)', () => {
     expect(await svc.history()).toHaveLength(0)
   })
 
+  test('git mv of a protected island file to a canvas path is rejected (W11)', async () => {
+    // The rename's old path is dropped by listDirty, so without the rename guard the
+    // island deletion would commit under the canvas destination. Prove both sides are
+    // restored: the island file comes back, the canvas destination is dropped.
+    const { hmr } = recordingHmr()
+    const svc = new SelfModService(repo, hmr)
+    const guard = 'electron/main/self-mod/scope-guard.ts'
+    write(repo, guard, 'export const classifyWrite = () => ({ tier: "protected" })\n')
+    await git(repo, ['add', '-A'])
+    await git(repo, ['commit', '-m', 'baseline guard'])
+
+    await git(repo, ['mv', guard, 'src/app/smuggled.ts']) // island → canvas via rename
+
+    const result = await svc.captureTurn('conv-1', 'smuggle the guard out', [])
+
+    expect(result!.commits).toEqual([])
+    expect(result!.rejectedPaths.sort()).toEqual([guard, 'src/app/smuggled.ts'])
+    expect(existsSync(join(repo, guard))).toBe(true) // restored
+    expect(existsSync(join(repo, 'src/app/smuggled.ts'))).toBe(false) // dropped
+    expect(await svc.history()).toHaveLength(0)
+  })
+
   test('a turn that ONLY touches blocked/protected paths commits nothing', async () => {
     const { hmr } = recordingHmr()
     const svc = new SelfModService(repo, hmr)

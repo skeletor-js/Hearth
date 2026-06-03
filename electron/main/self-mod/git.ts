@@ -66,6 +66,27 @@ export async function listDirty(repoRoot: string): Promise<string[]> {
   return paths
 }
 
+/**
+ * Rename/copy pairs in the working tree, as `{ from, to }`. listDirty/
+ * listTrackedDirty deliberately drop the old path (callers want current paths),
+ * but the commit-time scope guard needs both sides: a `git mv <protected> <canvas>`
+ * would otherwise slip the island deletion past the canvas filter.
+ */
+export async function listRenames(repoRoot: string): Promise<Array<{ from: string; to: string }>> {
+  const out = await git(repoRoot, ['status', '--porcelain', '-z', '--untracked-files=all'])
+  const records = out.split('\0').filter(Boolean)
+  const renames: Array<{ from: string; to: string }> = []
+  for (let i = 0; i < records.length; i++) {
+    const status = records[i].slice(0, 2)
+    const to = records[i].slice(3)
+    if (status[0] === 'R' || status[0] === 'C') {
+      const from = records[++i] // the record after an R/C is its old path
+      if (from) renames.push({ from, to })
+    }
+  }
+  return renames
+}
+
 /** Tracked working-tree changes only (staged or unstaged) — untracked files are
  * excluded. This is what a `git revert` can actually conflict with: a revert never
  * touches untracked files, so the undo/redo guard must check THIS, not listDirty.
