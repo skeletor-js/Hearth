@@ -44,15 +44,13 @@ export function SelfTab() {
         <>
           <div className="ftree">
             {edit.changedPaths.map((p, i) => (
-              <div key={i} className="ftree-row" style={{ height: 'auto', padding: '9px 10px', alignItems: 'flex-start' }}>
-                <Icon name="pencil-simple" style={{ marginTop: 2 }} />
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-11_5)', color: 'var(--strong)' }}>{p}</div>
-                  <div style={{ fontSize: 'var(--t-12)', color: 'var(--subtle)', marginTop: 1 }}>{basename(p)}</div>
+              <div key={i} className="ftree-row self-file">
+                <Icon name="pencil-simple" />
+                <div className="sf-body">
+                  <div className="sf-path">{p}</div>
+                  <div className="sf-name">{basename(p)}</div>
                 </div>
-                <span className="tag m" style={{ marginLeft: 'auto' }}>
-                  mod
-                </span>
+                <span className="tag m">mod</span>
               </div>
             ))}
           </div>
@@ -86,7 +84,10 @@ export function SelfTab() {
         <div className="wb-empty">
           <Icon name="pencil-simple" />
           <h3>No self-edits yet</h3>
-          <p>Ask Hearth to change itself — the latest edit and an Undo will appear here.</p>
+          <p>
+            This shows the last change Hearth makes to its own code, with a one-click Undo. The full timeline lives in
+            History; the working-tree diff lives in Review.
+          </p>
         </div>
       )}
     </>

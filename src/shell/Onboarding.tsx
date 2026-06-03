@@ -3,9 +3,15 @@ import { useNavigate } from '@tanstack/react-router'
 import { Icon } from './Icon'
 import { AsciiEmber, FlameMark } from './Mascot'
 import { useShell } from './store'
+import { Btn, Status, CopyCommand } from '@/app/settings/controls'
 import { startSession } from '@/app/sessions'
-import type { AgentKind } from '../../electron/shared/protocol'
+import type { AgentKind, AuthState } from '../../electron/shared/protocol'
 import type { Workspace } from '../../electron/main/workspaces/registry'
+
+/** Signed in via the CLI's own login, a stored/env API key, or a live connection. */
+function authed(s?: AuthState): boolean {
+  return !!(s && (s.mode === 'api-key' || s.connected || s.loginPresent))
+}
 
 const STEPS = ['Connect an agent', 'Choose a workspace', 'Ready']
 
@@ -22,6 +28,11 @@ export function Onboarding() {
   const [backend, setBackend] = useState<AgentKind>('claude')
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [wsId, setWsId] = useState<string | null>(null)
+  const [authStates, setAuthStates] = useState<Partial<Record<AgentKind, AuthState>>>({})
+  const [loginCmd, setLoginCmd] = useState('')
+
+  const refreshAuth = (k: AgentKind, reconnect = false) =>
+    window.hearth.auth.status(k, reconnect).then((st) => setAuthStates((s) => ({ ...s, [k]: st })))
 
   useEffect(() => {
     void window.hearth.agent.getBackend().then(setBackend)
@@ -29,7 +40,15 @@ export function Onboarding() {
       setWorkspaces(l)
       setWsId(l[0]?.id ?? null)
     })
+    for (const b of BACKENDS) void refreshAuth(b.id)
+    return window.hearth.auth.onChanged((st) => setAuthStates((s) => ({ ...s, [st.kind]: st })))
   }, [])
+
+  // The CLI's own `login` command for the chosen backend (string only — Hearth
+  // never runs it or sees the credential).
+  useEffect(() => {
+    void window.hearth.auth.login(backend).then((r) => setLoginCmd(r.command))
+  }, [backend])
 
   const pickBackend = (k: AgentKind) => {
     setBackend(k)
@@ -91,6 +110,34 @@ export function Onboarding() {
                   {backend === b.id && <Icon name="check-circle" fill className="pk-check" />}
                 </div>
               ))}
+
+              {/* Sign-in status for the chosen backend, so a first prompt can't fail
+                  on an un-authenticated agent. Warns, never blocks. */}
+              {(() => {
+                const st = authStates[backend]
+                const name = BACKENDS.find((b) => b.id === backend)?.name ?? 'the agent'
+                if (authed(st))
+                  return (
+                    <div className="auth-login">
+                      <Status tone="ok">{st?.mode === 'api-key' ? 'API key set' : 'Signed in'} — ready to go</Status>
+                    </div>
+                  )
+                return (
+                  <div className="auth-login">
+                    <div className="auth-login-row">
+                      <Status tone="warn">Not signed in</Status>
+                      <Btn variant="ghost" icon="arrow-clockwise" onClick={() => void refreshAuth(backend, true)}>
+                        Re-check
+                      </Btn>
+                    </div>
+                    <p className="set-note">
+                      Run this in a terminal to sign in — it opens {name}’s own login. Hearth never sees the credential.
+                      Or bring an API key in Settings. You can continue and do this later.
+                    </p>
+                    {loginCmd && <CopyCommand command={loginCmd} />}
+                  </div>
+                )
+              })()}
             </>
           )}
 

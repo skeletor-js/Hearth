@@ -34,6 +34,29 @@ export interface SessionDetail {
   entries: TranscriptEntry[]
 }
 
+export interface SessionSearchHit {
+  meta: SessionMeta
+  /** A text excerpt around the first content match; absent when the hit was only
+   * in the title/workspace. The renderer highlights the query within it. */
+  snippet?: string
+}
+
+/** The searchable text of a transcript entry — what the user typed, what Hearth
+ * said, and its reasoning. Tool calls / diffs are structural, not prose. */
+function entryText(e: TranscriptEntry): string {
+  if (e.kind === 'user') return e.text
+  if (e.update.type === 'message' || e.update.type === 'thought') return e.update.text
+  return ''
+}
+
+/** A whitespace-collapsed window around a match, with ellipses when clipped. */
+function excerpt(text: string, idx: number, len: number, radius = 64): string {
+  const start = Math.max(0, idx - radius)
+  const end = Math.min(text.length, idx + len + radius)
+  const body = text.slice(start, end).replace(/\s+/g, ' ').trim()
+  return (start > 0 ? '… ' : '') + body + (end < text.length ? ' …' : '')
+}
+
 export interface CreateSessionInput {
   title?: string
   workspaceId: string
@@ -80,9 +103,27 @@ export class SessionStore {
     return index[i]
   }
 
-  /** Non-archived sessions, newest activity first. */
+  /** A session created but never used. `append`/`rename` both bump updatedAt past
+   * createdAt (see `bumped`), so "never touched" ⟺ updatedAt === createdAt. These
+   * are hidden from lists and swept on the next create, so unused "New session"
+   * rows never pile up across the rail, Home, Search, and resume. */
+  private untouched(m: SessionMeta): boolean {
+    return m.updatedAt === m.createdAt
+  }
+
+  /** A bumped updatedAt that is always strictly greater than createdAt, even when
+   * the wall clock hasn't advanced a millisecond since create — so `untouched`
+   * can never mis-flag a session that actually has content. */
+  private bumped(m: SessionMeta): number {
+    return Math.max(this.now(), m.createdAt + 1)
+  }
+
+  /** Non-archived, used sessions — newest activity first. Untouched (created but
+   * never prompted) sessions are excluded; they surface once they have content. */
   async list(): Promise<SessionMeta[]> {
-    return (await this.readIndex()).filter((m) => !m.archived).sort((a, b) => b.updatedAt - a.updatedAt)
+    return (await this.readIndex())
+      .filter((m) => !m.archived && !this.untouched(m))
+      .sort((a, b) => b.updatedAt - a.updatedAt)
   }
 
   async create(input: CreateSessionInput): Promise<SessionMeta> {
@@ -97,9 +138,15 @@ export class SessionStore {
       updatedAt: t,
       archived: false,
     }
-    await this.writeIndex([meta, ...(await this.readIndex())])
+    // Sweep previously-untouched sessions so abandoned empties never accumulate
+    // (clicking New Session / a workspace without typing leaves one behind).
+    const existing = await this.readIndex()
+    const stale = existing.filter((m) => this.untouched(m))
+    const keep = existing.filter((m) => !this.untouched(m))
+    await this.writeIndex([meta, ...keep])
     await mkdir(join(this.baseDir, 'transcripts'), { recursive: true })
     await writeFile(this.transcriptPath(meta.id), '')
+    for (const m of stale) await rm(this.transcriptPath(m.id), { force: true })
     return meta
   }
 
@@ -113,20 +160,38 @@ export class SessionStore {
     return this.patch(id, (m) => ({ ...m, acpSessionId }))
   }
 
-  async get(id: string): Promise<SessionDetail | null> {
-    const meta = (await this.readIndex()).find((m) => m.id === id)
-    if (!meta) return null
-    let entries: TranscriptEntry[] = []
+  private async readEntries(id: string): Promise<TranscriptEntry[]> {
     try {
       const raw = await readFile(this.transcriptPath(id), 'utf8')
-      entries = raw
+      return raw
         .split('\n')
         .filter(Boolean)
         .map((l) => JSON.parse(l) as TranscriptEntry)
     } catch {
-      entries = []
+      return []
     }
-    return { meta, entries }
+  }
+
+  async get(id: string): Promise<SessionDetail | null> {
+    const meta = (await this.readIndex()).find((m) => m.id === id)
+    if (!meta) return null
+    return { meta, entries: await this.readEntries(id) }
+  }
+
+  /** Search titles, workspace paths, and transcript content. Empty query returns
+   * the full list (newest-first). Content matches carry a highlighted snippet. */
+  async search(query: string): Promise<SessionSearchHit[]> {
+    const metas = await this.list()
+    const q = query.trim().toLowerCase()
+    if (!q) return metas.map((meta) => ({ meta }))
+    const hits: SessionSearchHit[] = []
+    for (const meta of metas) {
+      const text = (await this.readEntries(meta.id)).map(entryText).filter(Boolean).join('\n')
+      const idx = text.toLowerCase().indexOf(q)
+      if (idx >= 0) hits.push({ meta, snippet: excerpt(text, idx, q.length) })
+      else if ((meta.title + ' ' + meta.cwd).toLowerCase().includes(q)) hits.push({ meta })
+    }
+    return hits
   }
 
   /** Append transcript entries and bump updatedAt. Auto-titles from the first user line. */
@@ -137,13 +202,13 @@ export class SessionStore {
     const firstUser = entries.find((e) => e.kind === 'user') as Extract<TranscriptEntry, { kind: 'user' }> | undefined
     await this.patch(id, (m) => ({
       ...m,
-      updatedAt: this.now(),
+      updatedAt: this.bumped(m),
       title: m.title === 'New session' && firstUser ? firstUser.text.slice(0, 60) : m.title,
     }))
   }
 
   async rename(id: string, title: string): Promise<SessionMeta | null> {
-    return this.patch(id, (m) => ({ ...m, title: title.trim() || m.title, updatedAt: this.now() }))
+    return this.patch(id, (m) => ({ ...m, title: title.trim() || m.title, updatedAt: this.bumped(m) }))
   }
 
   async archive(id: string): Promise<void> {

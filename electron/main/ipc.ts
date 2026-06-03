@@ -303,6 +303,7 @@ export function registerIpc(services: MainServices): void {
 
   // Sessions.
   ipcMain.handle(HEARTH_CHANNELS.sessionsList, () => sessions.list())
+  ipcMain.handle(HEARTH_CHANNELS.sessionsSearch, (_e, query: string) => sessions.search(query))
   ipcMain.handle(HEARTH_CHANNELS.sessionsCreate, (_e, input: CreateSessionInput) => sessions.create(input))
   ipcMain.handle(HEARTH_CHANNELS.sessionsGet, (_e, id: string) => sessions.get(id))
   ipcMain.handle(HEARTH_CHANNELS.sessionsAppend, (_e, id: string, entries: TranscriptEntry[]) => sessions.append(id, entries))

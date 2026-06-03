@@ -82,7 +82,10 @@ function SettingsScreen() {
             </select>
           )}
         </SetRow>
-        <SetRow k="Command approval" h="When Hearth wants to run a shell command or write files.">
+        <SetRow
+          k="Command approval"
+          h="Hearth’s own gate before a shell command or file write reaches you for approval. Separate from the agent’s permission mode, which you set per session on the composer."
+        >
           <Seg
             value={s.approval}
             options={[['auto', 'Auto'], ['commands', 'Ask on commands'], ['always', 'Ask always']]}

@@ -25,7 +25,10 @@ export function PlanTab() {
             </span>
             <div className="plan-body">
               <div className="pt">{p.content}</div>
-              <div className="ps">{p.priority} priority</div>
+              <div className="ps">
+                Step {i + 1} of {plan.length}
+                {p.priority === 'high' ? ' · high priority' : ''}
+              </div>
             </div>
             {state === 'now' && <span className="plan-now-tag">now</span>}
           </div>

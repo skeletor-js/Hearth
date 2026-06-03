@@ -18,7 +18,7 @@ import type { Workspace } from '../main/workspaces/registry.js'
 import type { FileContent, FileEntry } from '../main/fs/files.js'
 import type { BrowserState } from '../main/browser/browser-view.js'
 import type { SoulConfig } from '../main/soul/soul.js'
-import type { CreateSessionInput, SessionDetail, SessionMeta, TranscriptEntry } from '../main/sessions/store.js'
+import type { CreateSessionInput, SessionDetail, SessionMeta, SessionSearchHit, TranscriptEntry } from '../main/sessions/store.js'
 import type { AppCapabilities as MicroAppCapabilities } from '../main/micro-apps/capabilities.js'
 
 interface WorkspaceStatus {
@@ -141,6 +141,7 @@ const api = {
   },
   sessions: {
     list: (): Promise<SessionMeta[]> => ipcRenderer.invoke(CH.sessionsList),
+    search: (query: string): Promise<SessionSearchHit[]> => ipcRenderer.invoke(CH.sessionsSearch, query),
     create: (input: CreateSessionInput): Promise<SessionMeta> => ipcRenderer.invoke(CH.sessionsCreate, input),
     get: (id: string): Promise<SessionDetail | null> => ipcRenderer.invoke(CH.sessionsGet, id),
     append: (id: string, entries: TranscriptEntry[]): Promise<void> => ipcRenderer.invoke(CH.sessionsAppend, id, entries),

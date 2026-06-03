@@ -45,6 +45,7 @@ export const HEARTH_CHANNELS = {
   workspacesStatus: 'workspaces:status',
   // sessions: persistent conversations (JSONL transcript + JSON index).
   sessionsList: 'sessions:list',
+  sessionsSearch: 'sessions:search',
   sessionsCreate: 'sessions:create',
   sessionsGet: 'sessions:get',
   sessionsAppend: 'sessions:append',

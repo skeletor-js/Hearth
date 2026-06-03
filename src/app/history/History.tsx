@@ -136,13 +136,11 @@ export function History() {
   return (
     <div className="screen scroll" data-screen-label="History">
       <div className="screen-inner narrow">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 7 }}>
-          <span style={{ color: 'var(--accent)', display: 'inline-flex' }}>
+        <div className="screen-head">
+          <span className="screen-head-ic">
             <Icon name={kind === 'soul' ? 'chat-text' : kind === 'memory' ? 'brain' : 'clock-counter-clockwise'} className="ico-20" />
           </span>
-          <h1 className="screen-title" style={{ margin: 0 }}>
-            {t.h1}
-          </h1>
+          <h1 className="screen-title">{t.h1}</h1>
         </div>
         <p className="screen-sub">{t.sub}</p>
 

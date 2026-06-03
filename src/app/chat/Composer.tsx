@@ -91,6 +91,7 @@ function AgentSettingsPop({
         {modes.available.length > 0 && (
           <>
             <div className="pop-sect">Permission mode</div>
+            <div className="pop-note">The agent’s own mode for this session. Hearth’s Command approval (Settings) gates these asks on top.</div>
             {modes.available.map((m) => (
               <div key={m.id} className="pop-item" onClick={() => onPickMode(m.id)}>
                 <span className="pi-mark">
@@ -261,6 +262,7 @@ export function Composer({
   const [pendingImages, setPendingImages] = useState<PromptImage[]>([])
   const [commands, setCommands] = useState<AvailableCommand[]>([])
   const [slashSel, setSlashSel] = useState(0)
+  const [slashDismissed, setSlashDismissed] = useState(false)
   const [settingsAnchor, setSettingsAnchor] = useState<DownAnchor | null>(null)
   const [gitAnchor, setGitAnchor] = useState<Anchor | null>(null)
   const [wsAnchor, setWsAnchor] = useState<Anchor | null>(null)
@@ -432,12 +434,17 @@ export function Composer({
   const slashQuery = /^\/(\S*)$/.exec(input)?.[1] // "/" + token, no space yet
   const slashMatches =
     slashQuery != null ? commands.filter((c) => c.name.toLowerCase().startsWith(slashQuery.toLowerCase())).slice(0, 8) : []
-  const slashOpen = slashMatches.length > 0
+  const slashOpen = slashMatches.length > 0 && !slashDismissed
   const pickCommand = (name: string) => {
     setInput(`/${name} `)
     requestAnimationFrame(() => inputRef.current?.focus())
   }
-  useEffect(() => setSlashSel(0), [slashQuery])
+  // Reset selection and un-dismiss whenever the typed token changes, so the menu
+  // re-opens as the user keeps typing after an Escape.
+  useEffect(() => {
+    setSlashSel(0)
+    setSlashDismissed(false)
+  }, [slashQuery])
 
   const send = () => {
     const text = input.trim()
@@ -460,7 +467,11 @@ export function Composer({
         e.preventDefault()
         return pickCommand(slashMatches[slashSel].name)
       }
-      if (e.key === 'Escape') return setInput('')
+      // Escape dismisses the menu only — the typed message is preserved.
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        return setSlashDismissed(true)
+      }
     }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()

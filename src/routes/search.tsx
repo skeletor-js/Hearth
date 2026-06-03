@@ -2,28 +2,50 @@ import { useEffect, useMemo, useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Icon } from '@/shell/Icon'
 import { openSession } from '@/app/sessions'
-import type { SessionMeta } from '../../electron/main/sessions/store'
+import type { SessionSearchHit } from '../../electron/main/sessions/store'
 
 export const Route = createFileRoute('/search')({ component: SearchScreen })
+
+/** Split a snippet on the query (case-insensitive) and wrap matches in <mark>. */
+function highlight(text: string, q: string): React.ReactNode {
+  const needle = q.trim()
+  if (!needle) return text
+  const out: React.ReactNode[] = []
+  const lower = text.toLowerCase()
+  const lq = needle.toLowerCase()
+  let i = 0
+  let key = 0
+  for (let at = lower.indexOf(lq); at >= 0; at = lower.indexOf(lq, i)) {
+    if (at > i) out.push(text.slice(i, at))
+    out.push(<mark key={key++}>{text.slice(at, at + needle.length)}</mark>)
+    i = at + needle.length
+  }
+  if (i < text.length) out.push(text.slice(i))
+  return out
+}
 
 function SearchScreen() {
   const navigate = useNavigate()
   const [q, setQ] = useState('')
   const [scope, setScope] = useState<'all' | 'hearth'>('all')
-  const [sessions, setSessions] = useState<SessionMeta[]>([])
+  const [hits, setHits] = useState<SessionSearchHit[]>([])
 
+  // Search runs in main (over transcripts on disk); debounce so each keystroke
+  // doesn't re-read every file. Empty query returns the full session list.
   useEffect(() => {
-    void window.hearth.sessions.list().then(setSessions)
-  }, [])
+    let live = true
+    const t = setTimeout(() => {
+      void window.hearth.sessions.search(q).then((r) => live && setHits(r))
+    }, 120)
+    return () => {
+      live = false
+      clearTimeout(t)
+    }
+  }, [q])
 
-  const hits = useMemo(() => {
-    const base = scope === 'hearth' ? sessions.filter((s) => s.self) : sessions
-    const needle = q.trim().toLowerCase()
-    if (!needle) return base
-    return base.filter((s) => (s.title + ' ' + s.cwd).toLowerCase().includes(needle))
-  }, [sessions, scope, q])
+  const shown = useMemo(() => (scope === 'hearth' ? hits.filter((h) => h.meta.self) : hits), [hits, scope])
 
-  const resume = (m: SessionMeta) => {
+  const resume = (m: SessionSearchHit['meta']) => {
     openSession(m)
     void navigate({ to: '/chat' })
   }
@@ -33,14 +55,19 @@ function SearchScreen() {
       <div className="screen-inner narrow">
         <div className="search-field">
           <Icon name="magnifying-glass" style={{ color: 'var(--subtle)', fontSize: 'var(--t-18)' }} />
-          <input autoFocus placeholder="Search sessions by title or workspace…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input
+            autoFocus
+            placeholder="Search sessions by title, workspace, or what was said…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
           {q && (
             <button className="btn-icon" onClick={() => setQ('')}>
               <Icon name="x" />
             </button>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '16px 0 14px' }}>
+        <div className="search-controls">
           <div className="mini-seg">
             <span className={'seg' + (scope === 'all' ? ' is-active' : '')} onClick={() => setScope('all')}>
               All sessions
@@ -49,21 +76,22 @@ function SearchScreen() {
               Hearth
             </span>
           </div>
-          <span style={{ marginLeft: 'auto', fontSize: 'var(--t-12)', color: 'var(--faint)' }}>
-            {hits.length} result{hits.length !== 1 ? 's' : ''}
+          <span className="search-count">
+            {shown.length} result{shown.length !== 1 ? 's' : ''}
           </span>
         </div>
 
-        {hits.map((m) => (
-          <div className="sresult" key={m.id} onClick={() => resume(m)}>
+        {shown.map((h) => (
+          <div className="sresult" key={h.meta.id} onClick={() => resume(h.meta)}>
             <div className="sr-top">
-              <Icon name={m.self ? 'flame' : 'chat-circle'} fill={m.self} style={{ color: 'var(--subtle)' }} />
-              {m.title}
-              <span className="sr-scope">{m.self ? 'Hearth' : m.cwd}</span>
+              <Icon name={h.meta.self ? 'flame' : 'chat-circle'} fill={h.meta.self} style={{ color: 'var(--subtle)' }} />
+              {h.meta.title}
+              <span className="sr-scope">{h.meta.self ? 'Hearth' : h.meta.cwd}</span>
             </div>
+            {h.snippet && <div className="sr-snip">{highlight(h.snippet, q)}</div>}
           </div>
         ))}
-        {hits.length === 0 && (
+        {shown.length === 0 && (
           <div className="wb-empty" style={{ minHeight: 180 }}>
             <Icon name="magnifying-glass" />
             <h3>No matches</h3>
