@@ -8,6 +8,7 @@ import { useShell } from '@/shell/store'
 import { useSession } from '../session-store'
 import { readScratchpad, writeScratchpad, SCRATCHPAD_MAX } from '../scratchpad'
 import { markdownLive } from './markdown-live'
+import { renderMd, handleCodeCopyClick } from '../chat/markdown'
 
 // A per-workspace markdown notepad. Backed by `.hearth/scratchpad.md` in the active
 // session's cwd. The user jots here; the agent can read it, you can send it on
@@ -23,6 +24,7 @@ export function ScratchpadTab() {
   const [text, setText] = useState('')
   const [saved, setSaved] = useState(true)
   const [hasSel, setHasSel] = useState(false)
+  const [preview, setPreview] = useState(false)
   const viewRef = useRef<EditorView | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pending = useRef<{ cwd: string; text: string } | null>(null)
@@ -120,13 +122,20 @@ export function ScratchpadTab() {
         </span>
         <button
           className="btn btn-sm btn-quiet"
+          title={preview ? 'Edit' : 'Preview formatted'}
+          onClick={() => setPreview((p) => !p)}
+        >
+          <Icon name={preview ? 'pencil-simple' : 'eye'} /> {preview ? 'Edit' : 'Preview'}
+        </button>
+        <button
+          className="btn btn-sm btn-quiet"
           style={attach ? { color: 'var(--accent)', background: 'var(--accent-soft)' } : undefined}
           title="Attach the scratchpad to every message in this workspace"
           onClick={() => setScratchpadAttach(cwd, !attach)}
         >
           <Icon name={attach ? 'check' : 'paperclip'} /> Auto-attach
         </button>
-        {hasSel && (
+        {hasSel && !preview && (
           <button className="btn btn-sm btn-quiet" onClick={sendSelection}>
             <Icon name="text-aa" /> Send selection
           </button>
@@ -136,17 +145,28 @@ export function ScratchpadTab() {
         </button>
       </div>
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-        <CodeMirror
-          value={text}
-          theme={theme}
-          extensions={extensions}
-          onChange={onChange}
-          onCreateEditor={(view) => (viewRef.current = view)}
-          onUpdate={(u) => setHasSel(!u.state.selection.main.empty)}
-          placeholder="Jot notes here. Send them to the agent, or turn on Auto-attach."
-          basicSetup={{ lineNumbers: false, foldGutter: false, highlightActiveLine: false }}
-          style={{ fontSize: 'var(--t-13)' }}
-        />
+        {preview ? (
+          text.trim() ? (
+            <div className="msg-body wb-pad" onClick={handleCodeCopyClick} dangerouslySetInnerHTML={{ __html: renderMd(text) }} />
+          ) : (
+            <div className="wb-empty">
+              <Icon name="eye" />
+              <p>Nothing to preview yet. Switch to Edit and start writing.</p>
+            </div>
+          )
+        ) : (
+          <CodeMirror
+            value={text}
+            theme={theme}
+            extensions={extensions}
+            onChange={onChange}
+            onCreateEditor={(view) => (viewRef.current = view)}
+            onUpdate={(u) => setHasSel(!u.state.selection.main.empty)}
+            placeholder="Jot notes here. Send them to the agent, or turn on Auto-attach."
+            basicSetup={{ lineNumbers: false, foldGutter: false, highlightActiveLine: false }}
+            style={{ fontSize: 'var(--t-13)' }}
+          />
+        )}
       </div>
       <div className="wb-subhead" style={{ justifyContent: 'flex-end' }}>
         <span className="path" style={{ color: near ? 'var(--accent)' : 'var(--subtle)' }}>
