@@ -79,6 +79,10 @@ const PROTECTED_REPO_PREFIXES: string[] = [
 
 const toPosix = (value: string): string => value.replace(/\\/g, '/')
 
+// Case-fold is deliberate: macOS (the target platform) uses a case-insensitive
+// filesystem, so `SRC/secret` and `src/secret` are the SAME file — matching must
+// be case-insensitive or a case-variant path would bypass a protected prefix. On a
+// case-sensitive volume this only ever over-protects (fail-safe), never under-.
 const normalizeAbs = (filePath: string): string => {
   const expanded = filePath.startsWith('~')
     ? path.join(os.homedir(), filePath.slice(1))

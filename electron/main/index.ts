@@ -213,7 +213,9 @@ async function bootstrap(): Promise<void> {
 
   // A successful renderer load means boot reached a healthy state — clear the
   // watchdog marker. A bricked main edit never loads, so the marker survives and
-  // the next boot auto-reverts it.
+  // the next boot auto-reverts it. NOTE: this fires on first renderer paint, so the
+  // watchdog covers crash-on-startup only — a main edit that paints then throws
+  // later (a deferred timer/IPC handler) has already cleared the marker.
   window.webContents.on('did-finish-load', () => watchdog.confirmReady())
 
   // Main-anchored recovery net (W3): if the renderer process dies outright (its own

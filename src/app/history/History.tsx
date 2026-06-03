@@ -44,7 +44,11 @@ export function History() {
   const [note, setNote] = useState<string | null>(null)
 
   const load = () => void window.hearth.selfMod.history().then(setEntries)
-  useEffect(load, [])
+  // Wrap in a thunk so the effect's return is undefined (no cleanup), not whatever
+  // `load` returns — passing `load` directly is brittle if its signature changes.
+  useEffect(() => {
+    load()
+  }, [])
 
   const shown = entries.filter((e) => e.kind === kind)
   const undone = shown.filter((e) => e.reverted).length
