@@ -7,6 +7,7 @@ import { useSession } from '../session-store'
 import { ensureActiveSession } from '../sessions'
 import { readScratchpad, wrapForPrompt } from '../scratchpad'
 import { Composer } from './Composer'
+import { humanizePermission } from './permission-verbs'
 import { LiveTrace, inferKind, type DiffRow, type TraceResult, type TraceStep } from './trace'
 import type { TranscriptEntry } from '../../../electron/main/sessions/store'
 import { renderMd, handleCodeCopyClick } from './markdown'
@@ -543,12 +544,14 @@ function MessageView({
 function ApproveCard({ req, onAnswer }: { req: PermissionRequest; onAnswer: (optionId: string) => void }) {
   const primary = req.options.find((o) => o.kind === 'allow' || o.kind === 'allow-always')
   const reject = req.options.find((o) => o.kind === 'reject')
+  const human = humanizePermission(req)
   return (
     <div className="approve">
       <div className="approve-head">
         <Icon name="seal-question" fill />
-        <span>{req.title}</span>
+        <span>{human.lead}</span>
       </div>
+      {human.detail && <div className="approve-detail">{human.detail}</div>}
       <div className="approve-foot" style={{ flexWrap: 'wrap', rowGap: 8 }}>
         <span className="scope">
           <Icon name="shield-check" className="ico-13" /> This session
