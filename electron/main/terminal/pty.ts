@@ -6,6 +6,7 @@
 import * as pty from 'node-pty'
 import { platform, env } from 'node:process'
 import { loginPath } from './login-path.js'
+import { buildChildEnv } from '../agents/child-env.js'
 
 export interface PtyHandle {
   proc: pty.IPty
@@ -37,8 +38,14 @@ export class TerminalManager {
       rows,
       cwd,
       // Merge the user's login PATH so GUI-launched Hearth can resolve claude/codex
-      // and other shell-installed CLIs (see login-path.ts).
-      env: { ...env, PATH: loginPath(), TERM: 'xterm-256color' } as Record<string, string>,
+      // and other shell-installed CLIs (see login-path.ts). Scrub inherited API
+      // keys/gateway vars so a credential injected into Hearth's own env doesn't
+      // leak into every shell the user opens — the login shell re-sources whatever
+      // the user actually configured in their profile.
+      env: buildChildEnv(env, { PATH: loginPath(), TERM: 'xterm-256color' }, { scrubInheritedKeys: true }) as Record<
+        string,
+        string
+      >,
     })
     const dataSub = proc.onData((data) => this.onData(id, data))
     const exitSub = proc.onExit(() => {
