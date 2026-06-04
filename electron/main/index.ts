@@ -1,7 +1,7 @@
 // App entry. Wires services and opens the window. Thin by design — all feature
 // logic lives in the renderer (which is self-editable) or in the named services.
 
-import { app, safeStorage, session, BrowserWindow } from 'electron'
+import { app, dialog, safeStorage, session, BrowserWindow } from 'electron'
 import { createMainWindow, createSnapshotWindow } from './window.js'
 import { prepareRenderer } from './dev-server.js'
 import { registerIpc } from './ipc.js'
@@ -36,7 +36,8 @@ import { CapabilityStore } from './micro-apps/capabilities.js'
 import { CredentialBroker } from './micro-apps/broker.js'
 import { installSessionPolicy } from './micro-apps/session-policy.js'
 import { startAgentBridge } from './agent-bridge.js'
-import { ensureWorkspace } from './packaging/workspace.js'
+import { ensureWorkspaceFromManifest, NeedsNetworkError, ShellTooOldError } from './packaging/payload.js'
+import { createBootstrapSplash, type BootstrapSplash } from './packaging/bootstrap-splash.js'
 
 // The repo is the agent's working directory — editing it IS self-modification.
 // In dev that's the project root; in a packaged self-evolving build it's the
@@ -45,16 +46,31 @@ import { ensureWorkspace } from './packaging/workspace.js'
 async function resolveRepoRoot(): Promise<string> {
   if (process.env.HEARTH_REPO_ROOT) return process.env.HEARTH_REPO_ROOT
   if (!app.isPackaged) return process.cwd()
-  // Packaged: copy the shipped, read-only source into a writable workspace and
-  // run (Vite root + git) from there. Shipped source + node_modules live under
-  // Resources/app-source (see electron-builder config in package.json).
-  const sourceDir = join(process.resourcesPath, 'app-source')
-  return ensureWorkspace({
-    workspaceDir: join(app.getPath('userData'), 'workspace'),
-    sourceDir,
-    nodeModulesDir: join(sourceDir, 'node_modules'),
-    version: app.getVersion(),
-  })
+  // Packaged: the renderer source + its node_modules are NOT shipped in the signed
+  // bundle. They're downloaded as a workspace payload from R2 (sha256-verified),
+  // extracted under userData, and run (Vite root + git) from a writable workspace.
+  // A splash shows progress only when a download actually happens. See
+  // packaging/payload.ts and docs/PACKAGING-V3-PLAN.md.
+  const ui: { splash: BootstrapSplash | null } = { splash: null }
+  try {
+    return await ensureWorkspaceFromManifest({
+      workspaceDir: join(app.getPath('userData'), 'workspace'),
+      payloadsDir: join(app.getPath('userData'), 'payloads'),
+      shellVersion: app.getVersion(),
+      onProgress: (p) => {
+        if (!ui.splash) ui.splash = createBootstrapSplash()
+        ui.splash.update(p)
+      },
+    })
+  } catch (err) {
+    if (err instanceof NeedsNetworkError || err instanceof ShellTooOldError) {
+      dialog.showErrorBox('Hearth setup', err.message)
+      app.quit()
+    }
+    throw err
+  } finally {
+    ui.splash?.close()
+  }
 }
 
 // Which backend to drive: HEARTH_AGENT=codex selects Codex, otherwise Claude.

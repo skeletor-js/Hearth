@@ -45,6 +45,7 @@ if (missing.length) {
 const WANT = /\.(ya?ml|zip|blockmap|dmg)$/i
 const files = readdirSync(releaseDir)
   .filter((f) => WANT.test(f))
+  .filter((f) => !/^builder-(debug|effective-config)/.test(f)) // electron-builder dumps, not feed assets
   .filter((f) => statSync(join(releaseDir, f)).isFile())
 
 if (!files.length) {

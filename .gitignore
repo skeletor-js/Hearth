@@ -1,6 +1,7 @@
 node_modules/
 out/
 dist/
+release/
 .vite-dev-url
 *.log
 
@@ -18,3 +19,6 @@ micro-apps/*/dist/
 
 # Hearth pins a project permission mode here at runtime
 .claude/settings.local.json
+
+# Local release credentials (Apple notarization + Cloudflare R2). Never commit.
+.env.release
