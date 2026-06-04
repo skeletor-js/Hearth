@@ -12,7 +12,7 @@ import { humanizePermission } from './permission-verbs'
 import { SaveAsTool } from './SaveAsTool'
 import { toast } from '@/shell/toast'
 import { LiveTrace, inferKind, type DiffRow, type TraceResult, type TraceStep } from './trace'
-import type { TranscriptEntry } from '../../../electron/main/sessions/store'
+import { persistEntries } from '../transcript-persist'
 import { renderMd, handleCodeCopyClick } from './markdown'
 
 type Block =
@@ -102,15 +102,9 @@ export function ChatView() {
   // buffered until turn-end. A self-mod that edits the renderer can trigger a full
   // reload mid-turn, which would wipe an in-memory buffer before it flushed —
   // losing the whole assistant turn. Writing as we go makes the transcript durable
-  // across that reload. Appends are serialized through one promise chain so JSONL
-  // lines never interleave and stay in stream order.
-  const persistChain = useRef<Promise<unknown>>(Promise.resolve())
-  const persist = (sessionId: string, entries: TranscriptEntry[]) => {
-    if (!entries.length) return
-    persistChain.current = persistChain.current
-      .then(() => window.hearth.sessions.append(sessionId, entries))
-      .catch(() => {})
-  }
+  // across that reload. `persistEntries` serializes per-session so the active and any
+  // background session never interleave (see transcript-persist.ts).
+  const persist = persistEntries
 
   // ids are allocated OUTSIDE the setMsgs updater. React may invoke an updater
   // twice (StrictMode/concurrent), and an updater must be pure — minting ids inside

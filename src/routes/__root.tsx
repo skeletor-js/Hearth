@@ -14,6 +14,7 @@ import { UpdateBanner } from '@/shell/UpdateBanner'
 import { WaitingBanner } from '@/shell/WaitingBanner'
 import { useRoutineRunner } from '@/app/routines/runner'
 import { usePresenceBridge } from '@/app/presence-bridge'
+import { useBackgroundPersister } from '@/app/background-persister'
 
 export const Route = createRootRoute({ component: RootLayout })
 
@@ -35,6 +36,7 @@ function RootLayout() {
 
   useRoutineRunner()
   usePresenceBridge()
+  useBackgroundPersister()
 
   // Off-session, panels are plain open/closed surfaces — the focus/split machinery
   // (data-layout, scrim) is session-only, so right visibility is just `rightOpen`.
