@@ -3,7 +3,7 @@
 
 import { contextBridge, ipcRenderer } from 'electron'
 import { HEARTH_CHANNELS as CH } from '../shared/channels.js'
-import type { ActiveConnectors, AgentKind, AgentUpdatePayload, AuthState, AvailableCommand, BackendStatus, ConfigOption, CreateRoutineInput, ModelState, ModeState, PermissionRequestPayload, PromptCapabilities, PromptImage, Routine, Usage, WorkspaceKind } from '../shared/protocol.js'
+import type { ActiveConnectors, AgentKind, AgentUpdatePayload, AuthState, AvailableCommand, BackendStatus, BrowserCursorEvent, ConfigOption, CreateRoutineInput, ModelState, ModeState, PermissionRequestPayload, PromptCapabilities, PromptImage, Routine, UpdateStatus, Usage, WorkspaceKind } from '../shared/protocol.js'
 import type { SecretInfo } from '../main/secrets/secret-store.js'
 import type { McpServerConfig, McpServerInput } from '../main/mcp/registry.js'
 import type { ProbeResult } from '../main/mcp/probe.js'
@@ -260,6 +260,20 @@ const api = {
       codexAdapter: string | null
     }> => ipcRenderer.invoke(CH.aboutInfo),
   },
+  update: {
+    /** Latest known update status (for a renderer subscribing after a push). */
+    get: (): Promise<UpdateStatus> => ipcRenderer.invoke(CH.updateGet),
+    /** Force a feed check now. */
+    check: (): Promise<UpdateStatus> => ipcRenderer.invoke(CH.updateCheck),
+    /** Restart into a staged update. */
+    install: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke(CH.updateInstall),
+    /** Subscribe to status pushes; returns an unsubscribe fn. */
+    onStatus: (cb: (status: UpdateStatus) => void) => {
+      const handler = (_e: unknown, status: UpdateStatus) => cb(status)
+      ipcRenderer.on(CH.updateStatus, handler)
+      return () => void ipcRenderer.off(CH.updateStatus, handler)
+    },
+  },
   win: {
     /** Toggle the window between filling the screen and its previous frame. */
     zoomToggle: () => ipcRenderer.send(CH.windowZoomToggle),
@@ -292,6 +306,15 @@ const api = {
       return () => void ipcRenderer.off(CH.morphHandoff, h)
     },
     signal: (type: 'ready' | 'cover-painted' | 'done') => ipcRenderer.send(CH.morphSignal, { type }),
+  },
+  // Browser presence cursor — used only by the overlay renderer (src/overlay). Main
+  // pushes the agent's spatial actions (click/fill/nav) in overlay-local px (P6).
+  cursor: {
+    onBrowser: (cb: (e: BrowserCursorEvent) => void) => {
+      const h = (_e: unknown, e: BrowserCursorEvent) => cb(e)
+      ipcRenderer.on(CH.browserCursor, h)
+      return () => void ipcRenderer.off(CH.browserCursor, h)
+    },
   },
 }
 

@@ -187,6 +187,18 @@ button.rail-item{ width:100%;border:0;background:transparent;font:inherit;text-a
   box-shadow:0 0 0 3px var(--accent-soft); animation:pulse 1.8s ease-in-out infinite; }
 @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.4} }
 
+/* Presence dot — agent activity per session (rail recents + shell). */
+.presence-dot{ width:8px;height:8px;border-radius:50%;flex-shrink:0;margin:0 3.5px;background:var(--faint); }
+.presence-dot.is-thinking,.presence-dot.is-working{ background:var(--accent);
+  animation:pulse 1.6s ease-in-out infinite; }
+.presence-dot.is-waiting{ background:var(--warn);box-shadow:0 0 0 3px var(--accent-soft); }
+.presence-dot.is-error{ background:var(--warn); }
+.presence-dot.is-idle,.presence-dot.is-done{ background:var(--faint); }
+.rail-item .ri-status{ color:var(--faint);font-size:var(--t-11);flex-shrink:0;text-transform:lowercase; }
+.rail-item .ri-status.is-waiting{ color:var(--warn); }
+/* Living flame: pulse when an agent is waiting on you (P3). */
+.status-flame.is-waiting{ animation:pulse 1.4s ease-in-out infinite; }
+
 /* Rail footer — settings row + theme toggle */
 .rail-foot{ border-top:1px solid var(--border);padding:8px;display:flex;align-items:center;gap:5px; }
 .foot-settings{ flex:1;min-width:0;display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;
@@ -616,6 +628,9 @@ kbd{ display:inline-flex;align-items:center;justify-content:center;min-width:17p
 .wb-tab.is-active{ background:var(--selected);color:var(--strong);font-weight:500; }
 .wb-tab .ph-thin,.wb-tab .ph-fill{ font-size:14px; }
 .wb-tab.is-active .ph-thin,.wb-tab.is-active .ph-fill{ color:var(--accent); }
+/* Files tab nudge when the agent edits while you're on another tab (P4). */
+.wb-tab.is-pulsing{ color:var(--accent); }
+.wb-tab.is-pulsing .ph-thin{ color:var(--accent);animation:pulse 1.2s ease-in-out infinite; }
 .wb-tab .wb-badge{ font-size:10px;background:var(--accent-soft);color:var(--accent-text);
   border-radius:9px;padding:0 5px;height:15px;display:inline-flex;align-items:center;font-weight:600; }
 .wb-tabbar .spacer{ flex:1; }
@@ -640,6 +655,21 @@ kbd{ display:inline-flex;align-items:center;justify-content:center;min-width:17p
 .wb-subhead .spacer{ flex:1; }
 .wb-subhead .stat{ display:inline-flex;align-items:center;gap:4px;font-variant-numeric:tabular-nums; }
 .wb-subhead .stat.add{ color:var(--add); } .wb-subhead .stat.del{ color:var(--del); }
+
+/* Editor change-reveal (P7): flash the agent-changed lines; warn on disk conflict. */
+.cm-flash{ background:var(--accent-soft); }
+.disk-changed{ display:flex;align-items:center;gap:9px;padding:7px 14px;flex-shrink:0;
+  border-bottom:1px solid var(--border);background:var(--accent-soft);
+  font-size:var(--t-12);color:var(--default); }
+.disk-changed .ph-thin{ color:var(--warn); } .disk-changed span{ flex:1; }
+
+/* "While you were away" recap chip atop the chat (P5). */
+.recap{ display:flex;align-items:center;gap:9px;margin:0 0 14px;padding:8px 11px;
+  border:1px solid var(--line);border-radius:10px;background:var(--bg-inset);
+  font-size:var(--t-12);color:var(--default); }
+.recap .ph-fill{ color:var(--accent); } .recap span{ flex:1; }
+.recap-x{ border:0;background:transparent;cursor:pointer;color:var(--faint);display:inline-flex;padding:2px; }
+.recap-x:hover{ color:var(--default); }
 
 /* Diff view */
 .diff{ font-family:var(--mono);font-size:var(--t-11_5);line-height:1.7;flex:1; }
@@ -694,6 +724,9 @@ kbd{ display:inline-flex;align-items:center;justify-content:center;min-width:17p
 .ftree-row.is-active .ph-thin{ color:var(--accent); }
 .ftree-row .tag{ margin-left:auto;font-size:10px;font-family:var(--mono); }
 .ftree-row .tag.m{ color:var(--warn); } .ftree-row .tag.a{ color:var(--add); }
+/* File pulse (P4): light a row up as the agent touches it, then fade. */
+.ftree-row{ transition:background .6s ease; }
+.ftree-row.is-pulsing{ background:var(--accent-soft);transition:background .15s ease; }
 
 /* Terminal */
 .term{ flex:1;background:var(--code-bg);font-family:var(--mono);font-size:var(--t-11_5);line-height:1.75;
@@ -833,6 +866,20 @@ html[data-reduce-motion="1"] .ember .glow{ filter:none; }
   display:flex;align-items:center;gap:11px;box-shadow:var(--shadow-lg); }
 .toast .ph-thin{ color:var(--accent); }
 .toast a{ text-decoration:underline; }
+.update-banner{ position:fixed;top:38px;left:50%;transform:translateX(-50%);z-index:410;
+  background:var(--bg-panel);border:1px solid var(--line);border-radius:10px;
+  padding:8px 10px 8px 13px;font-size:var(--t-12);display:flex;align-items:center;gap:11px;
+  box-shadow:var(--shadow-lg); }
+.update-banner .ph-thin{ color:var(--accent); }
+
+/* "Waiting on you" — permission ask from an off-screen session (P2). */
+.waiting-banner{ position:fixed;top:38px;left:50%;transform:translateX(-50%);z-index:411;
+  background:var(--bg-panel);border:1px solid var(--warn);border-radius:10px;
+  padding:8px 11px;font:inherit;font-size:var(--t-12);color:var(--default);cursor:pointer;
+  display:flex;align-items:center;gap:9px;box-shadow:var(--shadow-lg); }
+.waiting-banner .ph-fill{ color:var(--warn); }
+.waiting-banner .arrow{ color:var(--faint);font-size:13px; }
+.waiting-banner:hover{ background:var(--hover); }
 
 /* ─────────────────────────  Full screens  ───────────────────────── */
 .screen{ flex:1;min-height:0;overflow:auto;background:var(--bg); }

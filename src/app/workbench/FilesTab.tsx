@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import CodeMirror from '@uiw/react-codemirror'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror'
 import { javascript } from '@codemirror/lang-javascript'
 import { markdown } from '@codemirror/lang-markdown'
 import { json } from '@codemirror/lang-json'
@@ -11,6 +11,8 @@ import DOMPurify from 'dompurify'
 import { Icon } from '@/shell/Icon'
 import { useShell } from '@/shell/store'
 import { useSession } from '../session-store'
+import { usePresence } from '../presence-store'
+import { flashExtension, flashRange } from './cm-flash'
 import type { FileContent, FileEntry } from '../../../electron/main/fs/files'
 import type { FileTag } from '../../../electron/main/self-mod/git-ops'
 
@@ -39,7 +41,9 @@ function tagClass(tag: FileTag): 'a' | 'm' | null {
 
 export function FilesTab() {
   const cwd = useSession((s) => s.active?.cwd)
+  const activeId = useSession((s) => s.active?.id)
   const diffNonce = useSession((s) => s.diffNonce)
+  const recentFiles = usePresence((s) => (activeId ? s.byId[activeId]?.recentFiles : undefined))
   const theme = useShell((s) => s.theme)
   const [tree, setTree] = useState<Record<string, FileEntry[]>>({})
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -49,6 +53,13 @@ export function FilesTab() {
   const [tags, setTags] = useState<Map<string, FileTag>>(new Map())
   const [filter, setFilter] = useState('')
   const [newPath, setNewPath] = useState<string | null>(null)
+  // Editor change-reveal (P7): live-reload + flash when the agent edits the open file.
+  const [diskChanged, setDiskChanged] = useState(false)
+  const cmRef = useRef<ReactCodeMirrorRef>(null)
+  const handledAt = useRef(0)
+  // File pulse (P4): briefly light up tree rows as the agent touches them.
+  const [pulsing, setPulsing] = useState<Set<string>>(new Set())
+  const pulseHandled = useRef(0)
 
   const loadDir = async (rel: string) => {
     const entries = await window.hearth.files.list(cwd, rel || undefined)
@@ -94,6 +105,8 @@ export function FilesTab() {
     const fc = await window.hearth.files.read(cwd, rel)
     setOpen({ ...fc, draft: fc.content })
     setPreview(false)
+    setDiskChanged(false)
+    handledAt.current = Date.now() // don't replay this run's prior edits as a flash
   }
 
   const createFile = async () => {
@@ -112,6 +125,60 @@ export function FilesTab() {
     () => (open && preview ? DOMPurify.sanitize(marked.parse(open.draft, { async: false }) as string) : ''),
     [open, preview],
   )
+
+  // When the agent edits the file currently open, reveal it (P7): live-reload from
+  // disk and flash the changed range — unless the user has unsaved edits, in which
+  // case we don't clobber them and surface a reload notice instead.
+  const openRel = open?.rel
+  useEffect(() => {
+    if (!openRel || !recentFiles?.length) return
+    const last = recentFiles[recentFiles.length - 1]
+    if (last.at <= handledAt.current) return
+    if (!(last.path === openRel || last.path.endsWith(openRel))) return
+    handledAt.current = last.at
+    if (dirty) {
+      setDiskChanged(true)
+      return
+    }
+    void window.hearth.files.read(cwd, openRel).then((fc) => {
+      setOpen((o) => (o && o.rel === openRel ? { ...o, content: fc.content, draft: fc.content } : o))
+      if (!last.range) return
+      requestAnimationFrame(() => {
+        const view = cmRef.current?.view
+        if (view) flashRange(view, last.range![0], last.range![1])
+      })
+    })
+  }, [recentFiles, openRel, dirty, cwd])
+
+  const reloadFromDisk = async () => {
+    if (!open) return
+    const fc = await window.hearth.files.read(cwd, open.rel)
+    setOpen((o) => (o ? { ...o, content: fc.content, draft: fc.content } : o))
+    setDiskChanged(false)
+  }
+
+  // Pulse the tree row for each file the agent touches, clearing after ~2s.
+  useEffect(() => {
+    if (!recentFiles?.length) return
+    const last = recentFiles[recentFiles.length - 1]
+    if (last.at <= pulseHandled.current) return
+    pulseHandled.current = last.at
+    setPulsing((s) => new Set(s).add(last.path))
+    const t = setTimeout(
+      () =>
+        setPulsing((s) => {
+          const n = new Set(s)
+          n.delete(last.path)
+          return n
+        }),
+      2000,
+    )
+    return () => clearTimeout(t)
+  }, [recentFiles])
+  const isPulsing = (rel: string): boolean => {
+    for (const p of pulsing) if (p === rel || p.endsWith('/' + rel) || p.endsWith(rel)) return true
+    return false
+  }
 
   const save = async () => {
     if (!open || !dirty || saving) return
@@ -145,14 +212,24 @@ export function FilesTab() {
             <Icon name="floppy-disk" /> {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
+        {diskChanged && (
+          <div className="disk-changed">
+            <Icon name="warning-circle" className="ico-13" />
+            <span>The agent changed this file on disk while you were editing.</span>
+            <button className="btn btn-sm btn-quiet" onClick={() => void reloadFromDisk()}>
+              Reload
+            </button>
+          </div>
+        )}
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
           {preview ? (
             <div className="md-preview" dangerouslySetInnerHTML={{ __html: previewHtml }} />
           ) : (
             <CodeMirror
+              ref={cmRef}
               value={open.draft}
               theme={theme}
-              extensions={langFor(open.rel)}
+              extensions={[...langFor(open.rel), flashExtension]}
               editable={!open.readonly}
               onChange={(v) => setOpen((o) => (o ? { ...o, draft: v } : o))}
               basicSetup={{ lineNumbers: true, foldGutter: true, highlightActiveLine: true }}
@@ -212,6 +289,7 @@ export function FilesTab() {
           depth={0}
           tags={tags}
           filter={filter.trim().toLowerCase()}
+          isPulsing={isPulsing}
           onToggle={toggleDir}
           onOpen={openFile}
         />
@@ -227,6 +305,7 @@ function FileTree({
   depth,
   tags,
   filter,
+  isPulsing,
   onToggle,
   onOpen,
 }: {
@@ -236,6 +315,7 @@ function FileTree({
   depth: number
   tags: Map<string, FileTag>
   filter: string
+  isPulsing: (rel: string) => boolean
   onToggle: (rel: string) => void
   onOpen: (rel: string) => void
 }) {
@@ -252,7 +332,7 @@ function FileTree({
         return (
           <div key={e.rel}>
             <div
-              className="ftree-row"
+              className={'ftree-row' + (!e.dir && isPulsing(e.rel) ? ' is-pulsing' : '')}
               style={{ paddingLeft: 8 + depth * 14, cursor: 'pointer' }}
               onClick={() => (e.dir ? onToggle(e.rel) : onOpen(e.rel))}
             >
@@ -268,6 +348,7 @@ function FileTree({
                 depth={depth + 1}
                 tags={tags}
                 filter={filter}
+                isPulsing={isPulsing}
                 onToggle={onToggle}
                 onOpen={onOpen}
               />

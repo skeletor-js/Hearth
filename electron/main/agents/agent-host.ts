@@ -74,17 +74,22 @@ export class AgentHost {
     if (!this.ready) {
       const agent = this.factory(this.currentKind)
       this.agent = agent
-      this.offUpdate = agent.onUpdate((sessionId, update) => {
+      this.offUpdate = agent.onUpdate((acpSessionId, update) => {
         // Live mode/config/usage updates maintain the per-kind cache and fire the
         // dedicated change handlers (the renderer's chat surface ignores them).
         this.absorbUpdate(update)
-        for (const h of this.updateHandlers) h(sessionId, update)
+        // Translate the ACP protocol session id to the renderer session key once,
+        // here — every consumer (the renderer transcript/presence AND the self-mod
+        // run tracker, which keys runs by the renderer id) thinks in renderer keys.
+        const key = this.keyForAcpSession(acpSessionId) ?? acpSessionId
+        for (const h of this.updateHandlers) h(key, update)
       })
-      agent.onPermission((sessionId, req) =>
-        this.permissionHandler
-          ? this.permissionHandler(sessionId, req)
-          : Promise.reject(new Error('no permission handler registered')),
-      )
+      agent.onPermission((acpSessionId, req) => {
+        const key = this.keyForAcpSession(acpSessionId) ?? acpSessionId
+        return this.permissionHandler
+          ? this.permissionHandler(key, req)
+          : Promise.reject(new Error('no permission handler registered'))
+      })
       this.ready = agent.connect().then(
         () => agent,
         (err) => {
@@ -144,6 +149,14 @@ export class AgentHost {
     this.activeKey = key
     await session.prompt(text, opts?.images)
     return session.id
+  }
+
+  /** Map an ACP protocol session id back to the renderer session key that owns it.
+   * Streamed updates/permissions are tagged with the ACP id, but the renderer (and
+   * the run tracker) think in renderer keys — callers translate before forwarding. */
+  keyForAcpSession(acpSessionId: string): string | undefined {
+    for (const [key, session] of this.sessions) if (session.id === acpSessionId) return key
+    return undefined
   }
 
   /** Prompt capabilities the current backend advertised (image / embedded context). */

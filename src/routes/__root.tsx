@@ -10,7 +10,10 @@ import { WorkPanel } from '@/app/workbench/WorkPanel'
 import { CommandPalette, useCommandPalette } from '@/shell/CommandPalette'
 import { Onboarding } from '@/shell/Onboarding'
 import { Toaster } from '@/shell/toast'
+import { UpdateBanner } from '@/shell/UpdateBanner'
+import { WaitingBanner } from '@/shell/WaitingBanner'
 import { useRoutineRunner } from '@/app/routines/runner'
+import { usePresenceBridge } from '@/app/presence-bridge'
 
 export const Route = createRootRoute({ component: RootLayout })
 
@@ -31,6 +34,7 @@ function RootLayout() {
   }, [s.theme, s.accent, s.reduceMotion])
 
   useRoutineRunner()
+  usePresenceBridge()
 
   // Off-session, panels are plain open/closed surfaces — the focus/split machinery
   // (data-layout, scrim) is session-only, so right visibility is just `rightOpen`.
@@ -43,6 +47,7 @@ function RootLayout() {
         <Titlebar />
         <Onboarding />
         <Toaster />
+        <UpdateBanner />
       </div>
     )
   }
@@ -52,6 +57,8 @@ function RootLayout() {
       <Titlebar />
       {cmdk.open && <CommandPalette onClose={() => cmdk.setOpen(false)} />}
       <Toaster />
+      <UpdateBanner />
+      <WaitingBanner />
       {!s.railHidden && <Rail />}
       <div className="stage">
         <div className="stage-row">

@@ -1,4 +1,20 @@
 import { useEffect, useState, type CSSProperties } from 'react'
+import type { PresenceStatus } from '@/app/presence-store'
+
+// The living flame — Hearth's mark, but alive: it reflects the agent's presence so a
+// glance at the brand tells you whether an agent is thinking, working, or waiting on
+// you. Flicker is neutralized by the global reduce-motion rule. See docs/PRESENCE.md.
+export function StatusFlame({ status, size = 19 }: { status: PresenceStatus; size?: number }) {
+  const busy = status === 'thinking' || status === 'working'
+  const attention = status === 'waiting' || status === 'error'
+  return (
+    <i
+      className={`ph-fill ph-flame status-flame${busy ? ' thinking-flame' : ''}${status === 'waiting' ? ' is-waiting' : ''}`}
+      style={{ fontSize: size, color: attention ? 'var(--warn)' : undefined }}
+      title={status}
+    />
+  )
+}
 
 // Hearth's flame mark (Phosphor flame glyph).
 export function FlameMark({

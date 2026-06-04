@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Icon } from '@/shell/Icon'
 import type { WorkspaceKind } from '../../../electron/shared/protocol'
 import { useSession } from '../session-store'
+import { usePresence } from '../presence-store'
 import { ReviewTab } from './ReviewTab'
 import { PlanTab } from './PlanTab'
 import { SelfTab } from './SelfTab'
@@ -94,8 +95,23 @@ export function WorkPanel({
   const planCount = useSession((s) => s.plan.length)
   const lastSelfEdit = useSession((s) => s.lastSelfEdit)
   const kind = useSession((s) => s.active?.kind ?? 'code')
+  const activeId = useSession((s) => s.active?.id)
+  const recentFiles = usePresence((s) => (activeId ? s.byId[activeId]?.recentFiles : undefined))
   const [agentsActive, setAgentsActive] = useState(false)
   useEffect(() => window.hearth.selfMod.onActivity((a) => setAgentsActive(a.lanes.length > 0)), [])
+
+  // Pulse the Files tab when the agent touches a file while you're elsewhere (P4).
+  const [filesPulse, setFilesPulse] = useState(false)
+  const fpHandled = useRef(0)
+  useEffect(() => {
+    if (!recentFiles?.length) return
+    const last = recentFiles[recentFiles.length - 1]
+    if (last.at <= fpHandled.current) return
+    fpHandled.current = last.at
+    setFilesPulse(true)
+    const t = setTimeout(() => setFilesPulse(false), 2000)
+    return () => clearTimeout(t)
+  }, [recentFiles])
 
   const badgeFor = (id: string): number => (id === 'review' ? reviewCount : id === 'plan' ? planCount : 0)
 
@@ -131,7 +147,15 @@ export function WorkPanel({
           {tabs.map((t) => {
             const badge = badgeFor(t.id)
             return (
-              <div key={t.id} className={'wb-tab' + (tab === t.id ? ' is-active' : '')} onClick={() => setTab(t.id)}>
+              <div
+                key={t.id}
+                className={
+                  'wb-tab' +
+                  (tab === t.id ? ' is-active' : '') +
+                  (t.id === 'files' && filesPulse && tab !== 'files' ? ' is-pulsing' : '')
+                }
+                onClick={() => setTab(t.id)}
+              >
                 <Icon name={t.icon} fill={'flame' in t && t.flame && tab === t.id} />
                 {t.label}
                 {badge > 0 && tab !== t.id && <span className="wb-badge">{badge}</span>}

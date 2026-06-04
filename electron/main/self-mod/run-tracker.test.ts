@@ -52,8 +52,10 @@ describe('RunTracker — concurrency gate', () => {
     const t = new RunTracker()
     t.beginRun('r1', 's1')
     t.recordLane('r1', 'taskA', 'A', 'running')
+    t.markSubagent('r1', 'taskA')
     expect(t.isConcurrent('r1')).toBe(false)
     t.recordLane('r1', 'taskB', 'B', 'running')
+    t.markSubagent('r1', 'taskB')
     expect(t.isConcurrent('r1')).toBe(true)
     expect(t.concurrentWriterCount('r1')).toBe(2)
     // one finishes → back below threshold
@@ -65,7 +67,19 @@ describe('RunTracker — concurrency gate', () => {
     const t = new RunTracker()
     t.beginRun('r1', 's1')
     t.recordLane('r1', 'taskA', 'A', 'running')
+    t.markSubagent('r1', 'taskA')
     expect(t.isConcurrent('r1')).toBe(false)
+  })
+
+  test('unmarked tool-calls (orchestrator Reads/Edits) never count as subagents', () => {
+    const t = new RunTracker()
+    t.beginRun('r1', 's1')
+    // Two plain top-level tool-calls, neither marked a subagent.
+    t.recordLane('r1', 'read1', 'Read', 'running')
+    t.recordLane('r1', 'edit1', 'Edit', 'running')
+    expect(t.concurrentWriterCount('r1')).toBe(0)
+    expect(t.isConcurrent('r1')).toBe(false)
+    expect(t.activity('r1')!.lanes).toEqual([])
   })
 })
 
@@ -87,6 +101,8 @@ describe('RunTracker — baseline + activity', () => {
     t.beginRun('r1', 's1')
     t.recordLane('r1', 'taskA', 'A', 'running')
     t.recordLane('r1', 'taskB', 'B', 'running')
+    t.markSubagent('r1', 'taskA')
+    t.markSubagent('r1', 'taskB')
     t.recordWrite('r1', 'src/shared.ts', { parentToolCallId: 'taskA' })
     t.recordWrite('r1', 'src/shared.ts', { parentToolCallId: 'taskB' })
     t.recordWrite('r1', 'src/a.ts', { parentToolCallId: 'taskA' })
