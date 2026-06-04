@@ -34,7 +34,7 @@ const api = {
   agent: {
     prompt: (sessionId: string, cwd: string, text: string, images?: PromptImage[]): Promise<SelfModResult | null> =>
       ipcRenderer.invoke(CH.agentPrompt, { sessionId, cwd, text, images }),
-    cancel: () => ipcRenderer.invoke(CH.agentCancel),
+    cancel: (sessionId?: string) => ipcRenderer.invoke(CH.agentCancel, sessionId),
     getBackend: (): Promise<AgentKind> => ipcRenderer.invoke(CH.backendGet),
     setBackend: (kind: AgentKind): Promise<BackendStatus> => ipcRenderer.invoke(CH.backendSet, kind),
     getModels: (): Promise<ModelState> => ipcRenderer.invoke(CH.agentGetModels),

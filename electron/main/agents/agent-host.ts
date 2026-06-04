@@ -164,8 +164,11 @@ export class AgentHost {
     return this.agent?.promptCapabilities?.() ?? { image: false, embeddedContext: false }
   }
 
-  async cancel(): Promise<void> {
-    if (this.activeKey) await this.sessions.get(this.activeKey)?.cancel()
+  /** Cancel a specific renderer session's turn (defaults to the last-prompted one).
+   * Per-session so a background turn can be stopped without touching the foreground. */
+  async cancel(key?: string): Promise<void> {
+    const target = key ?? this.activeKey
+    if (target) await this.sessions.get(target)?.cancel()
   }
 
   /** Models the current backend offers (cached from the latest session). */

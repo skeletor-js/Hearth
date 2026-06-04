@@ -147,10 +147,24 @@ export function registerIpc(services: MainServices): void {
     }
   })
 
+  // Serialize turns per working directory. Self-mod's dirty-baseline diffing
+  // (dirtyPaths before/after + the in-progress marker) assumes one turn at a time
+  // per repo, so two turns on the SAME cwd must not overlap; turns in DIFFERENT
+  // repos run concurrently (separate lock chains). A no-op under today's single-turn
+  // UI — it's the safety floor that lets background/routine turns run (P6 / #6).
+  const turnLocks = new Map<string, Promise<unknown>>()
+
   ipcMain.handle(
     HEARTH_CHANNELS.agentPrompt,
     async (_e, payload: { sessionId: string; cwd?: string; text: string; images?: import('../shared/protocol.js').PromptImage[] }) => {
       const key = payload.sessionId || 'default'
+      const cwd = payload.cwd || repoRoot
+      const priorTurn = turnLocks.get(cwd) ?? Promise.resolve()
+      let releaseTurn!: () => void
+      const turnGate = new Promise<void>((r) => (releaseTurn = r))
+      turnLocks.set(cwd, priorTurn.then(() => turnGate))
+      await priorTurn.catch(() => {})
+      try {
       // Recover an interrupted prior turn (crashed before captureTurn) before we
       // baseline — commits its orphaned changes as a `recovered` run, never lost.
       await selfMod.recoverIfIncomplete(key)
@@ -221,9 +235,12 @@ export function registerIpc(services: MainServices): void {
         })
       }
       return result
+      } finally {
+        releaseTurn()
+      }
     },
   )
-  ipcMain.handle(HEARTH_CHANNELS.agentCancel, () => host.cancel())
+  ipcMain.handle(HEARTH_CHANNELS.agentCancel, (_e, sessionId?: string) => host.cancel(sessionId))
 
   // Backend switcher.
   ipcMain.handle(HEARTH_CHANNELS.backendGet, (): AgentKind => host.kind)

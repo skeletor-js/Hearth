@@ -386,7 +386,7 @@ export function ChatView() {
     }
   }
 
-  const stop = () => void window.hearth.agent.cancel()
+  const stop = () => void window.hearth.agent.cancel(active?.id)
 
   // Save the current conversation as a reusable micro-app: scaffold an empty app,
   // then ask the agent to build it from what we just did. Only offered on the
