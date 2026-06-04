@@ -13,6 +13,7 @@ import type { SessionStore, TranscriptEntry } from './sessions/store.js'
 import type { CreateSessionInput } from './sessions/store.js'
 import type { RoutineStore } from './routines/store.js'
 import type { RoutineScheduler } from './routines/scheduler.js'
+import type { Updater } from './updater.js'
 import type { CreateRoutineInput } from '../shared/protocol.js'
 import { listDir, readFile as fsReadFile, writeFile as fsWriteFile } from './fs/files.js'
 import { TerminalManager } from './terminal/pty.js'
@@ -68,10 +69,11 @@ export interface MainServices {
   broker: CredentialBroker
   routines: RoutineStore
   scheduler: RoutineScheduler
+  updater: Updater
 }
 
 export function registerIpc(services: MainServices): void {
-  const { repoRoot, host, selfMod, workspaces, sessions, browser, window, secrets, mcp, capabilities, broker, routines, scheduler } = services
+  const { repoRoot, host, selfMod, workspaces, sessions, browser, window, secrets, mcp, capabilities, broker, routines, scheduler, updater } = services
 
   // Self-mod run tracking (W0): attribute streamed writes to subagents, drive the
   // concurrency gate, and pin the overlay during parallel-subagent phases.
@@ -89,15 +91,17 @@ export function registerIpc(services: MainServices): void {
   // Stream agent updates to the renderer (forwarded from whichever backend is live),
   // and tap them for self-mod attribution + concurrency-gated overlay pinning.
   host.onUpdate((sessionId, update) => {
+    // sessionId is already the renderer session key (the host translates from the
+    // ACP id), so it matches both the renderer's session and the run tracker's runs.
     window.webContents.send(HEARTH_CHANNELS.agentUpdate, { sessionId, update })
     const runId = runTracker.runForSession(sessionId)
     if (!runId) return
     if (update.type === 'tool-call') {
-      // A tool-call that carries a parent is a subagent's own call; the lane is the
-      // parent Task id. A top-level Task tool-call's own status updates close its lane.
-      if (update.parentToolCallId) {
-        runTracker.recordLane(runId, update.parentToolCallId, '', 'running')
-      }
+      // A tool-call that carries a parent marks that parent as a subagent (a Task) —
+      // that's what surfaces in the Agents panel + drives the W1 concurrency gate. We
+      // record every tool-call so the parent Task's own title/status are captured
+      // regardless of arrival order; only subagent-marked ones are surfaced.
+      if (update.parentToolCallId) runTracker.markSubagent(runId, update.parentToolCallId)
       runTracker.recordLane(runId, update.id, update.title, update.status)
       broadcastActivity(runId)
     } else if (update.type === 'diff') {
@@ -130,6 +134,8 @@ export function registerIpc(services: MainServices): void {
           if (reject) return resolve(reject.id)
         }
         pendingPermissions.set(req.id, resolve)
+        // sessionId is already the renderer session key (translated by the host), so
+        // the renderer routes the ask (and its presence "waiting" state) correctly.
         window.webContents.send(HEARTH_CHANNELS.permissionRequest, { sessionId, req })
       }),
   )
@@ -141,10 +147,24 @@ export function registerIpc(services: MainServices): void {
     }
   })
 
+  // Serialize turns per working directory. Self-mod's dirty-baseline diffing
+  // (dirtyPaths before/after + the in-progress marker) assumes one turn at a time
+  // per repo, so two turns on the SAME cwd must not overlap; turns in DIFFERENT
+  // repos run concurrently (separate lock chains). A no-op under today's single-turn
+  // UI — it's the safety floor that lets background/routine turns run (P6 / #6).
+  const turnLocks = new Map<string, Promise<unknown>>()
+
   ipcMain.handle(
     HEARTH_CHANNELS.agentPrompt,
     async (_e, payload: { sessionId: string; cwd?: string; text: string; images?: import('../shared/protocol.js').PromptImage[] }) => {
       const key = payload.sessionId || 'default'
+      const cwd = payload.cwd || repoRoot
+      const priorTurn = turnLocks.get(cwd) ?? Promise.resolve()
+      let releaseTurn!: () => void
+      const turnGate = new Promise<void>((r) => (releaseTurn = r))
+      turnLocks.set(cwd, priorTurn.then(() => turnGate))
+      await priorTurn.catch(() => {})
+      try {
       // Recover an interrupted prior turn (crashed before captureTurn) before we
       // baseline — commits its orphaned changes as a `recovered` run, never lost.
       await selfMod.recoverIfIncomplete(key)
@@ -215,9 +235,12 @@ export function registerIpc(services: MainServices): void {
         })
       }
       return result
+      } finally {
+        releaseTurn()
+      }
     },
   )
-  ipcMain.handle(HEARTH_CHANNELS.agentCancel, () => host.cancel())
+  ipcMain.handle(HEARTH_CHANNELS.agentCancel, (_e, sessionId?: string) => host.cancel(sessionId))
 
   // Backend switcher.
   ipcMain.handle(HEARTH_CHANNELS.backendGet, (): AgentKind => host.kind)
@@ -515,6 +538,12 @@ export function registerIpc(services: MainServices): void {
       codexAdapter: ver('@agentclientprotocol/codex-acp'),
     }
   })
+
+  // Auto-update: status pushes flow over update:status from the updater itself;
+  // these are the renderer's pull/command handles.
+  ipcMain.handle(HEARTH_CHANNELS.updateGet, () => updater.getStatus())
+  ipcMain.handle(HEARTH_CHANNELS.updateCheck, () => updater.check())
+  ipcMain.handle(HEARTH_CHANNELS.updateInstall, () => updater.installNow())
 
   // Double-clicking the title-bar strip zooms the window to fill the screen, and
   // again restores the previous frame (macOS "zoom"). maximize/unmaximize remembers

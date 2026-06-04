@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { SecLabel, SetRow, Btn } from '../controls'
 import { Icon } from '@/shell/Icon'
 import { toast } from '@/shell/toast'
+import type { UpdateStatus } from '../../../../electron/shared/protocol'
 
 // Memory: the agent's durable notes, managed through chat. Here we surface its
 // state and give an escape hatch (clear) beyond the conversational flow.
@@ -130,6 +131,7 @@ export function AboutSection() {
   return (
     <>
       <SecLabel icon="info">About</SecLabel>
+      <UpdatesRow />
       <div className="about-grid">
         {rows.map(([k, v]) => (
           <div key={k} className="about-row">
@@ -139,5 +141,55 @@ export function AboutSection() {
         ))}
       </div>
     </>
+  )
+}
+
+// Update status + a manual check, alongside the version info. Auto-checks run in
+// the background (updater.ts); a ready update also raises the global restart banner.
+function UpdatesRow() {
+  const [status, setStatus] = useState<UpdateStatus>({ state: 'idle' })
+  useEffect(() => {
+    void window.hearth.update.get().then(setStatus)
+    return window.hearth.update.onStatus(setStatus)
+  }, [])
+
+  const label = ((): string => {
+    switch (status.state) {
+      case 'checking':
+        return 'Checking…'
+      case 'available':
+        return `Downloading… ${status.percent ?? 0}%`
+      case 'downloaded':
+        return `Ready: ${status.version ?? 'update'}`
+      case 'error':
+        return 'Check failed'
+      case 'unsupported':
+        return 'Applies in the packaged app'
+      default:
+        return 'Up to date'
+    }
+  })()
+  const busy = status.state === 'checking' || status.state === 'available'
+
+  return (
+    <SetRow k="Updates" h="Hearth checks for updates in the background and applies them when you restart.">
+      <span className="chip" title={status.error}>
+        <Icon name={status.state === 'error' ? 'warning' : 'arrow-clockwise'} /> {label}
+      </span>
+      {status.state === 'downloaded' ? (
+        <Btn variant="accent" onClick={() => void window.hearth.update.install()}>
+          Restart to update
+        </Btn>
+      ) : (
+        <Btn
+          onClick={() => {
+            void window.hearth.update.check()
+          }}
+          disabled={busy || status.state === 'unsupported'}
+        >
+          Check now
+        </Btn>
+      )}
+    </SetRow>
   )
 }

@@ -1,4 +1,6 @@
 import { useSession, type ActiveSession } from './session-store'
+import { usePresence } from './presence-store'
+import { persistEntries } from './transcript-persist'
 import type { Workspace } from '../../electron/main/workspaces/registry'
 import type { SessionMeta } from '../../electron/main/sessions/store'
 
@@ -21,6 +23,25 @@ export function openSession(m: SessionMeta): ActiveSession {
   const active = toActive(m)
   useSession.getState().setActive(active)
   return active
+}
+
+/**
+ * Run a turn in a session WITHOUT making it active or navigating to it — the
+ * background path for routines (and any future fire-and-forget turn). Presence is
+ * marked so the rail shows it live; updates stream through the presence bridge and
+ * are persisted by the background persister. The turn itself runs through main's
+ * per-cwd-serialized prompt handler, so it can't corrupt a concurrent foreground
+ * turn. See docs/PRESENCE.md (#6).
+ */
+export async function runBackgroundTurn(meta: SessionMeta, text: string): Promise<void> {
+  useSession.getState().bumpSessions() // surface the new session in the rail
+  usePresence.getState().markSending(meta.id)
+  persistEntries(meta.id, [{ kind: 'user', text }])
+  try {
+    await window.hearth.agent.prompt(meta.id, meta.cwd, text)
+  } catch {
+    usePresence.getState().setError(meta.id)
+  }
 }
 
 /**

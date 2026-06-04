@@ -4,6 +4,7 @@ import { FlameMark, ThinkingEmber } from '@/shell/Mascot'
 import { Icon } from '@/shell/Icon'
 import { useShell } from '@/shell/store'
 import { useSession } from '../session-store'
+import { usePresence } from '../presence-store'
 import { ensureActiveSession } from '../sessions'
 import { readScratchpad, wrapForPrompt } from '../scratchpad'
 import { Composer } from './Composer'
@@ -11,7 +12,7 @@ import { humanizePermission } from './permission-verbs'
 import { SaveAsTool } from './SaveAsTool'
 import { toast } from '@/shell/toast'
 import { LiveTrace, inferKind, type DiffRow, type TraceResult, type TraceStep } from './trace'
-import type { TranscriptEntry } from '../../../electron/main/sessions/store'
+import { persistEntries } from '../transcript-persist'
 import { renderMd, handleCodeCopyClick } from './markdown'
 
 type Block =
@@ -27,6 +28,23 @@ const MAX_DIFF_ROWS = 60
 
 function basename(p: string): string {
   return p.split('/').pop() || p
+}
+
+// Recap chip helpers (P5).
+function fmtDuration(ms: number): string {
+  const s = Math.round(ms / 1000)
+  if (s < 60) return `${s}s`
+  const m = Math.floor(s / 60)
+  const rem = s % 60
+  return rem ? `${m}m ${rem}s` : `${m}m`
+}
+function fmtAgo(ts: number): string {
+  const s = Math.round((Date.now() - ts) / 1000)
+  if (s < 30) return 'just now'
+  if (s < 60) return 'less than a minute ago'
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m ago`
+  return `${Math.floor(m / 60)}h ago`
 }
 
 function copyText(text: string): void {
@@ -58,8 +76,6 @@ function diffRows(oldText: string | null, newText: string): { add: number; del: 
 
 export function ChatView() {
   const [msgs, setMsgs] = useState<Msg[]>([])
-  const [busy, setBusy] = useState(false)
-  const [permission, setPermission] = useState<PermissionRequest | null>(null)
   const [backend, setBackend] = useState<AgentKind>('claude')
   const nextId = useRef(0)
   const openText = useRef(false) // last hearth block is a coalescing text block
@@ -68,6 +84,15 @@ export function ChatView() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const openRightTab = useShell((s) => s.openRightTab)
   const active = useSession((s) => s.active)
+  // Busy + the pending permission ask are derived from presence (the bridge owns the
+  // stream and folds them in by sessionId), so they survive switching sessions away
+  // and back instead of resetting with this component. See docs/PRESENCE.md.
+  const status = usePresence((s) => (active ? s.byId[active.id]?.status : undefined))
+  const busy = status === 'thinking' || status === 'working' || status === 'waiting'
+  const permission = usePresence((s) => (active ? s.byId[active.id]?.pendingPermission ?? null : null))
+  // "While you were away" recap — a session that finished work while you were looking
+  // at another one (P5). Reads the run summary the bridge accumulated into presence.
+  const recap = usePresence((s) => (active ? s.byId[active.id] : undefined))
   const attach = useShell((s) => (active ? s.scratchpadAttach[active.cwd] ?? false : false))
   const setScratchpadAttach = useShell((s) => s.setScratchpadAttach)
   const padNonEmpty = useSession((s) => s.scratchpadNonEmpty)
@@ -77,15 +102,9 @@ export function ChatView() {
   // buffered until turn-end. A self-mod that edits the renderer can trigger a full
   // reload mid-turn, which would wipe an in-memory buffer before it flushed —
   // losing the whole assistant turn. Writing as we go makes the transcript durable
-  // across that reload. Appends are serialized through one promise chain so JSONL
-  // lines never interleave and stay in stream order.
-  const persistChain = useRef<Promise<unknown>>(Promise.resolve())
-  const persist = (sessionId: string, entries: TranscriptEntry[]) => {
-    if (!entries.length) return
-    persistChain.current = persistChain.current
-      .then(() => window.hearth.sessions.append(sessionId, entries))
-      .catch(() => {})
-  }
+  // across that reload. `persistEntries` serializes per-session so the active and any
+  // background session never interleave (see transcript-persist.ts).
+  const persist = persistEntries
 
   // ids are allocated OUTSIDE the setMsgs updater. React may invoke an updater
   // twice (StrictMode/concurrent), and an updater must be pure — minting ids inside
@@ -253,48 +272,34 @@ export function ChatView() {
   useEffect(() => {
     void window.hearth.agent.getBackend().then(setBackend)
     const offBe = window.hearth.agent.onBackendChanged((s) => setBackend(s.kind))
-    const offUpdate = window.hearth.agent.onUpdate(({ update }) => {
-      apply(update)
-      // Persist this update immediately so a mid-turn renderer reload (e.g. a
-      // self-mod that touches routes) can't lose the turn.
+    const offUpdate = window.hearth.agent.onUpdate(({ sessionId, update }) => {
+      // Only the active session's stream drives this transcript — background sessions
+      // are folded into presence by the shell bridge. Without this filter a background
+      // turn would corrupt the on-screen transcript. See docs/PRESENCE.md.
       const a = useSession.getState().active
+      if (!a || (sessionId && sessionId !== a.id)) return
+      apply(update)
       // W9: agent-supplied session title — rename the active session + refresh the
       // rail. Not persisted as a transcript entry (it's metadata, not chat content).
       if (update.type === 'info') {
-        if (a) {
-          void window.hearth.sessions.rename(a.id, update.title).then(() => useSession.getState().bumpSessions())
-        }
+        void window.hearth.sessions.rename(a.id, update.title).then(() => useSession.getState().bumpSessions())
         return
       }
-      if (a) persist(a.id, [{ kind: 'update', update }])
+      // Persist this update immediately so a mid-turn renderer reload (e.g. a
+      // self-mod that touches routes) can't lose the turn.
+      persist(a.id, [{ kind: 'update', update }])
       if (update.type === 'end') {
-        setBusy(false)
         useSession.getState().refreshDiff() // working tree may have changed this turn
       }
     })
     const offError = window.hearth.agent.onError((message) => {
       openText.current = false
       setMsgs((p) => [...p, { id: id(), role: 'system', text: `agent error: ${message}` }])
-      setBusy(false)
-    })
-    const offPermission = window.hearth.permission.onRequest(({ req }) => {
-      // Command-approval tiers (Settings → Agent). 'always' prompts for every ask;
-      // 'commands' prompts only for shell/edit and silently approves reads/MCP;
-      // 'auto' approves everything. Source-mutating shell is already auto-rejected
-      // upstream in main, so it never reaches here. When we can't pick a non-reject
-      // option, fall back to prompting rather than guess.
-      const mode = useShell.getState().approval
-      const mustPrompt = mode === 'always' || (mode === 'commands' && req.category !== 'other')
-      if (mustPrompt) return setPermission(req)
-      const allow = req.options.find((o) => o.kind === 'allow') ?? req.options.find((o) => o.kind === 'allow-always')
-      if (allow) window.hearth.permission.respond(req.id, allow.id)
-      else setPermission(req)
     })
     return () => {
       offBe()
       offUpdate()
       offError()
-      offPermission()
     }
   }, [])
 
@@ -346,16 +351,16 @@ export function ChatView() {
   }, [active?.cwd])
 
   const answer = (optionId: string) => {
-    if (!permission) return
+    if (!permission || !active) return
     window.hearth.permission.respond(permission.id, optionId)
-    setPermission(null)
+    usePresence.getState().setPermission(active.id, null)
   }
 
   const send = async (text: string, images?: PromptImage[]) => {
     const a = useSession.getState().active ?? (await ensureActiveSession())
     openText.current = false
     pushUser(text, images)
-    setBusy(true)
+    usePresence.getState().markSending(a.id)
     turnStart.current = Date.now()
     persist(a.id, [{ kind: 'user', text }])
     try {
@@ -371,11 +376,11 @@ export function ChatView() {
       }
     } catch (e) {
       setMsgs((p) => [...p, { id: id(), role: 'system', text: `failed to send: ${String(e)}` }])
-      setBusy(false)
+      usePresence.getState().setError(a.id)
     }
   }
 
-  const stop = () => void window.hearth.agent.cancel()
+  const stop = () => void window.hearth.agent.cancel(active?.id)
 
   // Save the current conversation as a reusable micro-app: scaffold an empty app,
   // then ask the agent to build it from what we just did. Only offered on the
@@ -414,6 +419,19 @@ export function ChatView() {
     <div className="chat-col" data-screen-label="Chat">
       <div className="chat-scroll scroll" ref={scrollRef}>
         <div className="chat-wrap">
+          {active && recap?.unread && recap.edits > 0 && (
+            <div className="recap">
+              <Icon name="flame" fill className="ico-13" />
+              <span>
+                While you were away — edited {recap.edits} file{recap.edits > 1 ? 's' : ''}
+                {recap.startedAt && recap.finishedAt ? ` · ${fmtDuration(recap.finishedAt - recap.startedAt)}` : ''}
+                {recap.finishedAt ? ` · finished ${fmtAgo(recap.finishedAt)}` : ''}
+              </span>
+              <button className="recap-x" title="Dismiss" onClick={() => usePresence.getState().clearUnread(active.id)}>
+                <Icon name="x" />
+              </button>
+            </div>
+          )}
           {msgs.length === 0 && !busy ? (
             <div className="chat-empty">
               <span className="flame">

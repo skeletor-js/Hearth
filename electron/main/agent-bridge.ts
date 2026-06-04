@@ -52,12 +52,9 @@ export interface AgentBridgeDeps {
   browser: BrowserManager
 }
 
-// JS run inside the embedded browser page for read/click/fill.
+// JS run inside the embedded browser page for read. Click/fill live on BrowserManager
+// (they also report where the action landed, to drive the presence cursor — see P6).
 const READ_JS = `({ url: location.href, title: document.title, text: (document.body && document.body.innerText || '').slice(0, 20000) })`
-const clickJS = (sel: string) =>
-  `(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return { ok:false, error:'no element for ${sel.replace(/'/g, "\\'")}' }; el.click(); return { ok:true }; })()`
-const fillJS = (sel: string, value: string) =>
-  `(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return { ok:false, error:'no element' }; el.focus(); el.value = ${JSON.stringify(value)}; el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); return { ok:true }; })()`
 
 export function startAgentBridge(deps: AgentBridgeDeps, repoRoot: string): () => void {
   // Per-boot bearer token. The bridge runs arbitrary JS in the renderer, so
@@ -126,6 +123,7 @@ export function startAgentBridge(deps: AgentBridgeDeps, repoRoot: string): () =>
         const body = req.method === 'POST' ? (JSON.parse((await readBody(req)) || '{}') as Record<string, unknown>) : {}
         if (action === 'navigate') {
           deps.browser.navigate(String(body.url ?? ''))
+          deps.browser.signalNav()
           await sleep(300)
           sendJson(res, 200, { ok: true })
           return
@@ -139,13 +137,11 @@ export function startAgentBridge(deps: AgentBridgeDeps, repoRoot: string): () =>
           return
         }
         if (action === 'click') {
-          const result = await wc.executeJavaScript(clickJS(String(body.selector ?? '')), true)
-          sendJson(res, 200, result)
+          sendJson(res, 200, await deps.browser.click(String(body.selector ?? '')))
           return
         }
         if (action === 'fill') {
-          const result = await wc.executeJavaScript(fillJS(String(body.selector ?? ''), String(body.value ?? '')), true)
-          sendJson(res, 200, result)
+          sendJson(res, 200, await deps.browser.fill(String(body.selector ?? ''), String(body.value ?? '')))
           return
         }
         if (action === 'eval') {

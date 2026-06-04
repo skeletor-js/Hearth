@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
 import { Icon } from './Icon'
-import { FlameMark } from './Mascot'
+import { StatusFlame } from './Mascot'
 import { Resizer } from './Resizer'
 import { useShell } from './store'
 import { useSession } from '@/app/session-store'
+import { usePresence } from '@/app/presence-store'
+import { PresenceDot, isActiveStatus, statusWord, aggregateStatus } from './Presence'
 import { openSession, startSession } from '@/app/sessions'
 import type { Workspace } from '../../electron/main/workspaces/registry'
 import type { SessionMeta } from '../../electron/main/sessions/store'
@@ -18,6 +20,7 @@ export function Rail() {
   const navigate = useNavigate()
   const activeId = useSession((s) => s.active?.id)
   const sessionsNonce = useSession((s) => s.sessionsNonce)
+  const presenceById = usePresence((s) => s.byId)
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [recent, setRecent] = useState<SessionMeta[]>([])
 
@@ -77,7 +80,7 @@ export function Rail() {
       <div className="rail-top">
         <div className="rail-brand" title="Hearth">
           <span className="flame">
-            <FlameMark size={19} />
+            <StatusFlame status={aggregateStatus(presenceById)} size={19} />
           </span>
           <span>Hearth</span>
         </div>
@@ -141,12 +144,17 @@ export function Rail() {
               <span className="ri-label">No recent sessions</span>
             </div>
           ) : (
-            recent.map((m) => (
-              <button key={m.id} className={itemClass(m.id === activeId && pathname === '/chat')} onClick={() => resume(m)}>
-                <Icon name="chat-circle" />
-                <span className="ri-label">{m.title}</span>
-              </button>
-            ))
+            recent.map((m) => {
+              const st = presenceById[m.id]?.status
+              const live = isActiveStatus(st)
+              return (
+                <button key={m.id} className={itemClass(m.id === activeId && pathname === '/chat')} onClick={() => resume(m)}>
+                  {live ? <PresenceDot status={st} /> : <Icon name="chat-circle" />}
+                  <span className="ri-label">{m.title}</span>
+                  {live && <span className={'ri-status' + (st === 'waiting' ? ' is-waiting' : '')}>{statusWord(st)}</span>}
+                </button>
+              )
+            })
           )}
         </div>
       </div>

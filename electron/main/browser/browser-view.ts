@@ -23,16 +23,73 @@ export interface Rect {
   height: number
 }
 
+/** A spatial action the agent took in the browser, in GLOBAL screen coords (DIP),
+ * so the caller can map it into the desktop-spanning overlay for the cursor (P6). */
+export interface BrowserAction {
+  kind: 'click' | 'fill' | 'nav'
+  x: number
+  y: number
+}
+
+// JS run in the page: act on the element AND report its on-screen centre (CSS px,
+// viewport coords) so main can place the presence cursor where the action landed.
+const clickJS = (sel: string) =>
+  `(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return { ok:false, error:'no element for selector' };` +
+  ` el.scrollIntoView({ block:'center', inline:'center' }); const r = el.getBoundingClientRect();` +
+  ` const x = r.left + r.width/2, y = r.top + r.height/2; el.click(); return { ok:true, x, y }; })()`
+const fillJS = (sel: string, value: string) =>
+  `(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return { ok:false, error:'no element' };` +
+  ` el.scrollIntoView({ block:'center', inline:'center' }); el.focus(); el.value = ${JSON.stringify(value)};` +
+  ` el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));` +
+  ` const r = el.getBoundingClientRect(); return { ok:true, x: r.left + r.width/2, y: r.top + r.height/2 }; })()`
+
 export class BrowserManager {
   private view: WebContentsView | null = null
   private visible = false
+  /** Last bounds the renderer reported, so a page-viewport point can be mapped to
+   * screen coords for the presence cursor. */
+  private bounds: Rect | null = null
   /** Last URL per workspace id, so reopening a workspace's browser resumes it. */
   private lastUrl = new Map<string, string>()
 
   constructor(
     private readonly window: BrowserWindow,
     private readonly onState: (state: BrowserState) => void,
+    /** Notified when the agent acts spatially in the browser (P6); coords are global. */
+    private readonly onAction?: (action: BrowserAction) => void,
   ) {}
+
+  // Map a page-viewport point (CSS px) to global screen coords (DIP) via the view
+  // bounds (window-content-relative) + the window's content origin.
+  private emitAction(kind: BrowserAction['kind'], vx: number, vy: number): void {
+    if (!this.onAction || !this.bounds) return
+    const cb = this.window.getContentBounds()
+    this.onAction({ kind, x: cb.x + this.bounds.x + vx, y: cb.y + this.bounds.y + vy })
+  }
+
+  /** Click a selector and report where it landed for the cursor. */
+  async click(selector: string): Promise<{ ok: boolean; error?: string }> {
+    const r = (await this.contents().executeJavaScript(clickJS(selector), true)) as {
+      ok: boolean
+      error?: string
+      x?: number
+      y?: number
+    }
+    if (r.ok && r.x != null && r.y != null) this.emitAction('click', r.x, r.y)
+    return { ok: r.ok, error: r.error }
+  }
+
+  /** Fill an input by selector and report where it landed for the cursor. */
+  async fill(selector: string, value: string): Promise<{ ok: boolean; error?: string }> {
+    const r = (await this.contents().executeJavaScript(fillJS(selector, value), true)) as {
+      ok: boolean
+      error?: string
+      x?: number
+      y?: number
+    }
+    if (r.ok && r.x != null && r.y != null) this.emitAction('fill', r.x, r.y)
+    return { ok: r.ok, error: r.error }
+  }
 
   private emit(): void {
     const wc = this.view?.webContents
@@ -83,12 +140,14 @@ export class BrowserManager {
     const view = this.ensure()
     this.visible = true
     view.setVisible(true)
-    view.setBounds({
+    const b = {
       x: Math.round(rect.x),
       y: Math.round(rect.y),
       width: Math.round(rect.width),
       height: Math.round(rect.height),
-    })
+    }
+    this.bounds = b
+    view.setBounds(b)
   }
 
   hide(): void {
@@ -101,6 +160,12 @@ export class BrowserManager {
     const target = normalizeUrl(url)
     if (workspaceId) this.lastUrl.set(workspaceId, target)
     void this.contents().loadURL(target)
+  }
+
+  /** Show the nav cursor indicator — called only from the agent path (the bridge),
+   * so a user typing in the URL bar doesn't trigger the agent's cursor (P6). */
+  signalNav(): void {
+    if (this.bounds) this.emitAction('nav', this.bounds.width / 2, 22)
   }
 
   /** Open the remembered URL for a workspace, or `fallback` if none. */

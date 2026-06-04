@@ -237,6 +237,16 @@ export interface PermissionRequest {
   category?: 'execute' | 'edit' | 'other'
 }
 
+/** A spatial action the agent performed in the embedded browser, for the presence
+ * cursor (P6, docs/PRESENCE.md). Coordinates are overlay-local px (already mapped
+ * from the page viewport through the browser view + window bounds), so the overlay
+ * renderer can place the ghost cursor directly. */
+export interface BrowserCursorEvent {
+  kind: 'click' | 'fill' | 'nav'
+  x: number
+  y: number
+}
+
 /** Payload shape for the `agent:update` channel (main → renderer). */
 export interface AgentUpdatePayload {
   sessionId: string
@@ -247,4 +257,24 @@ export interface AgentUpdatePayload {
 export interface PermissionRequestPayload {
   sessionId: string
   req: PermissionRequest
+}
+
+/**
+ * Auto-update status surfaced to the renderer (main → renderer on `update:status`,
+ * also returned by `update:get`). `state` drives the UI; the rest is detail.
+ *  - idle: no update known (or last check found none)
+ *  - checking: a check is in flight
+ *  - available: an update is downloading (see `percent`)
+ *  - downloaded: staged and ready — the user can restart to apply it
+ *  - error: last check/download failed (see `error`)
+ *  - unsupported: not a packaged build (dev), so updates can't apply
+ */
+export interface UpdateStatus {
+  state: 'idle' | 'checking' | 'available' | 'downloaded' | 'error' | 'unsupported'
+  /** The version being offered, when known. */
+  version?: string
+  /** Download progress 0–100 while state === 'available'. */
+  percent?: number
+  /** Failure message when state === 'error'. */
+  error?: string
 }

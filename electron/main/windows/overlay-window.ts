@@ -9,6 +9,7 @@
 import { join } from 'node:path'
 import { BrowserWindow, ipcMain, screen } from 'electron'
 import { HEARTH_CHANNELS } from '../../shared/channels.js'
+import type { BrowserCursorEvent } from '../../shared/protocol.js'
 import type { RendererTarget } from '../dev-server.js'
 
 export type MorphSignal = 'ready' | 'cover-painted' | 'done'
@@ -45,6 +46,9 @@ function overlaySource(target: RendererTarget): { url?: string; file?: string } 
 export class OverlayWindow {
   private win: BrowserWindow | null = null
   private ready = false
+  // True between a morph show()/hide() — so the presence cursor's idle auto-hide
+  // never pulls the overlay out from under an in-flight morph (P6 overlap guard).
+  private morphing = false
   private readyWaiters: Array<() => void> = []
   // Resolvers waiting on a specific overlay→main signal (cover-painted / done).
   private signalWaiters = new Map<MorphSignal, Array<() => void>>()
@@ -85,6 +89,28 @@ export class OverlayWindow {
   /** Hand the overlay the post-reload screenshot to morph to. */
   sendHandoff(newFrame: string): void {
     this.ensure().webContents.send(HEARTH_CHANNELS.morphHandoff, { newFrame })
+  }
+
+  /** Push the agent's browser cursor position (overlay-local px) for the P6 cursor. */
+  sendCursor(e: BrowserCursorEvent): void {
+    this.ensure().webContents.send(HEARTH_CHANNELS.browserCursor, e)
+  }
+
+  /** Show the overlay WITHOUT capturing input — for the click-through presence cursor
+   * (unlike show(), which grabs the mouse to shield a mid-morph reload). */
+  showPassive(): void {
+    const win = this.ensure()
+    win.setBounds(allDisplaysBounds())
+    win.setIgnoreMouseEvents(true)
+    if (!win.isVisible()) win.showInactive()
+    win.setAlwaysOnTop(true, 'screen-saver')
+  }
+
+  /** Hide IF a morph isn't using the overlay — the cursor's idle auto-hide path, so
+   * it can't yank the overlay out from under an in-flight morph. */
+  hidePassive(): void {
+    if (this.morphing) return
+    this.hide()
   }
 
   /** Resolve when the overlay reports `type` (or after timeoutMs, so we never hang). */
@@ -174,6 +200,7 @@ export class OverlayWindow {
   /** Bring the cover on screen, capturing input (so clicks don't hit the app mid-morph). */
   show(): void {
     const win = this.ensure()
+    this.morphing = true
     win.setBounds(allDisplaysBounds())
     win.setIgnoreMouseEvents(false)
     win.showInactive() // visible without stealing focus
@@ -182,6 +209,7 @@ export class OverlayWindow {
 
   /** Hide the cover and return to click-through idle. */
   hide(): void {
+    this.morphing = false
     if (!this.win || this.win.isDestroyed()) return
     this.win.hide()
     this.win.setIgnoreMouseEvents(true)

@@ -5,6 +5,7 @@ import { app, safeStorage, session, BrowserWindow } from 'electron'
 import { createMainWindow, createSnapshotWindow } from './window.js'
 import { prepareRenderer } from './dev-server.js'
 import { registerIpc } from './ipc.js'
+import { setupAutoUpdater } from './updater.js'
 import { ClaudeAgent } from './agents/claude.js'
 import { CodexAgent } from './agents/codex.js'
 import { FakeAgent } from './agents/fake.js'
@@ -248,8 +249,20 @@ async function bootstrap(): Promise<void> {
   scheduler.start()
 
   // Embedded persistent browser; the agent drives the same view (browser_* tools).
-  const browser = new BrowserManager(window, (state) =>
-    window.webContents.send(HEARTH_CHANNELS.browserState, state),
+  // The third arg routes the agent's spatial actions to the overlay as a ghost cursor
+  // (P6): map global coords into the desktop-spanning overlay, show it click-through,
+  // and auto-hide after a few idle seconds.
+  let cursorIdle: ReturnType<typeof setTimeout> | null = null
+  const browser = new BrowserManager(
+    window,
+    (state) => window.webContents.send(HEARTH_CHANNELS.browserState, state),
+    (action) => {
+      const o = overlay.originOffset()
+      overlay.showPassive()
+      overlay.sendCursor({ kind: action.kind, x: action.x - o.x, y: action.y - o.y })
+      if (cursorIdle) clearTimeout(cursorIdle)
+      cursorIdle = setTimeout(() => overlay.hidePassive(), 4000)
+    },
   )
 
   // Loopback bridge: lets the agent see (snapshot) AND drive (eval) the live app.
@@ -259,7 +272,12 @@ async function bootstrap(): Promise<void> {
     REPO_ROOT,
   )
 
-  registerIpc({ repoRoot: REPO_ROOT, host, selfMod, workspaces, sessions, browser, window, secrets, mcp, capabilities, broker, routines, scheduler })
+  // Auto-update: checks a Cloudflare feed, downloads in the background, and lets
+  // the user restart into the staged build. Inert (no-op) in dev. See updater.ts.
+  const updater = setupAutoUpdater(window)
+  app.once('before-quit', () => updater.dispose())
+
+  registerIpc({ repoRoot: REPO_ROOT, host, selfMod, workspaces, sessions, browser, window, secrets, mcp, capabilities, broker, routines, scheduler, updater })
 
   // Connect the current backend in the background; the UI renders immediately.
   // A failed connect must surface, not crash boot.

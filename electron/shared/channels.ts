@@ -83,6 +83,7 @@ export const HEARTH_CHANNELS = {
   browserSetBounds: 'browser:set-bounds',
   browserHide: 'browser:hide',
   browserState: 'browser:state', // main → renderer
+  browserCursor: 'browser:cursor', // main → overlay: agent's spatial action for the presence cursor (P6)
   // personality (soul) + memory — managed blocks in each backend's global file.
   personalityGet: 'personality:get',
   personalitySet: 'personality:set',
@@ -116,6 +117,11 @@ export const HEARTH_CHANNELS = {
   dataReveal: 'data:reveal', // open the data folder
   // about: app + adapter/SDK versions.
   aboutInfo: 'about:info',
+  // auto-update: query current status, force a check, apply (restart into the
+  // staged build). updateStatus is the main → renderer push.
+  updateGet: 'update:get',
+  updateCheck: 'update:check',
+  updateInstall: 'update:install',
   // window chrome: double-click the title-bar strip to zoom (fill) / restore.
   windowZoomToggle: 'window:zoom-toggle',
   microAppCreate: 'micro-app:create',
@@ -138,6 +144,7 @@ export const HEARTH_CHANNELS = {
   // main → renderer (send/broadcast)
   agentUpdate: 'agent:update',
   agentError: 'agent:error',
+  updateStatus: 'update:status', // auto-update: main → renderer status pushes
   permissionRequest: 'permission:request',
   backendChanged: 'agent:backend:changed',
   viewNavigate: 'view:navigate', // ask the renderer to route somewhere before a snapshot
