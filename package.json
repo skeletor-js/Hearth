@@ -14,7 +14,8 @@
     "test": "bun test",
     "dist": "electron-vite build && electron-builder --mac",
     "publish:update": "node scripts/publish-update.mjs",
-    "release": "bun run dist && bun run publish:update",
+    "payload:build": "node scripts/build-workspace-payload.mjs",
+    "release": "bun run dist && bun run publish:update && bun run payload:build",
     "create-app": "node scripts/create-micro-app.mjs",
     "view": "node scripts/view-app.mjs",
     "postinstall": "electron-rebuild -f -w node-pty"
@@ -33,20 +34,6 @@
       "package.json",
       "node_modules/**/*"
     ],
-    "extraResources": [
-      {
-        "from": "index.html",
-        "to": "app-source/index.html"
-      },
-      {
-        "from": "src",
-        "to": "app-source/src"
-      },
-      {
-        "from": "node_modules",
-        "to": "app-source/node_modules"
-      }
-    ],
     "mac": {
       "target": ["dmg", "zip"],
       "category": "public.app-category.developer-tools",
@@ -58,7 +45,7 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://updates.hearth.app/",
+        "url": "https://pub-aacb176d4db84288936664754f7f6c5b.r2.dev/",
         "channel": "latest"
       }
     ]

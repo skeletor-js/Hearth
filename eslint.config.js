@@ -7,7 +7,7 @@ import globals from 'globals'
 // would make agent edits slow to validate. `bun run typecheck` covers types.
 export default tseslint.config(
   {
-    ignores: ['out/**', 'dist/**', 'node_modules/**', 'src/routeTree.gen.ts', 'micro-apps/**', 'templates/**'],
+    ignores: ['out/**', 'dist/**', 'release/**', '.hearth/**', 'node_modules/**', 'src/routeTree.gen.ts', 'micro-apps/**', 'templates/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

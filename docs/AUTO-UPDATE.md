@@ -1,8 +1,14 @@
 # Auto-update
 
 Hearth ships signed, notarized macOS builds and updates them over a Cloudflare
-feed. The app checks in the background, downloads a new build, and — because we
-never apply silently — raises a banner so the user clicks **Restart to update**.
+feed. The app checks in the background, downloads a new build, and because we
+never apply silently, raises a banner so the user clicks **Restart to update**.
+
+> Two update channels (see `docs/PACKAGING-V3-PLAN.md`): this electron-updater
+> flow updates the **signed shell** (rare). The **workspace payload** (renderer
+> source + node_modules, the part that self-modifies and changes often) updates
+> separately via its own `workspace/current.json` manifest, downloaded on launch
+> by `packaging/payload.ts`. No re-notarization for payload updates.
 
 ## How it works
 
