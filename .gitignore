@@ -22,3 +22,6 @@ micro-apps/*/dist/
 
 # Local release credentials (Apple notarization + Cloudflare R2). Never commit.
 .env.release
+
+# Compound Engineering local config
+.compound-engineering/*.local.yaml
