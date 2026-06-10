@@ -15,9 +15,9 @@
 
 import { createRequire } from 'node:module'
 import { createHash } from 'node:crypto'
-import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, lstatSync } from 'node:fs'
+import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, lstatSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { resolve, join, dirname, relative, sep } from 'node:path'
+import { resolve, join, dirname } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -42,22 +42,77 @@ if (!DRY_RUN && missing.length) {
   process.exit(1)
 }
 
-// node_modules entries the renderer/Vite never resolve — desktop packaging + build
-// tooling. Excluding them (esp. `electron`, which carries a 242 MB nested .app)
-// keeps the download small. Anything not listed is kept, so a miss only costs size.
-const EXCLUDE = new Set([
-  'electron',
-  'electron-builder',
-  'electron-updater',
-  'app-builder-lib',
-  'app-builder-bin',
-  'electron-rebuild',
-  'electron-osx-sign',
-  'dmg-license',
-  '@aws-sdk',
-  '.cache',
-  '.bin',
-])
+// The payload ships ONLY what the renderer can resolve at runtime (U9): the
+// bare specifiers imported under src/ + index.html, plus their full dependency
+// closure walked from the local node_modules. The old approach (everything
+// minus a denylist) shipped the dev machine's whole tree — test tooling,
+// @aws-sdk, whatever happened to be installed — to every user by default.
+// A closure miss fails loudly at packaged-app boot (renderer import error),
+// never silently. Two-channel placement rule: docs/PACKAGING-CHANNELS.md.
+
+/** Bare package name of an import specifier ('@scope/pkg/sub' → '@scope/pkg'). */
+function packageNameOf(spec) {
+  if (spec.startsWith('@')) {
+    const [scope, name] = spec.split('/')
+    return name ? `${scope}/${name}` : null
+  }
+  return spec.split('/')[0]
+}
+
+/** Bare specifiers imported by the staged renderer source (ts/tsx/css/html). */
+function rendererSeeds(stageDir) {
+  const seeds = new Set()
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, entry.name)
+      if (entry.isDirectory()) walk(p)
+      else if (/\.(tsx?|css|html)$/.test(entry.name)) {
+        const text = readFileSync(p, 'utf8')
+        // import/export-from/dynamic-import + CSS @import. Relative paths, the
+        // '@/' src alias, and node:/electron builtins are not packages.
+        for (const m of text.matchAll(/(?:from\s*|import\s*\(?\s*|@import\s+)['"]([^'"\n]+)['"]/g)) {
+          const spec = m[1]
+          if (spec.startsWith('.') || spec.startsWith('/') || spec.startsWith('@/') || spec.startsWith('node:')) continue
+          const name = packageNameOf(spec)
+          if (name) seeds.add(name)
+        }
+      }
+    }
+  }
+  walk(stageDir)
+  return seeds
+}
+
+/** Seeds + every package reachable through dependencies/peers/optionals that
+ * actually exist in node_modules (peers are hoisted beside their dependents). */
+function dependencyClosure(seeds, nmDir) {
+  const closure = new Set()
+  const queue = [...seeds]
+  while (queue.length) {
+    const name = queue.shift()
+    if (closure.has(name)) continue
+    const pkgJson = join(nmDir, name, 'package.json')
+    let pkg
+    try {
+      pkg = JSON.parse(readFileSync(pkgJson, 'utf8'))
+    } catch {
+      continue // not installed (e.g. an optional peer) — nothing to ship
+    }
+    closure.add(name)
+    for (const dep of [
+      ...Object.keys(pkg.dependencies ?? {}),
+      ...Object.keys(pkg.peerDependencies ?? {}),
+      ...Object.keys(pkg.optionalDependencies ?? {}),
+    ]) {
+      if (!closure.has(dep)) queue.push(dep)
+    }
+  }
+  return closure
+}
+
+// Packages that must never reach the payload — their presence in the closure
+// means a seed (or a dependency edge) is wrong, not that the list needs a tweak.
+const FORBIDDEN = ['electron', 'electron-builder', '@aws-sdk/client-s3', 'tar']
 
 const commit = (() => {
   try {
@@ -74,23 +129,32 @@ try {
   cpSync(join(root, 'src'), join(stage, 'src'), { recursive: true })
 
   const nmSrc = join(root, 'node_modules')
-  cpSync(nmSrc, join(stage, 'node_modules'), {
-    recursive: true,
-    filter: (src) => {
-      const rel = relative(nmSrc, src)
-      if (rel === '') return true
-      const parts = rel.split(sep)
-      const top = parts[0].startsWith('@') && parts.length > 1 ? `${parts[0]}/${parts[1]}` : parts[0]
-      if (EXCLUDE.has(parts[0]) || EXCLUDE.has(top)) return false
-      // Skip broken symlinks so they don't leave dead links in the payload.
-      try {
-        if (lstatSync(src).isSymbolicLink()) return statSync(src), true
-      } catch {
-        return false
-      }
-      return true
-    },
-  })
+  const seeds = rendererSeeds(stage)
+  const closure = dependencyClosure(seeds, nmSrc)
+  const banned = FORBIDDEN.filter((p) => closure.has(p))
+  if (banned.length) {
+    console.error(`[payload] refusing to ship packaging/build tooling in the payload: ${banned.join(', ')}`)
+    console.error('[payload] a renderer seed (or a dependency edge) is wrong — fix the import, not this list.')
+    process.exit(1)
+  }
+  console.log(`[payload] ${seeds.size} renderer seeds → ${closure.size} packages:`)
+  console.log([...closure].sort().map((p) => `  ${p}`).join('\n'))
+
+  for (const name of closure) {
+    const from = join(nmSrc, name)
+    cpSync(from, join(stage, 'node_modules', name), {
+      recursive: true,
+      filter: (src) => {
+        // Skip broken symlinks so they don't leave dead links in the payload.
+        try {
+          if (lstatSync(src).isSymbolicLink()) return statSync(src), true
+        } catch {
+          return false
+        }
+        return true
+      },
+    })
+  }
 
   const releaseDir = join(root, 'release')
   mkdirSync(releaseDir, { recursive: true })
