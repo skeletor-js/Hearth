@@ -66,6 +66,7 @@ function makeServices(opts?: {
   const noopEvents = {
     onUpdate: () => {},
     onPermission: () => {},
+    onAgentExit: () => () => {},
     onModelsChanged: () => {},
     onModeChanged: () => {},
     onConfigChanged: () => {},
