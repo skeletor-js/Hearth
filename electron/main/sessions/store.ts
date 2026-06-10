@@ -69,10 +69,21 @@ export interface CreateSessionInput {
 
 export class SessionStore {
   private counter = 0
+  // Index-bump debouncing (U18): the transcript APPEND stays per-delta for
+  // durability, but rewriting the whole pretty-printed index.json per streamed
+  // token is pure amplification — coalesce the updatedAt/title bump instead.
+  // Ids this process has already bumped once; the FIRST bump writes through so
+  // a fresh session can't look "untouched" (and get swept) if we crash inside
+  // the debounce window.
+  private readonly bumpedOnce = new Set<string>()
+  private readonly pendingBumps = new Map<string, { timer: ReturnType<typeof setTimeout>; firstUser?: string }>()
+
   constructor(
     private readonly baseDir: string,
     /** Injectable clock so tests are deterministic; defaults to Date.now. */
     private readonly now: () => number = Date.now,
+    /** Debounce window for streamed index bumps; injectable for tests. */
+    private readonly indexDebounceMs = 1000,
   ) {}
 
   private indexPath(): string {
@@ -198,17 +209,55 @@ export class SessionStore {
     return hits
   }
 
-  /** Append transcript entries and bump updatedAt. Auto-titles from the first user line. */
+  /** Append transcript entries and bump updatedAt. Auto-titles from the first user
+   * line. The append is per-delta (durability across a mid-turn reload); the
+   * index bump is debounced after the first write-through (U18). */
   async append(id: string, entries: TranscriptEntry[]): Promise<void> {
     if (entries.length === 0) return
     await mkdir(join(this.baseDir, 'transcripts'), { recursive: true })
     await appendFile(this.transcriptPath(id), entries.map((e) => JSON.stringify(e)).join('\n') + '\n')
     const firstUser = entries.find((e) => e.kind === 'user') as Extract<TranscriptEntry, { kind: 'user' }> | undefined
+    if (!this.bumpedOnce.has(id)) {
+      this.bumpedOnce.add(id)
+      await this.bumpIndex(id, firstUser?.text)
+      return
+    }
+    const pending = this.pendingBumps.get(id)
+    if (pending) {
+      clearTimeout(pending.timer)
+      pending.firstUser = pending.firstUser ?? firstUser?.text
+      pending.timer = setTimeout(() => void this.flushBump(id), this.indexDebounceMs)
+    } else {
+      this.pendingBumps.set(id, {
+        firstUser: firstUser?.text,
+        timer: setTimeout(() => void this.flushBump(id), this.indexDebounceMs),
+      })
+    }
+  }
+
+  private async flushBump(id: string): Promise<void> {
+    const pending = this.pendingBumps.get(id)
+    if (!pending) return
+    this.pendingBumps.delete(id)
+    await this.bumpIndex(id, pending.firstUser)
+  }
+
+  private async bumpIndex(id: string, firstUserText?: string): Promise<void> {
     await this.patch(id, (m) => ({
       ...m,
       updatedAt: this.bumped(m),
-      title: m.title === 'New session' && firstUser ? firstUser.text.slice(0, 60) : m.title,
+      title: m.title === 'New session' && firstUserText ? firstUserText.slice(0, 60) : m.title,
     }))
+  }
+
+  /** Write any debounced index bumps now (quit/teardown, tests). */
+  async flushPending(): Promise<void> {
+    const ids = [...this.pendingBumps.keys()]
+    for (const id of ids) {
+      const pending = this.pendingBumps.get(id)
+      if (pending) clearTimeout(pending.timer)
+      await this.flushBump(id)
+    }
   }
 
   async rename(id: string, title: string): Promise<SessionMeta | null> {

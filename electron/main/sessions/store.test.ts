@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, readFile, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SessionStore } from './store.js'
@@ -68,6 +68,7 @@ test('list is newest-activity first and hides archived', async () => {
   const b = await store.create({ workspaceId: 'ws', cwd: '/proj', self: false })
   await store.append(b.id, [{ kind: 'user', text: 'seed b' }])
   await store.append(a.id, [{ kind: 'user', text: 'later activity on a' }]) // a is now newest
+  await store.flushPending() // index bumps are debounced after the first write-through (U18)
   let list = await store.list()
   expect(list[0].id).toBe(a.id)
 
@@ -108,4 +109,53 @@ test('rename, duplicate, and remove', async () => {
   await store.remove(s.id)
   expect(await store.get(s.id)).toBeNull()
   expect((await store.list()).map((m) => m.id)).toEqual([copy!.id])
+})
+
+
+// U18: the transcript append stays per-delta (durability), but the
+// pretty-printed index.json rewrite is debounced behind the first bump.
+test('N streamed appends -> first write-through + 1 debounced index write; append count unchanged', async () => {
+  const fast = new SessionStore(dir, () => clock++, 25)
+  const s = await fast.create({ workspaceId: 'hearth', cwd: '/repo', self: true })
+  await fast.append(s.id, [{ kind: 'user', text: 'kick off' }]) // first bump: write-through
+  const afterFirst = (await readFile(join(dir, 'index.json'), 'utf8')).length
+
+  const mtime0 = (await stat(join(dir, 'index.json'))).mtimeMs
+  for (let i = 0; i < 10; i++) {
+    await fast.append(s.id, [{ kind: 'update', update: { type: 'message', role: 'assistant', text: `tok${i}` } }])
+  }
+  // All 10 deltas are already durable in the transcript...
+  const lines = (await readFile(join(dir, 'transcripts', `${s.id}.jsonl`), 'utf8')).trim().split('\n')
+  expect(lines).toHaveLength(11)
+  // ...but the index has not been rewritten yet (still the write-through copy).
+  expect((await stat(join(dir, 'index.json'))).mtimeMs).toBe(mtime0)
+
+  await new Promise((r) => setTimeout(r, 60)) // past the debounce window
+  const meta = (await fast.list())[0]
+  expect(meta.updatedAt).toBeGreaterThan(meta.createdAt)
+  expect(afterFirst).toBeGreaterThan(0)
+})
+
+test('a crash inside the debounce window still recovers the transcript from the append log', async () => {
+  const fast = new SessionStore(dir, () => clock++, 60_000) // window "never" flushes
+  const s = await fast.create({ workspaceId: 'hearth', cwd: '/repo', self: true })
+  await fast.append(s.id, [{ kind: 'user', text: 'question' }])
+  await fast.append(s.id, [{ kind: 'update', update: { type: 'message', role: 'assistant', text: 'mid-stream token' } }])
+
+  // "Crash": a fresh instance with no flush of the pending bump.
+  const reborn = new SessionStore(dir, () => clock++)
+  const detail = await reborn.get(s.id)
+  expect(detail?.entries).toHaveLength(2)
+  expect(detail?.meta.title).toBe('question') // first bump wrote through title + updatedAt
+})
+
+test('flushPending writes a debounced bump immediately (quit path)', async () => {
+  const slow = new SessionStore(dir, () => clock++, 60_000)
+  const s = await slow.create({ workspaceId: 'hearth', cwd: '/repo', self: true })
+  await slow.append(s.id, [{ kind: 'user', text: 'hello' }])
+  const t1 = (await slow.list())[0].updatedAt
+  await slow.append(s.id, [{ kind: 'update', update: { type: 'message', role: 'assistant', text: 'tok' } }])
+  expect((await slow.list())[0].updatedAt).toBe(t1) // still debounced
+  await slow.flushPending()
+  expect((await slow.list())[0].updatedAt).toBeGreaterThan(t1)
 })
