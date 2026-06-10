@@ -67,7 +67,10 @@ guardrails even while rewriting the rest of main.
   electron-vite's server. The packaged self-evolving build ships a Vite server
   and writes its URL to `.vite-dev-url` (port Stella's `dev-url.ts`).
 - `electron/main/ipc.ts` — the only surface the renderer can call. Every channel
-  is explicit and validated.
+  is explicit; workspace-rooted paths are validated against the registered
+  workspaces, and writes are tier-checked by the scope guard. Structured inputs
+  that reach disk (MCP servers, routines, soul config) are trusted as-shaped
+  today — runtime validation for those is tracked as audit unit U22.
 - `electron/main/agents/` — the ACP layer (see below).
 - `electron/main/self-mod/` — the self-evolution engine (see below).
 - `electron/main/micro-apps/` — scaffolding + lifecycle for embedded apps.
@@ -202,11 +205,36 @@ The tab set is a pure function of kind (`selectWorkbenchTabs` in
 
 ## State
 
-Port Stella's **asymmetric request-broadcast**: the renderer requests a state
-change over IPC, the main process applies it to the canonical copy and
-broadcasts the full state back to all windows. The renderer never applies
-optimistically. The active *view* lives in the TanStack router, not in shared
-state.
+Renderer-local, store-per-concern — there is exactly one window, so main holds
+no canonical UI state and nothing is broadcast. Five zustand stores own the
+renderer's state:
+
+- `useSession` (`src/app/session-store.ts`) — the active session, plan, review
+  count, and a family of **nonce counters** (`diffNonce`, `sessionsNonce`,
+  `promptRequest.nonce`). Cross-cutting refreshes are nonce-bump-and-refetch:
+  a mutation bumps the nonce, and whoever renders that data re-fetches over IPC
+  when the nonce changes. Not persisted.
+- `usePresence` (`src/app/presence-store.ts`) — per-session "what is the agent
+  doing" state, derived in the renderer from the `agent:update` stream by the
+  presence bridge. Persisted to **sessionStorage** so it survives a self-mod
+  renderer reload (the morph) but never a real app restart; transient busy
+  states are sanitized on rehydrate.
+- `useShell` (`src/shell/store.ts`) — UI chrome + user preferences (theme,
+  approval tier, panel layout). Persisted to **localStorage**.
+- `useTerminalBus` (`src/app/workbench/terminal-bus.ts`) — terminal panel ids.
+- `useToast` (`src/shell/toast.tsx`) — ephemeral notices.
+
+Writes that need main go over IPC and are applied **optimistically** where the
+UI benefits (e.g. the Composer's backend/model/mode pickers set local state,
+then fire the IPC call); durable truth (sessions, transcripts, secrets,
+routines) lives in main's stores on disk, and the renderer re-reads it on the
+next nonce bump rather than holding a synchronized copy. The active *view*
+lives in the TanStack router, not in shared state.
+
+Stella's **asymmetric request-broadcast** model (main-canonical state pushed to
+all windows) was considered and deliberately not built: Hearth is single-window,
+and the broadcast layer would be machinery without a consumer. If multi-window
+ever becomes real, revisit it then — the IPC boundary is already the right seam.
 
 ## What we deliberately do NOT do
 
