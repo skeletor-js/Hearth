@@ -8,6 +8,7 @@
 
 import { readdir, readFile as fsReadFile, writeFile as fsWriteFile, mkdir, stat } from 'node:fs/promises'
 import { resolve, relative, isAbsolute, dirname, sep } from 'node:path'
+import { classifyWrite } from '../self-mod/scope-guard.js'
 
 export interface FileEntry {
   name: string
@@ -61,4 +62,31 @@ export async function writeFile(root: string, rel: string, content: string): Pro
   const abs = safeJoin(root, rel)
   await mkdir(dirname(abs), { recursive: true }) // create parent dirs (e.g. a missing .hearth/)
   await fsWriteFile(abs, content, 'utf8')
+}
+
+/** Stable message prefix the renderer matches on (only the message crosses IPC). */
+export const PROTECTED_WRITE_MESSAGE = 'protected path — not editable'
+
+export class ProtectedPathError extends Error {
+  readonly code = 'protected-path'
+}
+
+/**
+ * writeFile, hard-denying the scope guard's `blocked`/`protected` tiers when
+ * the target workspace IS the Hearth repo (audit U4; owner decision: no escape
+ * hatch). The check lives server-side because an agent driving
+ * eval_js → window.hearth.files.write arrives on the same IPC channel as the
+ * Files tab — the UI can't be the guarantee. Other workspaces keep plain
+ * safeJoin containment: their files aren't Hearth's guardrails.
+ * Case-folded root compare for the same reason scope-guard normalizes paths
+ * (macOS case-insensitive filesystem).
+ */
+export async function writeFileGuarded(root: string, repoRoot: string, rel: string, content: string): Promise<void> {
+  if (resolve(root).toLowerCase() === resolve(repoRoot).toLowerCase()) {
+    const decision = classifyWrite(rel, repoRoot)
+    if (decision.tier !== 'canvas') {
+      throw new ProtectedPathError(`${PROTECTED_WRITE_MESSAGE}: ${rel}${decision.reason ? ` (${decision.reason})` : ''}`)
+    }
+  }
+  return writeFile(root, rel, content)
 }
