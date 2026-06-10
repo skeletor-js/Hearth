@@ -12,6 +12,7 @@
 
 import { join } from 'node:path'
 import { startRendererServer } from './packaging/renderer-server.js'
+import { log } from './log.js'
 
 export interface RendererTarget {
   /** Load via loadURL when set (dev, or the packaged Vite server). */
@@ -45,7 +46,7 @@ export async function prepareRenderer(repoRoot: string): Promise<PreparedRendere
     const server = await startRendererServer(repoRoot)
     return { target: { url: server.url }, close: server.close }
   } catch (err) {
-    console.error('[hearth] renderer Vite server failed to start; falling back to static bundle:', err)
+    log.error('[hearth] renderer Vite server failed to start; falling back to static bundle:', err)
     return { target: { file: staticIndex() }, close: NOOP_CLOSE }
   }
 }

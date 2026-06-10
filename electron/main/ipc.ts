@@ -49,6 +49,7 @@ import { readActiveConnectors } from './mcp/active-connectors.js'
 import { resolveAuth, apiKeyRefs } from './agents/auth-config.js'
 import { hasStoredLogin } from './agents/login-presence.js'
 import { listSkills, globalSkillsDir, setSkillEnabled } from './skills/list.js'
+import { logFile } from './log.js'
 
 let runSeq = 0
 
@@ -518,6 +519,13 @@ export function registerIpc(services: MainServices): void {
   // Data & privacy: reveal the on-disk data folder backing the "stays on your
   // machine" claim.
   ipcMain.handle(HEARTH_CHANNELS.dataReveal, () => void shell.openPath(app.getPath('userData')))
+
+  // Reveal the main-process log (U14) — the field artifact when something
+  // misbehaved while nobody watched.
+  ipcMain.handle(HEARTH_CHANNELS.logsReveal, () => {
+    const f = logFile()
+    if (f) shell.showItemInFolder(f)
+  })
 
   // About: app + adapter/SDK versions.
   ipcMain.handle(HEARTH_CHANNELS.aboutInfo, () => {

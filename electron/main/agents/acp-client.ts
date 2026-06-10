@@ -28,6 +28,7 @@ import {
 import type { AgentSession, AuthMethodInfo, AvailableCommand, PermissionRequest, PromptCapabilities, PromptImage, SessionUpdate } from './agent.js'
 import { normalizeConfigOptions, normalizeModels, normalizeModes, translatePermission, translateUpdate } from './acp-translate.js'
 import { buildChildEnv, shouldScrubInheritedKeys } from './child-env.js'
+import { log } from '../log.js'
 
 export interface AdapterSpec {
   /** Executable + args that launch the ACP adapter, e.g. the claude-agent-acp bin. */
@@ -104,12 +105,13 @@ export class AcpClient {
         this.child = null
         this.connection = null
       }
-      if (code) console.error(`[acp adapter] exited with code ${code}${signal ? ` (${signal})` : ''}`)
+      if (code) log.error(`[acp adapter] exited with code ${code}${signal ? ` (${signal})` : ''}`)
     })
 
     // Surface adapter stderr to our log; it's where the agent reports its own
-    // startup/auth failures.
-    child.stderr.on('data', (b: Buffer) => process.stderr.write(`[acp adapter] ${b}`))
+    // startup/auth failures. Routed through the file logger (U14) so field
+    // failures are diagnosable after the fact.
+    child.stderr.on('data', (b: Buffer) => log.error(`[acp adapter] ${String(b).trimEnd()}`))
 
     // ndJsonStream(output, input): output is the writable we send to (the
     // adapter's stdin), input is the readable we receive on (its stdout).

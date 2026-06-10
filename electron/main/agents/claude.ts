@@ -6,6 +6,7 @@
 // their env. We never originate or store a credential. See COMPLIANCE.md.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { log } from '../log.js'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { type AdapterSpec, type McpServerProvider } from './acp-client.js'
@@ -66,7 +67,7 @@ function ensureParseablePermissionMode(cwd: string): void {
   }
   current.permissions = { ...current.permissions, defaultMode: 'default' }
   writeFileSync(localFile, JSON.stringify(current, null, 2) + '\n')
-  console.log('[hearth] shielded adapter from unparseable permissions.defaultMode (set local baseline "default")')
+  log.info('[hearth] shielded adapter from unparseable permissions.defaultMode (set local baseline "default")')
 }
 
 function resolveAdapter(config: AgentConfig): AdapterSpec {

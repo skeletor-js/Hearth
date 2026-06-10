@@ -249,6 +249,7 @@ const api = {
   },
   data: {
     reveal: (): Promise<void> => ipcRenderer.invoke(CH.dataReveal),
+    revealLogs: (): Promise<void> => ipcRenderer.invoke(CH.logsReveal),
   },
   about: {
     info: (): Promise<{
