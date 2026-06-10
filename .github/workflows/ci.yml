@@ -1,0 +1,33 @@
+# Gate every push and PR on the checks that are already green locally.
+# --ignore-scripts skips the electron-rebuild postinstall (node-pty native
+# build) — no test imports node-pty, and a signed dist build is a separate
+# manual concern, not this gate. macOS runner: dugite and packaging code
+# assume a mac host.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile --ignore-scripts
+      # --ignore-scripts also skips dugite's postinstall, but the self-mod git
+      # tests need its embedded git binary — fetch just that one.
+      - run: node node_modules/dugite/script/download-git.js
+      # routeTree.gen.ts is gitignored; a clean checkout has none until the
+      # TanStack plugin runs, so generate it before typecheck.
+      - run: bun run routes:gen
+      - run: bun run typecheck
+      - run: bun run lint
+      - run: bun test

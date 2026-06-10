@@ -16,6 +16,7 @@
     "publish:update": "node scripts/publish-update.mjs",
     "payload:build": "node scripts/build-workspace-payload.mjs",
     "release": "bun run dist && bun run publish:update && bun run payload:build",
+    "routes:gen": "bun scripts/generate-route-tree.mjs",
     "create-app": "node scripts/create-micro-app.mjs",
     "view": "node scripts/view-app.mjs",
     "postinstall": "electron-rebuild -f -w node-pty"
@@ -80,6 +81,7 @@
     "@electron/notarize": "^2.5.0",
     "@electron/rebuild": "^4.0.4",
     "@tanstack/react-router": "^1.168.0",
+    "@tanstack/router-generator": "1.167.12",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
