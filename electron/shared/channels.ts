@@ -115,6 +115,7 @@ export const HEARTH_CHANNELS = {
   skillsSetEnabled: 'skills:set-enabled',
   // data & privacy.
   dataReveal: 'data:reveal', // open the data folder
+  logsReveal: 'logs:reveal', // open the main-process log file (U14)
   // about: app + adapter/SDK versions.
   aboutInfo: 'about:info',
   // auto-update: query current status, force a check, apply (restart into the

@@ -101,6 +101,11 @@ export function DataPrivacySection() {
           Reveal data folder
         </Btn>
       </SetRow>
+      <SetRow k="Diagnostics" h="The main-process log — what happened when nobody was watching.">
+        <Btn variant="ghost" icon="file-text" onClick={() => void window.hearth.data.revealLogs()}>
+          Reveal log
+        </Btn>
+      </SetRow>
     </>
   )
 }

@@ -36,6 +36,7 @@ import { CapabilityStore } from './micro-apps/capabilities.js'
 import { CredentialBroker } from './micro-apps/broker.js'
 import { installSessionPolicy } from './micro-apps/session-policy.js'
 import { startAgentBridge } from './agent-bridge.js'
+import { initLogger, log } from './log.js'
 import { ensureWorkspaceFromManifest, NeedsNetworkError, ShellTooOldError } from './packaging/payload.js'
 import { createBootstrapSplash, type BootstrapSplash } from './packaging/bootstrap-splash.js'
 
@@ -95,6 +96,12 @@ function makeAgentFactory(secrets: SecretStore, mcp: McpRegistry, repoRoot: stri
 }
 
 async function bootstrap(): Promise<void> {
+  // Field observability (U14): a rotating file log + last-resort handlers, so a
+  // crash while nobody watched leaves something readable (Settings → Reveal log).
+  initLogger(join(app.getPath('userData'), 'Logs'))
+  process.on('uncaughtException', (err) => log.error('[hearth] uncaughtException:', err))
+  process.on('unhandledRejection', (reason) => log.error('[hearth] unhandledRejection:', reason))
+
   // Resolve the writable repo root first — in a packaged build this seeds the
   // userData workspace, which everything below (watchdog revert, self-mod, Vite
   // root) operates on.
@@ -111,7 +118,7 @@ async function bootstrap(): Promise<void> {
       // Surface the failure (don't swallow it) but still fall through: the attempt
       // was recorded, so a repeat hits the cap and drops to safe-mode rather than
       // looping forever.
-      console.error(`[hearth] boot auto-revert failed for commit ${decision.commit}:`, err)
+      log.error(`[hearth] boot auto-revert failed for commit ${decision.commit}:`, err)
     }
     if (app.isPackaged) {
       app.relaunch()
@@ -119,7 +126,7 @@ async function bootstrap(): Promise<void> {
       return
     }
   } else if (decision.action === 'safe-mode') {
-    console.error(`[hearth] self-mod restart bricked boot repeatedly (commit ${decision.commit}); booting current state without further auto-revert`)
+    log.error(`[hearth] self-mod restart bricked boot repeatedly (commit ${decision.commit}); booting current state without further auto-revert`)
   }
 
   // Resolve how the renderer loads: dev server URL, or (packaged) our own Vite
@@ -134,7 +141,7 @@ async function bootstrap(): Promise<void> {
   // plan) so it's ready to cover a structural-self-mod reload with no black flash.
   // It stays invisible + click-through until the morph controller drives it.
   const overlay = new OverlayWindow(renderer.target)
-  overlay.webContents().once('did-finish-load', () => console.log('[hearth] morph overlay ready'))
+  overlay.webContents().once('did-finish-load', () => log.info('[hearth] morph overlay ready'))
   app.once('before-quit', () => overlay.destroy())
 
   // B7: if a packaged relaunch armed a restart cover (a main/preload self-mod), show
@@ -180,7 +187,7 @@ async function bootstrap(): Promise<void> {
   // app's own (untrusted) Vite config.
   const capabilities = new CapabilityStore(join(dataDir, 'capabilities.json'))
   const broker = new CredentialBroker({ capabilities, secrets })
-  broker.start().catch((err) => console.error('[hearth] credential broker failed to start:', err))
+  broker.start().catch((err) => log.error('[hearth] credential broker failed to start:', err))
   app.once('before-quit', () => void broker.close())
   installSessionPolicy(session.defaultSession, {
     shellOrigins: [renderer.target.url ?? 'file://'],
@@ -191,7 +198,7 @@ async function bootstrap(): Promise<void> {
   // The host owns the current backend and swaps it at runtime; IPC talks to it,
   // not to a fixed agent. Starts on the env-selected backend (default Claude).
   const host = new AgentHost(makeAgentFactory(secrets, mcp, REPO_ROOT), resolveBackend())
-  console.log(`[hearth] backend: ${host.kind}`)
+  log.info(`[hearth] backend: ${host.kind}`)
 
   const hmr = new HmrController(
     {
@@ -243,7 +250,7 @@ async function bootstrap(): Promise<void> {
   let rendererCrashes = 0
   window.webContents.on('render-process-gone', (_e, details) => {
     rendererCrashes++
-    console.error(`[hearth] renderer gone (${details.reason}); recovery attempt ${rendererCrashes}`)
+    log.error(`[hearth] renderer gone (${details.reason}); recovery attempt ${rendererCrashes}`)
     if (rendererCrashes <= 2 && !window.isDestroyed()) window.webContents.reload()
   })
   window.webContents.on('did-finish-load', () => {

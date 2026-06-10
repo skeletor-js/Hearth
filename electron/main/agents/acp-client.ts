@@ -28,6 +28,7 @@ import {
 import type { AgentExitInfo, AgentSession, AuthMethodInfo, AvailableCommand, PermissionRequest, PromptCapabilities, PromptImage, SessionUpdate } from './agent.js'
 import { normalizeConfigOptions, normalizeModels, normalizeModes, translatePermission, translateUpdate } from './acp-translate.js'
 import { buildChildEnv, shouldScrubInheritedKeys } from './child-env.js'
+import { log } from '../log.js'
 
 export interface AdapterSpec {
   /** Executable + args that launch the ACP adapter, e.g. the claude-agent-acp bin. */
@@ -108,12 +109,13 @@ export class AcpClient {
         this.connection = null
         for (const h of this.exitHandlers) h({ code, signal })
       }
-      if (code) console.error(`[acp adapter] exited with code ${code}${signal ? ` (${signal})` : ''}`)
+      if (code) log.error(`[acp adapter] exited with code ${code}${signal ? ` (${signal})` : ''}`)
     })
 
     // Surface adapter stderr to our log; it's where the agent reports its own
-    // startup/auth failures.
-    child.stderr.on('data', (b: Buffer) => process.stderr.write(`[acp adapter] ${b}`))
+    // startup/auth failures. Routed through the file logger (U14) so field
+    // failures are diagnosable after the fact.
+    child.stderr.on('data', (b: Buffer) => log.error(`[acp adapter] ${String(b).trimEnd()}`))
 
     // ndJsonStream(output, input): output is the writable we send to (the
     // adapter's stdin), input is the readable we receive on (its stdout).
@@ -144,9 +146,12 @@ export class AcpClient {
         try {
           const optionId = await this.askPermission(params.sessionId, translatePermission(params))
           return { outcome: { outcome: 'selected', optionId } }
-        } catch {
-          // No handler, or the user dismissed/cancelled — tell the agent to stop
-          // waiting rather than hang the turn.
+        } catch (err) {
+          // No handler, the user dismissed, or the handler itself blew up — tell
+          // the agent to stop waiting rather than hang the turn, but log the
+          // cause first (U20): a handler bug used to be indistinguishable from a
+          // deliberate dismissal.
+          log.error(`[hearth] permission request ${params.toolCall?.toolCallId ?? ''} resolved as cancelled:`, err)
           return { outcome: { outcome: 'cancelled' } }
         }
       },

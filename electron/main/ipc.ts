@@ -50,6 +50,7 @@ import { readActiveConnectors } from './mcp/active-connectors.js'
 import { resolveAuth, apiKeyRefs } from './agents/auth-config.js'
 import { hasStoredLogin } from './agents/login-presence.js'
 import { listSkills, globalSkillsDir, setSkillEnabled } from './skills/list.js'
+import { log, logFile } from './log.js'
 
 export { HEARTH_CHANNELS }
 
@@ -314,7 +315,13 @@ export function registerIpc(services: MainServices): void {
     // unknown cwd is dropped rather than spawned at an arbitrary directory.
     void at(p.cwd)
       .then((cwd) => terminals.create(p.id, cwd, p.cols, p.rows))
-      .catch(() => window.webContents.send(HEARTH_CHANNELS.terminalExit, { id: p.id }))
+      .catch((err) => {
+        // A dead pane must explain itself (U20): log the cause and hand the
+        // renderer a reason to print instead of a blank exited terminal.
+        const reason = String(err instanceof Error ? err.message : err)
+        log.error(`[hearth] terminal create failed (id ${p.id}, cwd ${p.cwd ?? '<repo>'}):`, reason)
+        window.webContents.send(HEARTH_CHANNELS.terminalExit, { id: p.id, reason })
+      })
   })
   ipcMain.on(HEARTH_CHANNELS.terminalWrite, (_e, p: { id: string; data: string }) => terminals.write(p.id, p.data))
   ipcMain.on(HEARTH_CHANNELS.terminalResize, (_e, p: { id: string; cols: number; rows: number }) =>
@@ -419,7 +426,12 @@ export function registerIpc(services: MainServices): void {
     if (auth.mode === 'api-key' && auth.source === 'secret') {
       // Our stored key — we can actually clear it, then rebuild so the change takes.
       secrets.delete(apiKeyRefs(kind).secretKey)
-      if (kind === host.kind) await host.reconnect().catch(() => {})
+      if (kind === host.kind)
+        await host.reconnect().catch((err) => {
+          // Best-effort by design (status below reports truthfully), but the
+          // failure itself must not vanish (U20).
+          log.error('[hearth] post-logout reconnect failed:', err)
+        })
       window.webContents.send(HEARTH_CHANNELS.authChanged, await authStatusFor(kind, false))
       return { cleared: true }
     }
@@ -461,6 +473,13 @@ export function registerIpc(services: MainServices): void {
   // Data & privacy: reveal the on-disk data folder backing the "stays on your
   // machine" claim.
   ipcMain.handle(HEARTH_CHANNELS.dataReveal, () => void shell.openPath(app.getPath('userData')))
+
+  // Reveal the main-process log (U14) — the field artifact when something
+  // misbehaved while nobody watched.
+  ipcMain.handle(HEARTH_CHANNELS.logsReveal, () => {
+    const f = logFile()
+    if (f) shell.showItemInFolder(f)
+  })
 
   // About: app + adapter/SDK versions.
   ipcMain.handle(HEARTH_CHANNELS.aboutInfo, () => {
