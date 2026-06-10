@@ -1,6 +1,7 @@
 import js from '@eslint/js'
 import tseslint from 'typescript-eslint'
 import globals from 'globals'
+import reactHooks from 'eslint-plugin-react-hooks'
 
 // Flat config (ESLint 9+). Type-aware linting is intentionally off: this repo is
 // edited at runtime by an agent, and project-service type-checking on every lint
@@ -23,6 +24,18 @@ export default tseslint.config(
   {
     files: ['src/**/*.{ts,tsx}'],
     languageOptions: { globals: { ...globals.browser } },
+  },
+  {
+    // Hooks correctness (U19): rules-of-hooks as an error; exhaustive-deps as a
+    // warning — this codebase deliberately uses []-dep subscriptions that read
+    // live state via getState() (stale-closure-safe), and those are judgment
+    // calls, not violations to auto-fail on.
+    files: ['src/**/*.{ts,tsx}'],
+    plugins: { 'react-hooks': reactHooks },
+    rules: {
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+    },
   },
   {
     files: ['electron/**/*.{ts,mjs}', 'scripts/**/*.mjs', '*.config.{ts,js}'],
