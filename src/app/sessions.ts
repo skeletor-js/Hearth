@@ -36,6 +36,9 @@ export function openSession(m: SessionMeta): ActiveSession {
 export async function runBackgroundTurn(meta: SessionMeta, text: string): Promise<void> {
   useSession.getState().bumpSessions() // surface the new session in the rail
   usePresence.getState().markSending(meta.id)
+  // Headless turn: its permission asks fail closed instead of waiting on a
+  // user who isn't there (U7) — see permission-policy.ts.
+  usePresence.getState().markBackgroundRun(meta.id)
   persistEntries(meta.id, [{ kind: 'user', text }])
   try {
     await window.hearth.agent.prompt(meta.id, meta.cwd, text)

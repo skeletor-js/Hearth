@@ -3,6 +3,7 @@ import { useShell } from '@/shell/store'
 import { toast } from '@/shell/toast'
 import { useSession } from './session-store'
 import { usePresence } from './presence-store'
+import { decidePermission } from './permission-policy'
 
 // The single shell-level owner of the agent stream for PRESENCE — folds every
 // `agent:update` and `permission:request` into the presence store keyed by the
@@ -37,22 +38,28 @@ export function usePresenceBridge(): void {
 
     const offPermission = window.hearth.permission.onRequest(({ sessionId, req }) => {
       if (!sessionId) return
-      // Command-approval tiers (Settings → Agent). 'always' prompts for every ask;
-      // 'commands' prompts only for shell/edit and silently approves reads/MCP;
-      // 'auto' approves everything. Source-mutating shell is already auto-rejected
-      // upstream in main. When no non-reject option exists, surface it rather than guess.
-      const mode = useShell.getState().approval
-      const mustPrompt = mode === 'always' || (mode === 'commands' && req.category !== 'other')
-      const surface = () => {
-        usePresence.getState().setPermission(sessionId, req)
-        // Nudge when the ask belongs to a session the user isn't looking at — the
-        // inline ApproveCard would otherwise be hidden. The WaitingBanner deep-links.
-        if (useSession.getState().active?.id !== sessionId) toast('An agent needs your approval')
+      // The decision logic (approval tiers + the U7 headless fail-closed rule)
+      // lives in permission-policy.ts; this just supplies context and acts.
+      const presence = usePresence.getState()
+      const decision = decidePermission(req, {
+        mode: useShell.getState().approval,
+        isActiveSession: useSession.getState().active?.id === sessionId,
+        isBackgroundRun: presence.byId[sessionId]?.backgroundRun ?? false,
+      })
+      if (decision.action === 'respond') {
+        window.hearth.permission.respond(req.id, decision.optionId)
+        if (decision.reason === 'fail-closed') {
+          // A headless run declined something nobody was there to approve —
+          // flag the run for a look rather than letting "done" hide it.
+          presence.flagAttention(sessionId, `Declined unattended: ${req.title}`)
+          toast('A routine declined a permission while unattended')
+        }
+        return
       }
-      if (mustPrompt) return surface()
-      const allow = req.options.find((o) => o.kind === 'allow') ?? req.options.find((o) => o.kind === 'allow-always')
-      if (allow) window.hearth.permission.respond(req.id, allow.id)
-      else surface()
+      presence.setPermission(sessionId, req)
+      // Nudge when the ask belongs to a session the user isn't looking at — the
+      // inline ApproveCard would otherwise be hidden. The WaitingBanner deep-links.
+      if (useSession.getState().active?.id !== sessionId) toast('An agent needs your approval')
     })
 
     return () => {
