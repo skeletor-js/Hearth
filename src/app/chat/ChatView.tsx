@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentKind, PermissionRequest, PromptImage, SessionUpdate } from '../../../electron/shared/protocol'
 import { FlameMark, ThinkingEmber } from '@/shell/Mascot'
 import { Icon } from '@/shell/Icon'
@@ -83,6 +83,10 @@ export function ChatView() {
   const turnStart = useRef(0) // wall-clock turn start, for the "Worked · Ns" badge
   const scrollRef = useRef<HTMLDivElement>(null)
   const openRightTab = useShell((s) => s.openRightTab)
+  // Stable handlers: MessageView is memoized (U11), and a per-render closure
+  // would force every message to re-render on every streamed token anyway.
+  const openReview = useCallback(() => openRightTab('review'), [openRightTab])
+  const openPlan = useCallback(() => openRightTab('plan'), [openRightTab])
   const active = useSession((s) => s.active)
   // Busy + the pending permission ask are derived from presence (the bridge owns the
   // stream and folds them in by sessionId), so they survive switching sessions away
@@ -449,8 +453,8 @@ export function ChatView() {
                 busy={busy}
                 isLast={i === msgs.length - 1}
                 onRetry={!busy && i === msgs.length - 1 && m.role === 'hearth' && lastUserText ? () => void send(lastUserText) : undefined}
-                onOpenReview={() => openRightTab('review')}
-                onOpenPlan={() => openRightTab('plan')}
+                onOpenReview={openReview}
+                onOpenPlan={openPlan}
               />
             ))
           )}
@@ -469,7 +473,9 @@ export function ChatView() {
   )
 }
 
-function MessageView({
+// Memoized (U11): the reducer replaces only the tail message, so every earlier
+// message keeps identity and skips re-render while the last one streams.
+const MessageView = memo(function MessageView({
   m,
   backend,
   busy,
@@ -550,7 +556,7 @@ function MessageView({
         </div>
       )}
       {m.blocks.map((b, i) => {
-        if (b.kind === 'text') return <div key={i} className="msg-body" onClick={handleCodeCopyClick} dangerouslySetInnerHTML={{ __html: renderMd(b.text) }} />
+        if (b.kind === 'text') return <TextBlock key={i} text={b.text} />
         if (b.kind === 'planref')
           return (
             <div key={i} className="wb-ref" onClick={onOpenPlan}>
@@ -580,7 +586,15 @@ function MessageView({
       })}
     </div>
   )
-}
+})
+
+// One markdown parse per distinct block text (U11): finished blocks have stable
+// text, so only the still-streaming block re-parses per delta. DOMPurify stays
+// on every agent-content sink (inside renderMd).
+const TextBlock = memo(function TextBlock({ text }: { text: string }) {
+  const html = useMemo(() => renderMd(text), [text])
+  return <div className="msg-body" onClick={handleCodeCopyClick} dangerouslySetInnerHTML={{ __html: html }} />
+})
 
 function ApproveCard({ req, onAnswer }: { req: PermissionRequest; onAnswer: (optionId: string) => void }) {
   const primary = req.options.find((o) => o.kind === 'allow' || o.kind === 'allow-always')
