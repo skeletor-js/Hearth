@@ -15,6 +15,13 @@ type Phase =
   | { kind: 'ready'; url: string }
   | { kind: 'error'; message: string }
 
+// Grace window before a left-behind tool's Vite server is stopped (U15). Long
+// enough that a quick back-nav reattaches to the live server; short enough
+// that closed tools don't each leak a ~100-200 MB node process. Module-scoped
+// so the timer survives the component unmounting (that's the whole point).
+const STOP_GRACE_MS = 30_000
+const pendingStops = new Map<string, ReturnType<typeof setTimeout>>()
+
 export function MicroAppFrame({ name }: { name: string }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'checking' })
 
@@ -23,6 +30,13 @@ export function MicroAppFrame({ name }: { name: string }) {
 
   useEffect(() => {
     let cancelled = false
+    // Back within the grace window: cancel the pending stop and reuse the
+    // still-running server (start() below returns its existing URL).
+    const pending = pendingStops.get(name)
+    if (pending) {
+      clearTimeout(pending)
+      pendingStops.delete(name)
+    }
     setPhase({ kind: 'checking' })
     ;(async () => {
       try {
@@ -41,6 +55,14 @@ export function MicroAppFrame({ name }: { name: string }) {
     })()
     return () => {
       cancelled = true
+      // Leaving the tool: stop its server after the grace window unless the
+      // frame remounts first (the effect above cancels the timer). App quit
+      // still stops everything via stopAllMicroApps in main.
+      const timer = setTimeout(() => {
+        pendingStops.delete(name)
+        void window.hearth.microApps.stop(name)
+      }, STOP_GRACE_MS)
+      pendingStops.set(name, timer)
     }
   }, [name, gen])
 
