@@ -6,7 +6,8 @@ import { useShell } from './store'
 import { Btn, Status, CopyCommand } from '@/app/settings/controls'
 import { startSession } from '@/app/sessions'
 import type { AgentKind, AuthState } from '../../electron/shared/protocol'
-import type { Workspace } from '../../electron/main/workspaces/registry'
+import { useWorkspaces } from '@/app/use-workspaces'
+import { useSession } from '@/app/session-store'
 
 /** Signed in via the CLI's own login, a stored/env API key, or a live connection. */
 function authed(s?: AuthState): boolean {
@@ -26,7 +27,7 @@ export function Onboarding() {
   const { setOnboarded } = useShell()
   const [step, setStep] = useState(0)
   const [backend, setBackend] = useState<AgentKind>('claude')
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const workspaces = useWorkspaces()
   const [wsId, setWsId] = useState<string | null>(null)
   const [authStates, setAuthStates] = useState<Partial<Record<AgentKind, AuthState>>>({})
   const [loginCmd, setLoginCmd] = useState('')
@@ -36,10 +37,6 @@ export function Onboarding() {
 
   useEffect(() => {
     void window.hearth.agent.getBackend().then(setBackend)
-    void window.hearth.workspaces.list().then((l) => {
-      setWorkspaces(l)
-      setWsId(l[0]?.id ?? null)
-    })
     for (const b of BACKENDS) void refreshAuth(b.id)
     return window.hearth.auth.onChanged((st) => setAuthStates((s) => ({ ...s, [st.kind]: st })))
   }, [])
@@ -57,7 +54,7 @@ export function Onboarding() {
   const openFolder = async () => {
     const ws = await window.hearth.workspaces.open()
     if (ws) {
-      setWorkspaces(await window.hearth.workspaces.list())
+      useSession.getState().bumpSessions() // the useWorkspaces hook refetches
       setWsId(ws.id)
     }
   }

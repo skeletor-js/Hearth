@@ -4,6 +4,7 @@ import { Icon } from '@/shell/Icon'
 import { toast } from '@/shell/toast'
 import type { Routine, RoutineSchedule } from '../../electron/shared/protocol'
 import type { Workspace } from '../../electron/main/workspaces/registry'
+import { useWorkspaces } from '@/app/use-workspaces'
 
 export const Route = createFileRoute('/routines')({ component: RoutinesScreen })
 
@@ -43,13 +44,12 @@ function when(at: number | null): string {
 
 function RoutinesScreen() {
   const [routines, setRoutines] = useState<Routine[] | null>(null)
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [adding, setAdding] = useState<{ preset?: RoutinePreset } | null>(null)
 
+  const workspaces = useWorkspaces()
   const reload = () => void window.hearth.routines.list().then(setRoutines)
   useEffect(() => {
     reload()
-    void window.hearth.workspaces.list().then(setWorkspaces)
   }, [])
 
   const toggle = async (r: Routine) => {

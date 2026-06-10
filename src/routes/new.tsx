@@ -5,6 +5,7 @@ import { AsciiEmber } from '@/shell/Mascot'
 import { startSession, openSession } from '@/app/sessions'
 import type { Workspace } from '../../electron/main/workspaces/registry'
 import type { SessionMeta } from '../../electron/main/sessions/store'
+import { useWorkspaces } from '@/app/use-workspaces'
 
 export const Route = createFileRoute('/new')({ component: HomeScreen })
 
@@ -17,11 +18,10 @@ const STARTERS: [string, string, string][] = [
 
 function HomeScreen() {
   const navigate = useNavigate()
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const workspaces = useWorkspaces()
   const [recent, setRecent] = useState<SessionMeta[]>([])
 
   useEffect(() => {
-    void window.hearth.workspaces.list().then(setWorkspaces)
     void window.hearth.sessions.list().then((l) => setRecent(l.slice(0, 6)))
   }, [])
 

@@ -5,7 +5,7 @@ import { useShell, ACCENTS, ACCENT_OPTIONS } from './store'
 import { startSession } from '@/app/sessions'
 import { useSession } from '@/app/session-store'
 import { readScratchpad } from '@/app/scratchpad'
-import type { Workspace } from '../../electron/main/workspaces/registry'
+import { useWorkspaces } from '@/app/use-workspaces'
 
 interface Command {
   id: string
@@ -38,12 +38,8 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const padNonEmpty = useSession((s) => s.scratchpadNonEmpty)
   const requestPrompt = useSession((s) => s.requestPrompt)
   const [q, setQ] = useState('')
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const workspaces = useWorkspaces()
   const [sel, setSel] = useState(0)
-
-  useEffect(() => {
-    void window.hearth.workspaces.list().then(setWorkspaces)
-  }, [])
 
   const commands = useMemo<Command[]>(() => {
     const go = (to: string) => () => void navigate({ to })
