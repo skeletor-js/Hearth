@@ -15,6 +15,7 @@ import { LiveTrace } from './trace'
 import { persistEntries } from '../transcript-persist'
 import { renderMd, handleCodeCopyClick } from './markdown'
 import { applyUpdate, EMPTY_TRANSCRIPT, type Msg, type TranscriptState } from './transcript-reducer'
+import { pendingAfterSnapshot } from './replay-merge'
 
 // Recap chip helpers (P5).
 function fmtDuration(ms: number): string {
@@ -47,6 +48,12 @@ export function ChatView() {
   const [backend, setBackend] = useState<AgentKind>('claude')
   const nextId = useRef(0)
   const turnStart = useRef(0) // wall-clock turn start, for the "Worked · Ns" badge
+  // Non-null while the active session's transcript is replaying: live updates
+  // buffer here so history can never append below live content (U6/R-F8).
+  const replayBuffer = useRef<SessionUpdate[] | null>(null)
+  // Stick-to-bottom only when the user is already there (U6/R-F3): updated by
+  // real scroll events, so it reflects the position BEFORE content grows.
+  const atBottom = useRef(true)
   const scrollRef = useRef<HTMLDivElement>(null)
   const openRightTab = useShell((s) => s.openRightTab)
   // Stable handlers: MessageView is memoized (U11), and a per-render closure
@@ -123,7 +130,10 @@ export function ChatView() {
       // turn would corrupt the on-screen transcript. See docs/PRESENCE.md.
       const a = useSession.getState().active
       if (!a || (sessionId && sessionId !== a.id)) return
-      apply(update)
+      // Mid-replay live updates buffer for ordering; persistence below stays
+      // immediate (the snapshot/buffer overlap is deduped at flush).
+      if (replayBuffer.current) replayBuffer.current.push(update)
+      else apply(update)
       // W9: agent-supplied session title — rename the active session + refresh the
       // rail. Not persisted as a transcript entry (it's metadata, not chat content).
       if (update.type === 'info') {
@@ -153,18 +163,25 @@ export function ChatView() {
   useEffect(() => {
     let live = true
     setTranscript(EMPTY_TRANSCRIPT)
+    replayBuffer.current = []
+    atBottom.current = true // a fresh session opens pinned to the latest content
     if (!active) {
       void ensureActiveSession()
       return
     }
     void window.hearth.sessions.get(active.id).then((detail) => {
-      if (!live) return
+      if (!live) return // a newer switch owns the buffer now
       if (detail) {
         for (const e of detail.entries) {
           if (e.kind === 'user') pushUser(e.text, undefined, false)
           else apply(e.update, true)
         }
       }
+      // Flush live updates that arrived during the replay — minus the front
+      // already persisted into the snapshot we just replayed (see replay-merge).
+      const buffered = replayBuffer.current ?? []
+      replayBuffer.current = null
+      for (const u of pendingAfterSnapshot(buffered, detail?.entries ?? [])) apply(u)
       // A prompt queued elsewhere (e.g. a History revert conflict) sends here,
       // after the transcript is restored, through the normal send path.
       const pending = useSession.getState().pendingPrompt
@@ -179,8 +196,20 @@ export function ChatView() {
   }, [active?.id])
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
+    if (atBottom.current) scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
   }, [msgs, permission, busy])
+
+  // Track whether the user sits at the bottom (scroll events fire for user and
+  // programmatic scrolling alike, and BEFORE any content growth re-measures).
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const onScroll = () => {
+      atBottom.current = el.scrollTop + el.clientHeight >= el.scrollHeight - 40
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
 
   // Seed the scratchpad-has-content flag for the chip, even if the tab was never
   // opened this session. The tab keeps it fresh while open.
