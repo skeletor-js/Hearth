@@ -3,7 +3,7 @@
 
 import { contextBridge, ipcRenderer } from 'electron'
 import { HEARTH_CHANNELS as CH } from '../shared/channels.js'
-import type { ActiveConnectors, AgentKind, AgentUpdatePayload, AuthState, AvailableCommand, BackendStatus, BrowserCursorEvent, ConfigOption, CreateRoutineInput, ModelState, ModeState, PermissionRequestPayload, PromptCapabilities, PromptImage, Routine, UpdateStatus, Usage, WorkspaceKind } from '../shared/protocol.js'
+import type { ActiveConnectors, AgentErrorPayload, AgentKind, AgentUpdatePayload, AuthState, AvailableCommand, BackendStatus, BrowserCursorEvent, ConfigOption, CreateRoutineInput, ModelState, ModeState, PermissionRequestPayload, PromptCapabilities, PromptImage, Routine, UpdateStatus, Usage, WorkspaceKind } from '../shared/protocol.js'
 import type { SecretInfo } from '../main/secrets/secret-store.js'
 import type { McpServerConfig, McpServerInput } from '../main/mcp/registry.js'
 import type { ProbeResult } from '../main/mcp/probe.js'
@@ -82,8 +82,8 @@ const api = {
       ipcRenderer.on(CH.agentUpdate, handler)
       return () => void ipcRenderer.off(CH.agentUpdate, handler)
     },
-    onError: (cb: (message: string) => void) => {
-      const handler = (_e: unknown, message: string) => cb(message)
+    onError: (cb: (payload: AgentErrorPayload) => void) => {
+      const handler = (_e: unknown, payload: AgentErrorPayload) => cb(payload)
       ipcRenderer.on(CH.agentError, handler)
       return () => void ipcRenderer.off(CH.agentError, handler)
     },

@@ -27,9 +27,11 @@ export function usePresenceBridge(): void {
       }
     })
 
-    // agent:error carries no sessionId — attribute it to the active session.
-    const offError = window.hearth.agent.onError(() => {
-      const id = useSession.getState().active?.id
+    // agent:error is attributed to the session whose turn was in flight when the
+    // adapter died (U5); a null sessionKey (boot-time connect failure) falls back
+    // to the active session so it still surfaces somewhere visible.
+    const offError = window.hearth.agent.onError(({ sessionKey }) => {
+      const id = sessionKey ?? useSession.getState().active?.id
       if (id) usePresence.getState().setError(id)
     })
 

@@ -292,7 +292,12 @@ export function ChatView() {
         useSession.getState().refreshDiff() // working tree may have changed this turn
       }
     })
-    const offError = window.hearth.agent.onError((message) => {
+    const offError = window.hearth.agent.onError(({ sessionKey, message }) => {
+      // Only this session's error belongs in this transcript; a background
+      // session's death shows through presence (rail / banner), not here. A
+      // null sessionKey (boot-time connect failure) lands on the open session.
+      const a = useSession.getState().active
+      if (sessionKey && sessionKey !== a?.id) return
       openText.current = false
       setMsgs((p) => [...p, { id: id(), role: 'system', text: `agent error: ${message}` }])
     })

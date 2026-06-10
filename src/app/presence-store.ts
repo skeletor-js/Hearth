@@ -150,7 +150,9 @@ export const usePresence = create<PresenceState>()(
   setPermission: (id, req) =>
     patch(set, id, (p) => ({ ...p, pendingPermission: req, status: req ? 'waiting' : p.status === 'waiting' ? 'working' : p.status })),
 
-  setError: (id) => patch(set, id, (p) => ({ ...p, status: 'error', finishedAt: Date.now() })),
+  // A dead agent can't act on an answer, so any pending ask is cleared with the
+  // error rather than left dangling as a ghost ApproveCard (U5).
+  setError: (id) => patch(set, id, (p) => ({ ...p, status: 'error', pendingPermission: null, finishedAt: Date.now() })),
 
   settle: (id) => patch(set, id, (p) => (p.status === 'done' ? { ...p, status: 'idle' } : p)),
 

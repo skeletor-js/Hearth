@@ -25,7 +25,7 @@ import {
   type RequestPermissionResponse,
   type SessionNotification,
 } from '@agentclientprotocol/sdk'
-import type { AgentSession, AuthMethodInfo, AvailableCommand, PermissionRequest, PromptCapabilities, PromptImage, SessionUpdate } from './agent.js'
+import type { AgentExitInfo, AgentSession, AuthMethodInfo, AvailableCommand, PermissionRequest, PromptCapabilities, PromptImage, SessionUpdate } from './agent.js'
 import { normalizeConfigOptions, normalizeModels, normalizeModes, translatePermission, translateUpdate } from './acp-translate.js'
 import { buildChildEnv, shouldScrubInheritedKeys } from './child-env.js'
 
@@ -53,6 +53,7 @@ export class AcpClient {
   private connection: ClientSideConnection | null = null
   private cwd = process.cwd()
   private updateHandlers = new Set<UpdateHandler>()
+  private exitHandlers = new Set<(info: AgentExitInfo) => void>()
   private permissionHandler: PermissionHandler | null = null
   // tool-call id -> title, so tool_call_update notifications (which omit the
   // title) can be displayed with a name. See acp-translate.translateUpdate.
@@ -96,13 +97,16 @@ export class AcpClient {
     })
     this.child = child
 
-    // If the adapter dies (crash, or we killed it), null the connection so the next
-    // call fails fast with a clear "not connected" instead of rejecting deep in the
-    // SDK against a dead pipe.
+    // If the adapter dies, null the connection so the next call fails fast with a
+    // clear "not connected" instead of rejecting deep in the SDK against a dead
+    // pipe. `this.child === child` distinguishes an UNEXPECTED death (crash/kill)
+    // from a deliberate dispose() — dispose nulls this.child before killing — so
+    // exit handlers fire only for the former (U5: the host evicts dead state).
     child.on('exit', (code, signal) => {
       if (this.child === child) {
         this.child = null
         this.connection = null
+        for (const h of this.exitHandlers) h({ code, signal })
       }
       if (code) console.error(`[acp adapter] exited with code ${code}${signal ? ` (${signal})` : ''}`)
     })
@@ -298,6 +302,12 @@ export class AcpClient {
     return () => this.updateHandlers.delete(cb)
   }
 
+  /** Unexpected adapter death (never fired by a deliberate dispose). */
+  onExit(cb: (info: AgentExitInfo) => void): () => void {
+    this.exitHandlers.add(cb)
+    return () => this.exitHandlers.delete(cb)
+  }
+
   onPermission(cb: PermissionHandler): void {
     this.permissionHandler = cb
   }
@@ -316,6 +326,7 @@ export class AcpClient {
     this.child = null
     this.connection = null
     this.updateHandlers.clear()
+    this.exitHandlers.clear()
     this.toolTitles.clear()
     if (!child || child.exitCode !== null || child.signalCode !== null) return
     killTree(child, 'SIGTERM')

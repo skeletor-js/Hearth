@@ -46,6 +46,12 @@ export interface NewSessionOptions {
   cwd?: string
 }
 
+/** How the adapter subprocess died (mirrors child_process 'exit'). */
+export interface AgentExitInfo {
+  code: number | null
+  signal: string | null
+}
+
 export interface Agent {
   readonly kind: AgentKind
   /** Spawn the ACP adapter subprocess and complete the ACP handshake. */
@@ -57,6 +63,10 @@ export interface Agent {
   resumeSession?(acpSessionId: string, opts?: NewSessionOptions): Promise<AgentSession>
   /** Streamed updates for a session id. */
   onUpdate(cb: (sessionId: string, update: SessionUpdate) => void): () => void
+  /** Fires when the adapter subprocess dies UNEXPECTEDLY (crash/kill — never a
+   * deliberate dispose), so the host can evict dead state and surface it.
+   * Optional — in-process fakes have no subprocess to die. */
+  onExit?(cb: (info: AgentExitInfo) => void): () => void
   /** Resolve a permission request by option id. */
   onPermission(cb: (sessionId: string, req: PermissionRequest) => Promise<string>): void
   /** Prompt capabilities the adapter advertised at initialize (image / context). */

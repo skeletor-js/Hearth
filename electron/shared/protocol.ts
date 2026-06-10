@@ -259,6 +259,14 @@ export interface PermissionRequestPayload {
   req: PermissionRequest
 }
 
+/** Payload shape for the `agent:error` channel (main → renderer). `sessionKey`
+ * attributes the failure to the renderer session whose turn was in flight when
+ * the adapter died; null means a global failure (e.g. connect at boot). */
+export interface AgentErrorPayload {
+  sessionKey: string | null
+  message: string
+}
+
 /**
  * Auto-update status surfaced to the renderer (main → renderer on `update:status`,
  * also returned by `update:get`). `state` drives the UI; the rest is detail.
