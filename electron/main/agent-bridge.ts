@@ -83,6 +83,19 @@ export function startAgentBridge(deps: AgentBridgeDeps, repoRoot: string): () =>
 
   const server: Server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost')
+    // DNS-rebinding defense (U8): a browser script on attacker.example whose DNS
+    // flips to 127.0.0.1 reaches this port, but carries Host: attacker.example
+    // and an Origin header. Serve only requests addressed to exactly this bound
+    // loopback address from non-browser clients (our MCP child / scripts send no
+    // Origin). Defense-in-depth alongside the bearer token, which such a page
+    // still couldn't read.
+    const addr = server.address()
+    const expectedHost = typeof addr === 'object' && addr ? `127.0.0.1:${addr.port}` : null
+    if (!expectedHost || req.headers.host !== expectedHost || req.headers.origin !== undefined) {
+      res.writeHead(403, { 'Content-Type': 'text/plain' })
+      res.end('forbidden')
+      return
+    }
     if (req.headers['x-hearth-token'] !== token) {
       res.writeHead(401, { 'Content-Type': 'text/plain' })
       res.end('unauthorized')
