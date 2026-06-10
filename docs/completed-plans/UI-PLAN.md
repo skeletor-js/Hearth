@@ -1,7 +1,7 @@
 # Hearth — UI Build Plan & Tracker (the real product UI)
 
 Target: build the Hearth UI from the Claude Design handoff (mirrored in
-[design/handoff/](../../design/handoff/) — read `Hearth.html` for the full token + CSS
+[docs/design/](../design/) — read `Hearth.html` for the full token + CSS
 system, then the `hearth-*.jsx` components). Supersedes the minimal v1 shell. v1
 plumbing ([BUILD-PLAN.md](../BUILD-PLAN.md)) — ACP client, permission flow, self-mod,
 backend switch, agent see/control MCP — stays; this re-skins the renderer and adds
@@ -95,7 +95,7 @@ Every phase must end green and be checkpoint-committed. A task is "done" only wh
   (check the dev log + a `view_app` screenshot).
 - **Visual gate (for UI tasks):** drive `view_app` (and `view_app?path=/route` for
   specific screens; `HEARTH_FAKE_AGENT=1` for chat states without burning tokens)
-  and compare against the matching handoff screen (`design/handoff/`). Fidelity is
+  and compare against the matching handoff screen (`docs/design/`). Fidelity is
   judged on layout, spacing, type scale, color tokens, light AND dark. Flag any
   deliberate deviation. A human eyeballs fidelity at each phase checkpoint.
 - **TDD where logic exists** (IPC, stores, diff parsing, session/workspace model,

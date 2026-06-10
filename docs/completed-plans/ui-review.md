@@ -7,7 +7,7 @@ live `getComputedStyle` reads, across `/ /new /chat /search /history /settings` 
 git/env panel, command palette, right panel). Computed-style reads let me verify
 exact token values and WCAG ratios on the running app, not from source guesses.
 
-Rulers: `design/handoff/Hearth.html` and `src/styles/hearth.css` (the `--t-*` scale,
+Rulers: `docs/design/Hearth.html` and `src/styles/hearth.css` (the `--t-*` scale,
 semantic colors, accent `#C8542B`, `--shadow-sm/md/lg`). Core question: does the live
 app honor its own system, or drift?
 
