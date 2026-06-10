@@ -11,24 +11,10 @@ import { Composer } from './Composer'
 import { humanizePermission } from './permission-verbs'
 import { SaveAsTool } from './SaveAsTool'
 import { toast } from '@/shell/toast'
-import { LiveTrace, inferKind, type DiffRow, type TraceResult, type TraceStep } from './trace'
+import { LiveTrace } from './trace'
 import { persistEntries } from '../transcript-persist'
 import { renderMd, handleCodeCopyClick } from './markdown'
-
-type Block =
-  | { kind: 'text'; text: string }
-  | { kind: 'trace'; steps: TraceStep[]; result?: TraceResult; edits: number; turnMs?: number }
-  | { kind: 'planref'; done: number; total: number }
-type Msg =
-  | { id: number; role: 'user'; text: string; images?: PromptImage[] }
-  | { id: number; role: 'hearth'; blocks: Block[] }
-  | { id: number; role: 'system'; text: string }
-
-const MAX_DIFF_ROWS = 60
-
-function basename(p: string): string {
-  return p.split('/').pop() || p
-}
+import { applyUpdate, EMPTY_TRANSCRIPT, type Msg, type TranscriptState } from './transcript-reducer'
 
 // Recap chip helpers (P5).
 function fmtDuration(ms: number): string {
@@ -55,31 +41,11 @@ function copyText(text: string): void {
   }
 }
 
-function diffRows(oldText: string | null, newText: string): { add: number; del: number; rows: DiffRow[] } {
-  const dels = oldText ? oldText.split('\n') : []
-  const adds = newText.split('\n')
-  const rows: DiffRow[] = []
-  let ln = 1
-  for (const code of dels) {
-    if (rows.length >= MAX_DIFF_ROWS) break
-    rows.push({ t: 'del', code, ln: ln++ })
-  }
-  ln = 1
-  for (const code of adds) {
-    if (rows.length >= MAX_DIFF_ROWS) break
-    rows.push({ t: 'add', code, ln: ln++ })
-  }
-  const dropped = dels.length + adds.length - rows.length
-  if (dropped > 0) rows.push({ t: 'ctx', code: `… ${dropped} more lines` })
-  return { add: newText === '' ? 0 : adds.length, del: oldText ? dels.length : 0, rows }
-}
-
 export function ChatView() {
-  const [msgs, setMsgs] = useState<Msg[]>([])
+  const [transcript, setTranscript] = useState<TranscriptState>(EMPTY_TRANSCRIPT)
+  const msgs = transcript.msgs
   const [backend, setBackend] = useState<AgentKind>('claude')
   const nextId = useRef(0)
-  const openText = useRef(false) // last hearth block is a coalescing text block
-  const openThought = useRef(false) // streaming a single reasoning block (coalesce deltas)
   const turnStart = useRef(0) // wall-clock turn start, for the "Worked · Ns" badge
   const scrollRef = useRef<HTMLDivElement>(null)
   const openRightTab = useShell((s) => s.openRightTab)
@@ -123,154 +89,29 @@ export function ChatView() {
   const pushUser = (text: string, images?: PromptImage[], spawnTail = true) => {
     const uid = id()
     const hid = spawnTail ? id() : null
-    setMsgs((p) => {
-      const out: Msg[] = [...p, { id: uid, role: 'user', text, images }]
+    setTranscript((p) => {
+      const out: Msg[] = [...p.msgs, { id: uid, role: 'user', text, images }]
       if (hid !== null) out.push({ id: hid, role: 'hearth', blocks: [] })
-      return out
+      return { ...p, msgs: out }
     })
   }
 
   // Ensure there's a hearth message at the tail to receive stream blocks. `freshId`
   // is pre-allocated by the caller (outside the updater) and used only if a new tail
   // is needed; reusing the existing tail just leaves a harmless id gap.
-  const withHearthTail = (prev: Msg[], freshId: number): [Msg[], Extract<Msg, { role: 'hearth' }>] => {
-    const last = prev[prev.length - 1]
-    if (last?.role === 'hearth') return [prev, last]
-    const fresh: Msg = { id: freshId, role: 'hearth', blocks: [] }
-    return [[...prev, fresh], fresh as Extract<Msg, { role: 'hearth' }>]
-  }
-
+  // The fold itself lives in transcript-reducer.ts (pure, unit-tested — U12);
+  // this just supplies the pre-minted tail id + clock context. setPlan is passed
+  // as the plan sink so the reducer stays dependency-free.
   const apply = (u: SessionUpdate, replay = false) => {
     const freshTailId = id()
-    setMsgs((prev0) => {
-      const [prev, tail] = withHearthTail(prev0, freshTailId)
-      const blocks = tail.blocks
-      const lastBlock = blocks[blocks.length - 1]
-      // Any non-thought update ends the current reasoning run.
-      if (u.type !== 'thought') openThought.current = false
-
-      const replaceTail = (newBlocks: Block[]): Msg[] => {
-        const next = [...prev]
-        next[next.length - 1] = { ...tail, blocks: newBlocks }
-        return next
-      }
-      const ensureTrace = (): { steps: TraceStep[]; rebuild: (steps: TraceStep[], edits?: number) => Msg[] } => {
-        if (lastBlock?.kind === 'trace') {
-          const tb = lastBlock
-          return {
-            steps: tb.steps,
-            rebuild: (steps, edits = tb.edits) => replaceTail([...blocks.slice(0, -1), { ...tb, steps, edits }]),
-          }
-        }
-        return {
-          steps: [],
-          rebuild: (steps, edits = 0) => replaceTail([...blocks, { kind: 'trace', steps, edits }]),
-        }
-      }
-
-      switch (u.type) {
-        case 'message': {
-          if (openText.current && lastBlock?.kind === 'text') {
-            return replaceTail([...blocks.slice(0, -1), { kind: 'text', text: lastBlock.text + u.text }])
-          }
-          openText.current = true
-          return replaceTail([...blocks, { kind: 'text', text: u.text }])
-        }
-        case 'plan': {
-          openText.current = false
-          useSession.getState().setPlan(u.entries)
-          const done = u.entries.filter((e) => e.status === 'completed').length
-          const ref: Block = { kind: 'planref', done, total: u.entries.length }
-          const pi = blocks.findIndex((b) => b.kind === 'planref')
-          if (pi >= 0) {
-            const next = [...blocks]
-            next[pi] = ref
-            return replaceTail(next)
-          }
-          return replaceTail([...blocks, ref])
-        }
-        case 'thought': {
-          openText.current = false
-          const { steps, rebuild } = ensureTrace()
-          const last = steps[steps.length - 1]
-          // Coalesce streaming deltas of one reasoning block into a single step
-          // instead of spawning a node per chunk.
-          if (openThought.current && last?.kind === 'think') {
-            const next = [...steps]
-            next[next.length - 1] = {
-              ...last,
-              title: last.title + u.text,
-              thinkMs: last.startedAt ? Date.now() - last.startedAt : last.thinkMs,
-            }
-            return rebuild(next)
-          }
-          openThought.current = true
-          return rebuild([...steps, { kind: 'think', status: 'done', title: u.text, startedAt: replay ? undefined : Date.now() }])
-        }
-        case 'tool-call': {
-          openText.current = false
-          // The agent's internal tool-discovery is plumbing, not a user-facing step.
-          if (/^tool\s*search$/i.test(u.title.trim())) return prev
-          const { steps, rebuild } = ensureTrace()
-          const i = steps.findIndex((s) => s.toolId === u.id)
-          if (i >= 0) {
-            const next = [...steps]
-            next[i] = { ...next[i], title: u.title, status: u.status, kind: next[i].kind ?? inferKind(u.title) }
-            return rebuild(next)
-          }
-          return rebuild([...steps, { toolId: u.id, kind: inferKind(u.title), status: u.status, title: u.title }])
-        }
-        case 'diff': {
-          openText.current = false
-          const curEdits = lastBlock?.kind === 'trace' ? lastBlock.edits : 0
-          const { steps, rebuild } = ensureTrace()
-          const d = diffRows(u.oldText, u.newText)
-          const diff = { path: u.path, add: d.add, del: d.del, rows: d.rows }
-          // Attach to the most recent step (the tool-call that just produced it).
-          if (steps.length && steps[steps.length - 1].kind !== 'think') {
-            const next = [...steps]
-            const s = next[next.length - 1]
-            next[next.length - 1] = { ...s, kind: 'edit', diff }
-            return rebuild(next, curEdits + 1)
-          }
-          return rebuild([...steps, { kind: 'edit', status: 'done', title: `Edit ${basename(u.path)}`, diff }], curEdits + 1)
-        }
-        case 'commands':
-          // The agent's advertised slash commands / skills are captured for
-          // Settings, never rendered into the chat transcript.
-          return prev
-        case 'mode':
-        case 'config':
-        case 'usage':
-        case 'info':
-          // Session mode / config / usage / info updates aren't chat content — the
-          // composer popover (mode/config/usage) and the onUpdate effect (info →
-          // session title) consume them. Ignore in the transcript reducer.
-          return prev
-        case 'end': {
-          openText.current = false
-          // Attach a result summary to the turn's last trace block (a closing
-          // message block may sit after it).
-          let ti = -1
-          for (let i = blocks.length - 1; i >= 0; i--) {
-            if (blocks[i].kind === 'trace') {
-              ti = i
-              break
-            }
-          }
-          if (ti < 0) return prev
-          const tb = blocks[ti] as Extract<Block, { kind: 'trace' }>
-          const turnMs = replay ? tb.turnMs : turnStart.current ? Date.now() - turnStart.current : tb.turnMs
-          const result =
-            tb.edits > 0 && !tb.result
-              ? { text: `Applied changes to ${tb.edits} file${tb.edits > 1 ? 's' : ''}`, hasDiff: true }
-              : tb.result
-          const next = [...blocks]
-          next[ti] = { ...tb, result, turnMs }
-          return replaceTail(next)
-        }
-      }
-    })
+    setTranscript((prev) =>
+      applyUpdate(prev, u, {
+        freshTailId,
+        replay,
+        turnStartAt: turnStart.current,
+        onPlan: (entries) => useSession.getState().setPlan(entries),
+      }),
+    )
   }
 
   useEffect(() => {
@@ -297,8 +138,8 @@ export function ChatView() {
       }
     })
     const offError = window.hearth.agent.onError((message) => {
-      openText.current = false
-      setMsgs((p) => [...p, { id: id(), role: 'system', text: `agent error: ${message}` }])
+      const sid = id()
+      setTranscript((p) => ({ ...p, openText: false, msgs: [...p.msgs, { id: sid, role: 'system', text: `agent error: ${message}` }] }))
     })
     return () => {
       offBe()
@@ -311,8 +152,7 @@ export function ChatView() {
   // exists on first entry. Replaying through `apply` rebuilds the surface exactly.
   useEffect(() => {
     let live = true
-    setMsgs([])
-    openText.current = false
+    setTranscript(EMPTY_TRANSCRIPT)
     if (!active) {
       void ensureActiveSession()
       return
@@ -362,7 +202,7 @@ export function ChatView() {
 
   const send = async (text: string, images?: PromptImage[]) => {
     const a = useSession.getState().active ?? (await ensureActiveSession())
-    openText.current = false
+    setTranscript((p) => (p.openText ? { ...p, openText: false } : p))
     pushUser(text, images)
     usePresence.getState().markSending(a.id)
     turnStart.current = Date.now()
@@ -379,7 +219,8 @@ export function ChatView() {
         useSession.getState().setLastSelfEdit({ commit: result.commit, subject: text, changedPaths: result.changedPaths })
       }
     } catch (e) {
-      setMsgs((p) => [...p, { id: id(), role: 'system', text: `failed to send: ${String(e)}` }])
+      const fid = id()
+      setTranscript((p) => ({ ...p, msgs: [...p.msgs, { id: fid, role: 'system', text: `failed to send: ${String(e)}` }] }))
       usePresence.getState().setError(a.id)
     }
   }
