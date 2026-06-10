@@ -45,3 +45,38 @@ test('a valid token passes the auth gate (then routes normally)', async () => {
   const res = await fetch(`${base}/nonexistent`, { headers: { 'x-hearth-token': token } })
   expect(res.status).toBe(404)
 })
+
+// U8: DNS-rebinding defense — only requests addressed to exactly the bound
+// loopback host, with no browser Origin, get past the front door.
+test('a valid token with a foreign Host (rebinding shape) is rejected', async () => {
+  const { base, token } = await boot()
+  const res = await fetch(`${base}/snapshot`, {
+    headers: { 'x-hearth-token': token, host: 'attacker.example' },
+  })
+  expect(res.status).toBe(403)
+})
+
+test('a valid token with a browser Origin present is rejected', async () => {
+  const { base, token } = await boot()
+  const res = await fetch(`${base}/snapshot`, {
+    headers: { 'x-hearth-token': token, origin: 'https://attacker.example' },
+  })
+  expect(res.status).toBe(403)
+})
+
+test('correct Host + valid token is served exactly as before', async () => {
+  const { base, token } = await boot()
+  // bun's fetch sets Host to the URL authority (127.0.0.1:<port>) by default.
+  const res = await fetch(`${base}/nonexistent`, { headers: { 'x-hearth-token': token } })
+  expect(res.status).toBe(404)
+})
+
+test('a wrong Host with a wrong token still fails closed (403 before 401)', async () => {
+  const { base } = await boot()
+  const res = await fetch(`${base}/eval`, {
+    method: 'POST',
+    headers: { host: 'attacker.example' },
+    body: JSON.stringify({ code: '1' }),
+  })
+  expect(res.status).toBe(403)
+})
