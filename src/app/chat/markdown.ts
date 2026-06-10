@@ -34,7 +34,10 @@ renderer.code = ({ text, lang }: { text: string; lang?: string }) => {
   const language = lang && hljs.getLanguage(lang) ? lang : ''
   let body: string
   try {
-    body = language ? hljs.highlight(text, { language }).value : hljs.highlightAuto(text).value
+    // No highlightAuto fallback (U11): auto-detection runs every registered
+    // grammar over the block — the most expensive path in the per-token
+    // re-parse — for a cosmetic guess. Unlabeled fences render escaped.
+    body = language ? hljs.highlight(text, { language }).value : escapeHtml(text)
   } catch {
     body = escapeHtml(text)
   }
