@@ -177,8 +177,8 @@ const api = {
       ipcRenderer.on(CH.terminalData, h)
       return () => void ipcRenderer.off(CH.terminalData, h)
     },
-    onExit: (cb: (id: string) => void) => {
-      const h = (_e: unknown, p: { id: string }) => cb(p.id)
+    onExit: (cb: (id: string, reason?: string) => void) => {
+      const h = (_e: unknown, p: { id: string; reason?: string }) => cb(p.id, p.reason)
       ipcRenderer.on(CH.terminalExit, h)
       return () => void ipcRenderer.off(CH.terminalExit, h)
     },

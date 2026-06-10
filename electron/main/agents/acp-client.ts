@@ -142,9 +142,12 @@ export class AcpClient {
         try {
           const optionId = await this.askPermission(params.sessionId, translatePermission(params))
           return { outcome: { outcome: 'selected', optionId } }
-        } catch {
-          // No handler, or the user dismissed/cancelled — tell the agent to stop
-          // waiting rather than hang the turn.
+        } catch (err) {
+          // No handler, the user dismissed, or the handler itself blew up — tell
+          // the agent to stop waiting rather than hang the turn, but log the
+          // cause first (U20): a handler bug used to be indistinguishable from a
+          // deliberate dismissal.
+          log.error(`[hearth] permission request ${params.toolCall?.toolCallId ?? ''} resolved as cancelled:`, err)
           return { outcome: { outcome: 'cancelled' } }
         }
       },

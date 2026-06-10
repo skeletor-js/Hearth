@@ -47,8 +47,8 @@ export function TerminalTab() {
     const offData = window.hearth.terminal.onData((tid, data) => {
       if (tid === id) term.write(data)
     })
-    const offExit = window.hearth.terminal.onExit((tid) => {
-      if (tid === id) term.write('\r\n\x1b[2m[process exited]\x1b[0m\r\n')
+    const offExit = window.hearth.terminal.onExit((tid, reason) => {
+      if (tid === id) term.write(`\r\n\x1b[2m[${reason ? `failed to start: ${reason}` : 'process exited'}]\x1b[0m\r\n`)
     })
     const inputSub = term.onData((data) => window.hearth.terminal.write(id, data))
 
