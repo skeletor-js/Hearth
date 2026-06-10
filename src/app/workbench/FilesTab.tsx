@@ -55,6 +55,8 @@ export function FilesTab() {
   const [newPath, setNewPath] = useState<string | null>(null)
   // Editor change-reveal (P7): live-reload + flash when the agent edits the open file.
   const [diskChanged, setDiskChanged] = useState(false)
+  // A rejected write (e.g. protected-island path, U4) — surfaced, not swallowed.
+  const [writeError, setWriteError] = useState<string | null>(null)
   const cmRef = useRef<ReactCodeMirrorRef>(null)
   const handledAt = useRef(0)
   // File pulse (P4): briefly light up tree rows as the agent touches them.
@@ -72,6 +74,7 @@ export function FilesTab() {
     setOpen(null)
     setFilter('')
     setNewPath(null)
+    setWriteError(null)
     void loadDir('')
   }, [cwd])
 
@@ -106,13 +109,25 @@ export function FilesTab() {
     setOpen({ ...fc, draft: fc.content })
     setPreview(false)
     setDiskChanged(false)
+    setWriteError(null)
     handledAt.current = Date.now() // don't replay this run's prior edits as a flash
   }
+
+  // IPC rejections arrive wrapped ("Error invoking remote method 'fs:write':
+  // Error: …") — keep only the actual message.
+  const writeErrorOf = (e: unknown): string =>
+    String(e instanceof Error ? e.message : e).replace(/^.*'fs:write': (Error: )?/, '')
 
   const createFile = async () => {
     const rel = (newPath ?? '').trim().replace(/^\/+/, '')
     if (!rel) return setNewPath(null)
-    await window.hearth.files.write(cwd, rel, '')
+    try {
+      await window.hearth.files.write(cwd, rel, '')
+    } catch (e) {
+      setWriteError(writeErrorOf(e))
+      return
+    }
+    setWriteError(null)
     setNewPath(null)
     await loadDir('') // refresh root so the new file (or its top dir) shows
     useSession.getState().refreshDiff()
@@ -183,10 +198,13 @@ export function FilesTab() {
   const save = async () => {
     if (!open || !dirty || saving) return
     setSaving(true)
+    setWriteError(null)
     try {
       await window.hearth.files.write(cwd, open.rel, open.draft)
       setOpen((o) => (o ? { ...o, content: o.draft } : o))
       useSession.getState().refreshDiff()
+    } catch (e) {
+      setWriteError(writeErrorOf(e))
     } finally {
       setSaving(false)
     }
@@ -219,6 +237,12 @@ export function FilesTab() {
             <button className="btn btn-sm btn-quiet" onClick={() => void reloadFromDisk()}>
               Reload
             </button>
+          </div>
+        )}
+        {writeError && (
+          <div className="disk-changed">
+            <Icon name="warning-circle" className="ico-13" />
+            <span>{writeError}</span>
           </div>
         )}
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
@@ -279,6 +303,12 @@ export function FilesTab() {
           <button className="btn btn-sm btn-primary" disabled={!newPath.trim()} onClick={() => void createFile()}>
             Create
           </button>
+        </div>
+      )}
+      {writeError && (
+        <div className="disk-changed">
+          <Icon name="warning-circle" className="ico-13" />
+          <span>{writeError}</span>
         </div>
       )}
       <div className="ftree">

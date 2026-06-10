@@ -15,7 +15,7 @@ import type { RoutineStore } from './routines/store.js'
 import type { RoutineScheduler } from './routines/scheduler.js'
 import type { Updater } from './updater.js'
 import type { CreateRoutineInput } from '../shared/protocol.js'
-import { listDir, readFile as fsReadFile, writeFile as fsWriteFile } from './fs/files.js'
+import { listDir, readFile as fsReadFile, writeFileGuarded } from './fs/files.js'
 import { TerminalManager } from './terminal/pty.js'
 import type { BrowserManager, Rect } from './browser/browser-view.js'
 import { SoulService, DEFAULT_SOUL, type SoulConfig } from './soul/soul.js'
@@ -398,8 +398,10 @@ export function registerIpc(services: MainServices): void {
   // against the registered workspaces — see `at` above).
   ipcMain.handle(HEARTH_CHANNELS.fsList, async (_e, cwd: string | undefined, rel?: string) => listDir(await at(cwd), rel))
   ipcMain.handle(HEARTH_CHANNELS.fsRead, async (_e, cwd: string | undefined, rel: string) => fsReadFile(await at(cwd), rel))
+  // Hard-denies island/blocked writes when the cwd is the Hearth repo (U4) —
+  // the Files tab and eval_js-driven writes are indistinguishable here.
   ipcMain.handle(HEARTH_CHANNELS.fsWrite, async (_e, cwd: string | undefined, rel: string, content: string) =>
-    fsWriteFile(await at(cwd), rel, content),
+    writeFileGuarded(await at(cwd), repoRoot, rel, content),
   )
 
   // Personality (soul) + memory. Personality is versioned in the repo
