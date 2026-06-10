@@ -4,11 +4,24 @@
 // from whichever agent is live and re-points them on switch. The per-window
 // session also lives here, so a switch transparently starts a fresh session.
 
-import type { Agent, AgentKind, AgentSession, AuthMethodInfo, AvailableCommand, ConfigOption, ModelState, ModeState, PermissionRequest, PromptCapabilities, PromptImage, SessionUpdate, Usage } from './agent.js'
+import type { Agent, AgentExitInfo, AgentKind, AgentSession, AuthMethodInfo, AvailableCommand, ConfigOption, ModelState, ModeState, PermissionRequest, PromptCapabilities, PromptImage, SessionUpdate, Usage } from './agent.js'
+
+/** Rejection for prompts in flight when the adapter subprocess died (U5) —
+ * typed so callers can distinguish a dead agent from an agent-reported error. */
+export class AgentDiedError extends Error {
+  constructor(
+    message: string,
+    readonly sessionKey: string,
+  ) {
+    super(message)
+    this.name = 'AgentDiedError'
+  }
+}
 
 export type AgentFactory = (kind: AgentKind) => Agent
 type UpdateHandler = (sessionId: string, update: SessionUpdate) => void
 type PermissionHandler = (sessionId: string, req: PermissionRequest) => Promise<string>
+type AgentExitHandler = (sessionKeys: string[], message: string) => void
 type ModelsHandler = (state: ModelState) => void
 type ModeHandler = (state: ModeState) => void
 type ConfigHandler = (options: ConfigOption[]) => void
@@ -31,8 +44,14 @@ export class AgentHost {
   private sessions = new Map<string, AgentSession>()
   private activeKey: string | null = null
   private offUpdate: (() => void) | null = null
+  private offExit: (() => void) | null = null
   private readonly updateHandlers = new Set<UpdateHandler>()
   private permissionHandler: PermissionHandler | null = null
+  // One in-flight prompt per renderer session key (turns serialize per cwd in
+  // ipc.ts); rejected with AgentDiedError when the adapter dies mid-turn so the
+  // turn settles (and ipc's finally still runs captureTurn) instead of hanging.
+  private readonly inFlightRejects = new Map<string, (err: Error) => void>()
+  private readonly exitHandlers = new Set<AgentExitHandler>()
   // Latest model state per backend kind (captured on session creation) + the
   // user's preferred model per kind (re-applied to new sessions of that kind).
   private modelsByKind = new Map<AgentKind, ModelState>()
@@ -69,6 +88,14 @@ export class AgentHost {
     this.permissionHandler = cb
   }
 
+  /** Fires after an UNEXPECTED adapter death, with the renderer session keys
+   * whose turns were in flight (empty when the agent died idle). Persisted
+   * across switches. */
+  onAgentExit(cb: AgentExitHandler): () => void {
+    this.exitHandlers.add(cb)
+    return () => this.exitHandlers.delete(cb)
+  }
+
   /** Spawn + connect the current backend (idempotent; retries after a failure). */
   connect(): Promise<Agent> {
     if (!this.ready) {
@@ -90,6 +117,9 @@ export class AgentHost {
           ? this.permissionHandler(key, req)
           : Promise.reject(new Error('no permission handler registered'))
       })
+      // Unexpected adapter death: evict the dead state so the next prompt
+      // reconnects fresh, and settle everything waiting on the dead process.
+      this.offExit = agent.onExit?.((info) => this.handleAgentExit(agent, info)) ?? null
       this.ready = agent.connect().then(
         () => agent,
         (err) => {
@@ -98,6 +128,8 @@ export class AgentHost {
           this.agent = null
           this.offUpdate?.()
           this.offUpdate = null
+          this.offExit?.()
+          this.offExit = null
           throw err
         },
       )
@@ -112,6 +144,19 @@ export class AgentHost {
   async prompt(text: string, opts?: { key?: string; cwd?: string; images?: PromptImage[]; resumeId?: string }): Promise<string> {
     const agent = await this.connect()
     const key = opts?.key ?? 'default'
+    // Race the WHOLE turn (session creation included — session/new spawns the
+    // CLI + MCP servers and can run for seconds) against adapter death: any SDK
+    // request pending on a dead pipe hangs forever, leaving the turn (and its
+    // finally cleanup in ipc.ts) stuck.
+    const died = new Promise<never>((_, reject) => this.inFlightRejects.set(key, reject))
+    try {
+      return await Promise.race([this.promptInner(agent, key, text, opts), died])
+    } finally {
+      this.inFlightRejects.delete(key)
+    }
+  }
+
+  private async promptInner(agent: Agent, key: string, text: string, opts?: { cwd?: string; images?: PromptImage[]; resumeId?: string }): Promise<string> {
     let session = this.sessions.get(key)
     if (!session) {
       // Resume real agent context when this renderer session has a prior ACP id and
@@ -149,6 +194,29 @@ export class AgentHost {
     this.activeKey = key
     await session.prompt(text, opts?.images)
     return session.id
+  }
+
+  /** Evict a dead agent's cached state and settle whatever waited on it. */
+  private handleAgentExit(agent: Agent, info: AgentExitInfo): void {
+    if (this.agent !== agent) return // already torn down / switched away
+    const message = `agent process exited unexpectedly${info.code !== null ? ` with code ${info.code}` : ''}${info.signal ? ` (${info.signal})` : ''}`
+    const dyingKeys = [...this.inFlightRejects.keys()]
+    // Evict before settling so anything re-entering (a retry prompt) rebuilds
+    // from scratch instead of reusing the dead connection.
+    this.offUpdate?.()
+    this.offUpdate = null
+    this.offExit?.()
+    this.offExit = null
+    this.agent = null
+    this.ready = null
+    this.sessions.clear()
+    this.activeKey = null
+    void agent.dispose().catch(() => {})
+    for (const [key, reject] of [...this.inFlightRejects]) {
+      this.inFlightRejects.delete(key)
+      reject(new AgentDiedError(message, key))
+    }
+    for (const h of this.exitHandlers) h(dyingKeys, message)
   }
 
   /** Map an ACP protocol session id back to the renderer session key that owns it.
@@ -323,6 +391,8 @@ export class AgentHost {
   private async teardown(): Promise<void> {
     this.offUpdate?.()
     this.offUpdate = null
+    this.offExit?.()
+    this.offExit = null
     const old = this.agent
     this.agent = null
     this.ready = null

@@ -121,29 +121,46 @@ export function registerIpc(services: MainServices): void {
 
   // Permission round-trip. A mid-turn ask blocks the agent until the renderer
   // answers, so we hold the resolver keyed by request id and complete it when
-  // permission:respond comes back. Without this the agent hangs forever.
-  const pendingPermissions = new Map<string, (optionId: string) => void>()
+  // permission:respond comes back. Without this the agent hangs forever. The
+  // session key rides along so an adapter death can settle the right asks (U5).
+  const pendingPermissions = new Map<string, { sessionId: string; resolve: (optionId: string) => void; reject: (err: Error) => void }>()
   host.onPermission(
     (sessionId, req) =>
-      new Promise<string>((resolve) => {
+      new Promise<string>((resolve, reject) => {
         // Source-write enforcement (W0b): auto-reject shell that mutates repo
         // source so writes are forced onto the mediated Edit/Write path. Pick the
         // request's reject option without bothering the user.
         if (req.command && isSourceMutatingShell(req.command)) {
-          const reject = req.options.find((o: PermissionRequest['options'][number]) => o.kind === 'reject')
-          if (reject) return resolve(reject.id)
+          const rejectOpt = req.options.find((o: PermissionRequest['options'][number]) => o.kind === 'reject')
+          if (rejectOpt) return resolve(rejectOpt.id)
         }
-        pendingPermissions.set(req.id, resolve)
+        pendingPermissions.set(req.id, { sessionId, resolve, reject })
         // sessionId is already the renderer session key (translated by the host), so
         // the renderer routes the ask (and its presence "waiting" state) correctly.
         window.webContents.send(HEARTH_CHANNELS.permissionRequest, { sessionId, req })
       }),
   )
   ipcMain.on(HEARTH_CHANNELS.permissionRespond, (_e, payload: { id: string; optionId: string }) => {
-    const resolve = pendingPermissions.get(payload.id)
-    if (resolve) {
+    const pending = pendingPermissions.get(payload.id)
+    if (pending) {
       pendingPermissions.delete(payload.id)
-      resolve(payload.optionId)
+      pending.resolve(payload.optionId)
+    }
+  })
+
+  // Adapter death (U5): settle every permission still waiting on the dead
+  // process (the rejection flows back as a 'cancelled' outcome — no resolver
+  // leak, no hung agent promise) and surface an error ATTRIBUTED to the
+  // session(s) whose turns were in flight, so a background/routine failure
+  // doesn't land on whatever session happens to be foreground.
+  host.onAgentExit((sessionKeys, message) => {
+    for (const [id, pending] of [...pendingPermissions]) {
+      pendingPermissions.delete(id)
+      pending.reject(new Error(message))
+    }
+    const targets: Array<string | null> = sessionKeys.length ? sessionKeys : [null]
+    for (const sessionKey of targets) {
+      window.webContents.send(HEARTH_CHANNELS.agentError, { sessionKey, message })
     }
   })
 

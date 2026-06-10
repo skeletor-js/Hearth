@@ -296,9 +296,13 @@ async function bootstrap(): Promise<void> {
   registerIpc({ repoRoot: REPO_ROOT, host, selfMod, workspaces, sessions, browser, window, secrets, mcp, capabilities, broker, routines, scheduler, updater })
 
   // Connect the current backend in the background; the UI renders immediately.
-  // A failed connect must surface, not crash boot.
+  // A failed connect must surface, not crash boot. No session owns a boot-time
+  // connect, so the error is global (sessionKey: null).
   host.connect().catch((err) => {
-    window.webContents.send('agent:error', String(err))
+    window.webContents.send(HEARTH_CHANNELS.agentError, {
+      sessionKey: null,
+      message: String(err instanceof Error ? err.message : err),
+    })
   })
 }
 
