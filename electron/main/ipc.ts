@@ -39,6 +39,7 @@ import { createOverlayClient } from './self-mod/overlay-client.js'
 import { isViteTrackablePath } from './self-mod/path-relevance.js'
 import { runTypecheck } from './self-mod/validate.js'
 import { isSourceMutatingShell } from './self-mod/shell-guard.js'
+import { TurnCoordinator } from './turn-coordinator.js'
 import { relative, isAbsolute } from 'node:path'
 import type { AgentHost } from './agents/agent-host.js'
 import type { AgentKind, AuthState, BackendStatus, PermissionRequest, WorkspaceKind } from '../shared/protocol.js'
@@ -49,8 +50,6 @@ import { readActiveConnectors } from './mcp/active-connectors.js'
 import { resolveAuth, apiKeyRefs } from './agents/auth-config.js'
 import { hasStoredLogin } from './agents/login-presence.js'
 import { listSkills, globalSkillsDir, setSkillEnabled } from './skills/list.js'
-
-let runSeq = 0
 
 export { HEARTH_CHANNELS }
 
@@ -147,98 +146,23 @@ export function registerIpc(services: MainServices): void {
     }
   })
 
-  // Serialize turns per working directory. Self-mod's dirty-baseline diffing
-  // (dirtyPaths before/after + the in-progress marker) assumes one turn at a time
-  // per repo, so two turns on the SAME cwd must not overlap; turns in DIFFERENT
-  // repos run concurrently (separate lock chains). A no-op under today's single-turn
-  // UI — it's the safety floor that lets background/routine turns run (P6 / #6).
-  const turnLocks = new Map<string, Promise<unknown>>()
-
+  // The turn lifecycle (recover → baseline → prompt → capture, with per-cwd
+  // serialization) lives in TurnCoordinator (U13) — unit-tested without
+  // Electron. This handler is pure transport.
+  const turns = new TurnCoordinator({
+    repoRoot,
+    host,
+    selfMod,
+    sessions,
+    runTracker,
+    overlay,
+    send: (channel, payload) => window.webContents.send(channel, payload),
+    typecheck: runTypecheck,
+  })
   ipcMain.handle(
     HEARTH_CHANNELS.agentPrompt,
-    async (_e, payload: { sessionId: string; cwd?: string; text: string; images?: import('../shared/protocol.js').PromptImage[] }) => {
-      const key = payload.sessionId || 'default'
-      const cwd = payload.cwd || repoRoot
-      const priorTurn = turnLocks.get(cwd) ?? Promise.resolve()
-      let releaseTurn!: () => void
-      const turnGate = new Promise<void>((r) => (releaseTurn = r))
-      turnLocks.set(cwd, priorTurn.then(() => turnGate))
-      await priorTurn.catch(() => {})
-      try {
-      // Recover an interrupted prior turn (crashed before captureTurn) before we
-      // baseline — commits its orphaned changes as a `recovered` run, never lost.
-      await selfMod.recoverIfIncomplete(key)
-      // Snapshot what's already dirty BEFORE the turn so captureTurn commits only
-      // what this turn changes — never the developer's pre-existing uncommitted work.
-      const before = await selfMod.dirtyPaths()
-      // Mint a run + write the in-progress marker, then prompt.
-      const runId = `run-${++runSeq}-${Date.now()}`
-      runTracker.beginRun(runId, key)
-      selfMod.beginTurn()
-      // Suppress Vite's autonomous full-reload for full-reload-tier files during the
-      // turn (B6); the change is applied at turn end under the morph cover (B5).
-      void overlay.turnStart()
-      // Resume real agent context for a reopened session: pass its stored ACP id
-      // (if any) so the host can loadSession instead of starting cold (W3).
-      const meta = await sessions.getMeta(key)
-      let result
-      try {
-        const acpId = await host.prompt(payload.text, {
-          key,
-          cwd: payload.cwd || repoRoot,
-          images: payload.images,
-          resumeId: meta?.acpSessionId,
-        })
-        // Persist the ACP session id on first turn so later reopens can resume it.
-        if (acpId && acpId !== meta?.acpSessionId) await sessions.setAcpSessionId(key, acpId)
-      } catch (err) {
-        // Adapters can reject with a JSON-RPC error object (not an Error), which
-        // serializes across IPC as "[object Object]". Normalize to a real Error
-        // with a readable message so the renderer shows the actual failure.
-        const message =
-          err instanceof Error
-            ? err.message
-            : typeof err === 'object' && err
-              ? (err as { message?: unknown }).message
-                ? String((err as { message: unknown }).message)
-                : JSON.stringify(err)
-              : String(err)
-        throw new Error(message)
-      } finally {
-        const ended = runTracker.endRun(runId)
-        // Apply the overlay batch (no-op for unpinned paths / single-writer turns).
-        void overlay.apply((ended?.groups ?? []).flatMap((g) => g.paths).filter(isViteTrackablePath))
-        window.webContents.send(HEARTH_CHANNELS.selfModActivity, { runId, sessionId: key, lanes: [], collisions: [] })
-        // captureTurn → HmrController.apply fires the morph for full-reload-tier
-        // edits. turnEnd lifts suppression after (the morph's own reload is explicit,
-        // not a Vite file-watch reload, so it isn't affected by the flag).
-        result = await selfMod.captureTurn(key, payload.text.slice(0, 72), before, ended ? { runId, groups: ended.groups } : undefined)
-        void overlay.turnEnd()
-      }
-      // W7: surface any writes the scope guard rejected (protected island / secrets)
-      // so the user knows the agent's edit there was undone, not silently dropped.
-      if (result?.rejectedPaths?.length) {
-        window.webContents.send(HEARTH_CHANNELS.selfModValidation, {
-          ok: false,
-          output: `Blocked edits to protected/secret paths (restored, not committed):\n${result.rejectedPaths.join('\n')}`,
-        })
-      }
-      // A restart-tier edit that failed the blocking typecheck (W6): surface it so
-      // the crash surface offers Undo/Repair instead of bricking on restart.
-      if (result?.blockedRestart) {
-        window.webContents.send(HEARTH_CHANNELS.selfModValidation, { ok: false, output: result.blockedRestart.output })
-      } else if (result && result.changedPaths.some((p) => isViteTrackablePath(p))) {
-        // Async validation gate (W5): typecheck renderer edits without blocking the
-        // turn; surface a failure for the crash surface / repair.
-        void runTypecheck(repoRoot).then((tc) => {
-          if (!tc.ok) window.webContents.send(HEARTH_CHANNELS.selfModValidation, tc)
-        })
-      }
-      return result
-      } finally {
-        releaseTurn()
-      }
-    },
+    (_e, payload: { sessionId: string; cwd?: string; text: string; images?: import('../shared/protocol.js').PromptImage[] }) =>
+      turns.runTurn(payload),
   )
   ipcMain.handle(HEARTH_CHANNELS.agentCancel, (_e, sessionId?: string) => host.cancel(sessionId))
 
