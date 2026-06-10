@@ -43,6 +43,12 @@ export interface SessionPresence {
   finishedAt: number | null
   /** Finished while this session was NOT the active one — drives the recap chip. */
   unread: boolean
+  /** This run was started headless (routine runner) — its permission asks fail
+   * closed instead of waiting on a user who isn't there (U7). */
+  backgroundRun: boolean
+  /** Why this run needs a human look (e.g. a fail-closed permission denial).
+   * Survives the turn ending — "done" is not the whole story. */
+  needsAttention: string | null
 }
 
 export const FRESH_PRESENCE: SessionPresence = {
@@ -54,6 +60,8 @@ export const FRESH_PRESENCE: SessionPresence = {
   startedAt: null,
   finishedAt: null,
   unread: false,
+  backgroundRun: false,
+  needsAttention: null,
 }
 
 const RECENT_MAX = 12
@@ -93,6 +101,10 @@ interface PresenceState {
    * turn that ends counts as unread (finished while the user was looking elsewhere). */
   applyUpdate: (id: string, u: SessionUpdate, isActive: boolean) => void
   setPermission: (id: string, req: PermissionRequest | null) => void
+  /** Mark a session's current turn as headless (routine-driven) — see U7. */
+  markBackgroundRun: (id: string) => void
+  /** Record that this run declined something unattended and needs a look. */
+  flagAttention: (id: string, reason: string) => void
   setError: (id: string) => void
   /** Settle a just-finished session from its brief 'done' flash back to idle. */
   settle: (id: string) => void
@@ -121,6 +133,9 @@ export const usePresence = create<PresenceState>()(
       startedAt: Date.now(),
       finishedAt: null,
       unread: false,
+      // A new turn starts interactive until the runner marks it otherwise;
+      // needsAttention survives (it's about a PRIOR run the user hasn't seen).
+      backgroundRun: false,
     })),
 
   applyUpdate: (id, u, isActive) =>
@@ -141,7 +156,9 @@ export const usePresence = create<PresenceState>()(
           return { ...p, recentFiles: [...p.recentFiles, rf].slice(-RECENT_MAX), edits: p.edits + 1 }
         }
         case 'end':
-          return { ...p, status: 'done', label: null, finishedAt: Date.now(), unread: !isActive && p.edits > 0 }
+          // unread already set mid-turn (e.g. a fail-closed denial, U7) survives
+          // the turn ending — don't recompute it away.
+          return { ...p, status: 'done', label: null, finishedAt: Date.now(), unread: p.unread || (!isActive && p.edits > 0) }
         default:
           return p
       }
@@ -149,6 +166,10 @@ export const usePresence = create<PresenceState>()(
 
   setPermission: (id, req) =>
     patch(set, id, (p) => ({ ...p, pendingPermission: req, status: req ? 'waiting' : p.status === 'waiting' ? 'working' : p.status })),
+
+  markBackgroundRun: (id) => patch(set, id, (p) => ({ ...p, backgroundRun: true })),
+
+  flagAttention: (id, reason) => patch(set, id, (p) => ({ ...p, needsAttention: reason, unread: true })),
 
   setError: (id) => patch(set, id, (p) => ({ ...p, status: 'error', finishedAt: Date.now() })),
 
