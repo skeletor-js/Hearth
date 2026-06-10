@@ -43,10 +43,16 @@ if (missing.length) {
 // Only these extensions matter to the updater; skip the rest of release/ (the
 // unpacked .app, builder-effective-config, etc.).
 const WANT = /\.(ya?ml|zip|blockmap|dmg)$/i
+const isFeed = (f) => /\.ya?ml$/i.test(f)
 const files = readdirSync(releaseDir)
   .filter((f) => WANT.test(f))
   .filter((f) => !/^builder-(debug|effective-config)/.test(f)) // electron-builder dumps, not feed assets
   .filter((f) => statSync(join(releaseDir, f)).isFile())
+  // Artifacts first, the feed (latest-mac.yml) LAST — by intent, not filename
+  // luck (U23): a client that reads a fresh feed before its artifacts finished
+  // uploading would 404 the download. readdirSync order only happened to work
+  // because 'H' sorts before 'l'.
+  .sort((a, b) => Number(isFeed(a)) - Number(isFeed(b)))
 
 if (!files.length) {
   console.error(`[publish] nothing to upload in ${releaseDir} — run \`bun run dist\` first.`)
