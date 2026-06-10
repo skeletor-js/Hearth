@@ -261,6 +261,9 @@ async function bootstrap(): Promise<void> {
   // never pollute the repo. Hearth itself is the built-in workspace at REPO_ROOT.
   const workspaces = new WorkspaceRegistry(join(dataDir, 'workspaces.json'), REPO_ROOT)
   const sessions = new SessionStore(join(dataDir, 'sessions'))
+  // Flush any debounced index bumps (U18) so a quit mid-stream can't leave a
+  // stale updatedAt/title behind the already-durable transcript appends.
+  app.once('before-quit', () => void sessions.flushPending())
 
   // Routines: scheduled agent tasks. Main only schedules + emits 'due'; the
   // renderer runs the prompt (the agent is never driven from here). The timer is

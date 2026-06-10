@@ -5,7 +5,37 @@ import type { PermissionRequest, SessionUpdate } from '../../electron/shared/pro
 // sessionStorage in the renderer; an inert in-memory shim under test/SSR (no global
 // sessionStorage there) so persist stays a no-op instead of throwing.
 const NOOP_STORAGE: StateStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} }
-const presenceStorage = (): StateStorage => (typeof sessionStorage !== 'undefined' ? sessionStorage : NOOP_STORAGE)
+
+/** Throttle persist writes (U18): presence updates per streamed token, and
+ * serializing the whole store to sessionStorage per token is amplification a
+ * trailing-edge write avoids. Worst case a reload loses <windowMs of presence —
+ * which rehydrate sanitizes anyway. Exported for tests. */
+export const throttledStorage = (inner: StateStorage, windowMs = 500): StateStorage => {
+  let lastWrite = 0
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let pending: [string, string] | null = null
+  const flush = () => {
+    timer = null
+    if (!pending) return
+    lastWrite = Date.now()
+    const [k, v] = pending
+    pending = null
+    inner.setItem(k, v)
+  }
+  return {
+    getItem: (k) => inner.getItem(k),
+    removeItem: (k) => inner.removeItem(k),
+    setItem: (k, v) => {
+      pending = [k, v]
+      const elapsed = Date.now() - lastWrite
+      if (elapsed >= windowMs) return flush()
+      if (!timer) timer = setTimeout(flush, windowMs - elapsed)
+    },
+  }
+}
+
+const presenceStorage = (): StateStorage =>
+  typeof sessionStorage !== 'undefined' ? throttledStorage(sessionStorage) : NOOP_STORAGE
 
 // Per-session presence — the coarse "what is this agent doing right now" state the
 // shell renders ambiently (rail dots, the living flame, "waiting on you", the

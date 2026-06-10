@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { changedRange, usePresence, getPresence, FRESH_PRESENCE } from './presence-store'
+import { changedRange, usePresence, getPresence, FRESH_PRESENCE, throttledStorage } from './presence-store'
 import { aggregateStatus } from '@/shell/Presence'
 import type { SessionUpdate } from '../../electron/shared/protocol'
 
@@ -102,5 +102,29 @@ describe('presence reducer', () => {
   test('getPresence returns a fresh record for unknown sessions', () => {
     reset()
     expect(getPresence('nope')).toEqual(FRESH_PRESENCE)
+  })
+})
+
+
+// U18: persist serializes per streamed token without a throttle.
+describe('throttledStorage', () => {
+  test('a token storm collapses to one leading + one trailing write', async () => {
+    const writes: string[] = []
+    const inner = { getItem: () => null, removeItem: () => {}, setItem: (_k: string, v: string) => void writes.push(v) }
+    const storage = throttledStorage(inner, 30)
+    for (let i = 0; i < 25; i++) storage.setItem('k', `v${i}`)
+    expect(writes).toEqual(['v0']) // leading write only, storm pending
+    await new Promise((r) => setTimeout(r, 45))
+    expect(writes).toEqual(['v0', 'v24']) // trailing write carries the final state
+  })
+
+  test('writes spaced past the window go straight through', async () => {
+    const writes: string[] = []
+    const inner = { getItem: () => null, removeItem: () => {}, setItem: (_k: string, v: string) => void writes.push(v) }
+    const storage = throttledStorage(inner, 10)
+    storage.setItem('k', 'a')
+    await new Promise((r) => setTimeout(r, 20))
+    storage.setItem('k', 'b')
+    expect(writes).toEqual(['a', 'b'])
   })
 })
