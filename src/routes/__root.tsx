@@ -34,6 +34,23 @@ function RootLayout() {
     applyTheme(s.theme, s.accent, s.reduceMotion)
   }, [s.theme, s.accent, s.reduceMotion])
 
+  // The onboarded flag lives in localStorage, which is per-ORIGIN — and the dev
+  // server port (and thus the origin) can drift across app restarts when the
+  // previous instance hasn't released it yet, bouncing an onboarded user back
+  // through onboarding with amnesiac prefs. Registered workspaces live in main
+  // and are the real signal: having any means onboarding already happened, so
+  // self-heal the flag instead of re-asking.
+  useEffect(() => {
+    if (s.onboarded) return
+    let live = true
+    void window.hearth.workspaces.list().then((l) => {
+      if (live && l.length > 0) s.setOnboarded(true)
+    })
+    return () => {
+      live = false
+    }
+  }, [s.onboarded])
+
   useRoutineRunner()
   usePresenceBridge()
   useBackgroundPersister()

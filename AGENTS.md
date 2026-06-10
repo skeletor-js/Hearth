@@ -67,6 +67,14 @@ After editing renderer or main-process code, run `bun run typecheck`. Restart-ti
 edits (`electron/**`, configs) are typechecked automatically before the app restarts;
 a failure is surfaced rather than bricking the app.
 
+## Project knowledge
+
+- `docs/solutions/` — documented solutions to past problems (bugs, best practices,
+  workflow patterns), organized by category with YAML frontmatter (`module`, `tags`,
+  `problem_type`). Relevant when implementing or debugging in documented areas.
+- `CONCEPTS.md` — shared domain vocabulary (entities, named processes, status
+  concepts). Relevant when orienting to the codebase or discussing domain concepts.
+
 ## Live-view semantics (important for view_app)
 
 - **Single-agent edits** hot-reload into the live app immediately — your normal
