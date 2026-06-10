@@ -14,6 +14,7 @@ import { toast } from '@/shell/toast'
 import { LiveTrace, inferKind, type DiffRow, type TraceResult, type TraceStep } from './trace'
 import { persistEntries } from '../transcript-persist'
 import { renderMd, handleCodeCopyClick } from './markdown'
+import { scaffoldTool } from '../scaffold-tool'
 
 type Block =
   | { kind: 'text'; text: string }
@@ -386,13 +387,7 @@ export function ChatView() {
   // then ask the agent to build it from what we just did. Only offered on the
   // Hearth self-session, where the agent's file tools can reach micro-apps/.
   const saveAsTool = async (slug: string) => {
-    try {
-      await window.hearth.microApps.create(slug)
-    } catch (e) {
-      const msg = String(e)
-      toast(msg.includes('Already exists') ? `A tool named “${slug}” already exists` : `Couldn’t create tool: ${msg}`)
-      return
-    }
+    if (!(await scaffoldTool(slug))) return
     toast(`Building tool “${slug}” — find it under Tools`)
     void send(
       `Turn our work in this conversation into a micro-app. I've scaffolded an empty one at micro-apps/${slug} ` +

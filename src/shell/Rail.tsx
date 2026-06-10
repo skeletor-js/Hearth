@@ -10,6 +10,7 @@ import { PresenceDot, isActiveStatus, statusWord, aggregateStatus } from './Pres
 import { openSession, startSession } from '@/app/sessions'
 import type { Workspace } from '../../electron/main/workspaces/registry'
 import type { SessionMeta } from '../../electron/main/sessions/store'
+import { useWorkspaces } from '@/app/use-workspaces'
 
 const itemClass = (active: boolean) => 'rail-item' + (active ? ' is-selected' : '')
 const footClass = (active: boolean) => 'foot-settings' + (active ? ' is-selected' : '')
@@ -21,18 +22,17 @@ export function Rail() {
   const activeId = useSession((s) => s.active?.id)
   const sessionsNonce = useSession((s) => s.sessionsNonce)
   const presenceById = usePresence((s) => s.byId)
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const workspaces = useWorkspaces()
   const [recent, setRecent] = useState<SessionMeta[]>([])
 
   useEffect(() => {
-    void window.hearth.workspaces.list().then(setWorkspaces)
     void window.hearth.sessions.list().then((l) => setRecent(l.slice(0, 8)))
   }, [sessionsNonce])
 
   const openFolder = async () => {
     const ws = await window.hearth.workspaces.open()
     if (!ws) return
-    setWorkspaces(await window.hearth.workspaces.list())
+    useSession.getState().bumpSessions() // the useWorkspaces hook refetches
     await startSession(ws)
     void navigate({ to: '/chat' })
   }

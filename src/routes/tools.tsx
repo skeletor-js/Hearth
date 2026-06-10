@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Icon } from '@/shell/Icon'
-import { toast } from '@/shell/toast'
 import { toToolSlug } from '@/app/chat/SaveAsTool'
 import type { MicroAppInfo } from '../../electron/main/micro-apps/server'
 import type { StarterInfo } from '../../electron/main/micro-apps/scaffold'
+import { scaffoldTool } from '@/app/scaffold-tool'
 
 export const Route = createFileRoute('/tools')({ component: ToolsScreen })
 
@@ -28,13 +28,7 @@ function ToolsScreen() {
   const create = async () => {
     const slug = toToolSlug(name)
     if (!picking || !slug) return
-    try {
-      await window.hearth.microApps.create(slug, picking.id || undefined)
-    } catch (e) {
-      const msg = String(e)
-      toast(msg.includes('Already exists') ? `A tool named “${slug}” already exists` : `Couldn’t create tool: ${msg}`)
-      return
-    }
+    if (!(await scaffoldTool(slug, picking.id || undefined))) return
     setPicking(null)
     setName('')
     open(slug)

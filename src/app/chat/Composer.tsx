@@ -6,6 +6,7 @@ import { Switch } from '@/app/settings/controls'
 import { GitPanel } from '@/app/workbench/GitPanel'
 import { useSession } from '@/app/session-store'
 import { startSession } from '@/app/sessions'
+import { useWorkspaces } from '../use-workspaces'
 
 const BACKENDS: Record<AgentKind, { name: string; sub: string; icon: string }> = {
   claude: { name: 'Claude', sub: 'Claude Agent · ACP', icon: 'terminal-window' },
@@ -188,10 +189,7 @@ function WorkspacePop({
   currentId: string | undefined
   onClose: () => void
 }) {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
-  useEffect(() => {
-    void window.hearth.workspaces.list().then(setWorkspaces)
-  }, [])
+  const workspaces = useWorkspaces()
 
   const pick = async (ws: Workspace) => {
     onClose()
@@ -345,18 +343,12 @@ export function Composer({
   }, [cwd, diffNonce])
 
   // Workspace name: match the active workspace id, fall back to the cwd basename.
+  const allWorkspaces = useWorkspaces()
   useEffect(() => {
-    let live = true
     if (!cwd) return setWsName(null)
-    void window.hearth.workspaces.list().then((list) => {
-      if (!live) return
-      const ws = list.find((w) => w.id === workspaceId)
-      setWsName(ws?.name ?? basename(cwd))
-    })
-    return () => {
-      live = false
-    }
-  }, [cwd, workspaceId])
+    const ws = allWorkspaces.find((w) => w.id === workspaceId)
+    setWsName(ws?.name ?? basename(cwd))
+  }, [cwd, workspaceId, allWorkspaces])
 
   // Pulse the workspace chip when New Session signals the workspace is changeable.
   useEffect(() => {
