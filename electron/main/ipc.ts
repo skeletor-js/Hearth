@@ -49,6 +49,7 @@ import { readActiveConnectors } from './mcp/active-connectors.js'
 import { resolveAuth, apiKeyRefs } from './agents/auth-config.js'
 import { hasStoredLogin } from './agents/login-presence.js'
 import { listSkills, globalSkillsDir, setSkillEnabled } from './skills/list.js'
+import { assertCreateRoutineInput, assertMcpServerInput, assertMcpServerPatch, assertRoutinePatch, assertSoulConfig } from './ipc-validate.js'
 
 let runSeq = 0
 
@@ -354,8 +355,14 @@ export function registerIpc(services: MainServices): void {
   // Routines: CRUD on definitions + a manual fire. The schedule timer (started in
   // index.ts) emits routineDue to the renderer, which runs the prompt.
   ipcMain.handle(HEARTH_CHANNELS.routinesList, () => routines.list())
-  ipcMain.handle(HEARTH_CHANNELS.routinesCreate, (_e, input: CreateRoutineInput) => routines.create(input))
-  ipcMain.handle(HEARTH_CHANNELS.routinesUpdate, (_e, id: string, patch: Partial<CreateRoutineInput>) => routines.update(id, patch))
+  ipcMain.handle(HEARTH_CHANNELS.routinesCreate, (_e, input: CreateRoutineInput) => {
+    assertCreateRoutineInput(input) // U22: validated before it reaches disk
+    return routines.create(input)
+  })
+  ipcMain.handle(HEARTH_CHANNELS.routinesUpdate, (_e, id: string, patch: Partial<CreateRoutineInput>) => {
+    assertRoutinePatch(patch)
+    return routines.update(id, patch)
+  })
   ipcMain.handle(HEARTH_CHANNELS.routinesSetEnabled, (_e, id: string, enabled: boolean) => routines.setEnabled(id, enabled))
   ipcMain.handle(HEARTH_CHANNELS.routinesDelete, (_e, id: string) => routines.remove(id))
   ipcMain.handle(HEARTH_CHANNELS.routinesRunNow, (_e, id: string) => scheduler.runNow(id))
@@ -415,6 +422,7 @@ export function registerIpc(services: MainServices): void {
     }
   })
   ipcMain.handle(HEARTH_CHANNELS.personalitySet, async (_e, config: SoulConfig) => {
+    assertSoulConfig(config) // U22: validated before it reaches disk + global agent files
     await mkdir(dirname(personalityPath), { recursive: true })
     await nodeWriteFile(personalityPath, JSON.stringify(config, null, 2) + '\n')
     await soul.setPersonality(config) // writes the managed block into Claude/Codex global files
@@ -487,8 +495,14 @@ export function registerIpc(services: MainServices): void {
 
   // MCP servers the user adds (merged into each new ACP session).
   ipcMain.handle(HEARTH_CHANNELS.mcpList, () => mcp.list())
-  ipcMain.handle(HEARTH_CHANNELS.mcpAdd, (_e, input: McpServerInput) => mcp.add(input))
-  ipcMain.handle(HEARTH_CHANNELS.mcpUpdate, (_e, id: string, patch: Partial<McpServerInput>) => mcp.update(id, patch))
+  ipcMain.handle(HEARTH_CHANNELS.mcpAdd, (_e, input: McpServerInput) => {
+    assertMcpServerInput(input) // U22: validated before it reaches disk
+    return mcp.add(input)
+  })
+  ipcMain.handle(HEARTH_CHANNELS.mcpUpdate, (_e, id: string, patch: Partial<McpServerInput>) => {
+    assertMcpServerPatch(patch)
+    return mcp.update(id, patch)
+  })
   ipcMain.handle(HEARTH_CHANNELS.mcpRemove, (_e, id: string) => {
     // A5: clean up the server's stored secrets so they don't orphan in the keyring.
     const cfg = mcp.get(id)
