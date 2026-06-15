@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__hearth-view__view_app",
+      "mcp__hearth__read_ui",
+      "mcp__hearth__fill",
+      "mcp__hearth__view_app"
+    ],
+    "defaultMode": "default"
+  },
+  "enabledMcpjsonServers": [
+    "context7",
+    "playwright"
+  ]
+}
