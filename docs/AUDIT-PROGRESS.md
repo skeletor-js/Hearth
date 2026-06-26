@@ -1,0 +1,65 @@
+# Hearth Audit Remediation — Progress
+
+Loop state for `docs/plans/2026-06-09-001-refactor-hearth-audit-remediation-plan.md`.
+The plan is the source of truth for each unit's approach, files, tests, and
+verification. This file is the loop's memory: read it first each iteration, update
+it last. Progress is derived from git by the executing loop — this table mirrors it.
+
+**Pick rule:** lowest-numbered unit whose every dependency is DONE.
+**Status values:** TODO · DOING · DONE · BLOCKED.
+
+| Unit | Title | Phase | Deps | Status | Branch | Verified | Notes |
+|---|---|---|---|---|---|---|---|
+| U1 | CI workflow | 0 | — | DONE | audit/U1-ci-workflow | local 3 gates + clean-clone sim (390 pass) + PR #4 checks green | pushed per U1 exception; awaiting owner confirmation. Deviations: routeTree.gen.ts was never committed (gitignored) → added scripts/generate-route-tree.mjs + routes:gen + @tanstack/router-generator devDep (exact pin, dedupes); --ignore-scripts also skips dugite postinstall → CI fetches its embedded git explicitly; checkout@v5 (Node 20 deprecation) |
+| U2 | Route-tree freshness gate + regenerate | 0 | U1 | DONE | audit/U2-route-tree-gate | 3 gates green (395 pass); clone: deleted route → exit 1 w/ path; missing tree → exit 1 | gate runs inside `bun run typecheck`, which validate.ts + CI both exec — island untouched. Tree was never committed (audit premise stale); kept gitignored, gate guards the on-disk tree |
+| U3 | Turn-lifecycle characterization tests | 0 | — | DONE | audit/U3-turn-lifecycle-tests | 7 tests green; reorder-mutation → red (clone); suite 397 pass; typecheck+lint clean | zero production edits — real ipc.ts handler driven via mock.module (electron, pty, overlay-client); no app restart |
+| U4 | fsWrite hard-deny island/blocked | 1 | — | DONE | audit/U4-fswrite-hard-deny | 7 new guard tests; suite 397 pass; live eval_js: island writes rejected w/ typed msg, canvas allowed | guard lives in fs/files.ts writeFileGuarded (server-side, called from ipc.ts) — no island edit; FilesTab surfaces rejections. App started via bun dev for live verify |
+| U5 | Agent-exit recovery + attributed errors | 1 | U3 | DONE | audit/U5-agent-exit-recovery | suite 401 pass + live kill -9 mid-stream: turn rejects w/ AgentDiedError, agent:error {sessionKey:'u5-kill-verify'} observed in renderer, next prompt reconnects fresh | live verify caught 2 real bugs: AcpAgent missing onExit delegation; death race didn't cover slow session/new. Lesson: COMMIT before live-turn verification — app recovery swept uncommitted work into 'recovered' commits (soft-reset + recommitted clean) |
+| U6 | Replay/live ordering + stick-to-bottom | 1 | U5, U12 | DONE | audit/U6-replay-live-ordering | live mid-stream switch: 250/250 items, 1 contiguous ol, no dup/disorder; scroll-up holds while height grows; bottom follows; rapid switches no bleed; 6 merge tests; suite 409 | stacked on U12 (merge order U11→U12→U6). Note: hidden window suppresses frame-aligned scroll events — gate verified w/ explicit dispatch; harmless when hidden |
+| U7 | Background permission policy | 1 | U5 | DONE | audit/U7-bg-permission-policy | 8 policy tests; live FakeAgent: bg ask auto-rejected + turn completes, fg ask waits, auto-tier still approves | DECISION: fail-closed (recorded; no WaitingBanner surface). Policy = pure module src/app/permission-policy.ts; bg flag set by runBackgroundTurn; deny flags needsAttention+unread+toast. Real-adapter note: claude auto-allows safe cmds (echo) without asking |
+| U8 | Agent-bridge Host/Origin allowlist | 1 | — | DONE | audit/U8-bridge-host-check | 7 bridge tests; live: eval/snapshot 200, foreign Host 403, Origin 403 | 403 gate runs before the 401 token check |
+| U9 | Release-pipeline integrity | 1 | U1 | DONE | audit/U9-release-integrity | dry-run: 21 seeds→53 pkgs, 19.8MB, no tooling; vite build rooted at staged payload resolves clean; clean-clone frozen-lockfile build OK | allowlist = computed closure from src/ imports, FORBIDDEN guard fails build on tooling; docs/PACKAGING-CHANNELS.md explains shell-vs-payload placement. First-run boot of installed payload deferred to U10's dist smoke |
+| U10 | Electron upgrade 33 → current | 1 | U1, U2 | DONE | audit/U10-electron-upgrade | 4 pair-steps (36/38/40/42.4.0) each: suite 390 + build + boot + pty + browser; HMR at 42; toolchain ev5/builder26/notarize3 green; signed dist (codesign VALID, dmg+zip) | AWAITING OWNER SIGN-OFF BEFORE MERGE (KTD-6). Current supported resolved live: 42 (40/41/42 window). Notarize self-skipped (no APPLE_* env). node_modules now holds the 42 binary regardless of branch |
+| U11 | Memoize chat render path | 2 | — | DONE | audit/U11-memoize-chat | live on-screen 1500-word/6-fence stream: 2/9114 frames >33ms (no jank); copy→'Copied'; sanitization live-checked; gates green | memo(MessageView)+TextBlock(useMemo renderMd)+useCallback handlers; highlightAuto dropped (unlabeled fences escape). DevTools unavailable — scoped re-renders argued from memo+tail-identity + frame data |
+| U12 | Extract + test transcript reducer | 2 | U11 | DONE | audit/U12-transcript-reducer | 13 reducer tests; suite 403; on-screen stream renders identically (trace+text+fence) | branch stacked on U11 (memo boundaries); merge order U11→U12. Behavior-preserving; ChatView −190 lines; ids caller-minted, plan sink injected |
+| U13 | Extract TurnCoordinator from ipc.ts | 2 | U3, U5 | DONE | audit/U13-turn-coordinator | 10 coordinator tests (U3 scenarios + W5/W6/W7 surfacing); handler = 5-line transport; suite 400; live turn through coordinator resolved | DEVIATION: placed at electron/main/turn-coordinator.ts (plan said self-mod/, but that's the island; lifecycle was canvas code anyway). ipc.ts 512 lines (plan hoped ~450 — soft target) |
+| U14 | Main-process file logging + handlers | 2 | — | DONE | audit/U14-file-logging | 3 logger tests (path/rotation/never-throws); live: boot lines + adapter error captured in userData/Logs/main.log; revealLogs IPC verified | 9 console sites + adapter stderr routed; uncaught handlers sync-flush; Settings → Reveal log |
+| U15 | Micro-app server stop-on-unmount | 2 | — | DONE | audit/U15-microapp-stop | live: leave→vite exits at +31s, list reconciles false; return at +8s → same pid, survives 65s mounted; quit path untouched | only one scaffolded tool (demo) exists — per-name mechanism verified once; 3-tool scenario follows mechanically. Pre-existing: server.ts doesn't reap self-exits (stale running entry until next stop) |
+| U16 | Rewrite ARCHITECTURE State section | 2 | — | DONE | audit/U16-architecture-state-doc | section derived from + checked against session-store/presence-store/Composer/store inventory; lint+typecheck green | also scoped the "every channel is validated" claim, pointing structured-input validation at U22 |
+| U17 | Relocate design/handoff out of canvas | 3 | — | DONE | audit/U17-relocate-design | git mv → docs/design/; 3 referrers fixed; gates green; zero importers confirmed | eslint never matched the .jsx files (no ignores entry needed) |
+| U18 | Throttle per-delta writes | 3 | U12 | DONE | audit/U18-throttle-writes | tests observe real fs writes: 10 appends → 0 index rewrites until flush (mtime pinned); crash-in-window recovers transcript + title; throttle leading+trailing | first bump writes through (sweep-safety + title); flushPending on before-quit; presence persist 500ms throttled. Branched off main (no real U12 code dependency) |
+| U19 | eslint react-hooks + noUncheckedIndexedAccess | 3 | — | DONE | audit/U19-lint-strictness | rules-of-hooks: error, 0 violations; exhaustive-deps: warn (10 deliberate mount-once sites); gates green | CHECKPOINT DECISION: noUncheckedIndexedAccess REJECTED — 79 errors, 41 inside the unwritable self-mod island; samples in iteration report for owner review |
+| U20 | Fix 3 real error silencers | 3 | U14 | DONE | audit/U20-error-silencers | live: bad-cwd terminal → renderer reason payload + main.log entry; gates green | stacked on U14 (needs logger); terminalExit carries optional reason; deliberate catches untouched |
+| U21 | Shared useWorkspaces hook + dedup | 3 | — | DONE | audit/U21-useworkspaces | 7 components on the hook; toast helper shared; gates green; live rail renders via hook | sessions.ts/runner.ts keep direct list() (not components). No hook unit test — repo has no React test runner by owner decision; liveness via nonce verified live |
+| U22 | Runtime validation for disk-bound IPC | 3 | U16 | DONE | audit/U22-ipc-validation | 6 guard tests (29 asserts); live malformed routines.create rejected w/ typed InvalidInputError; suite 396 | hand-rolled guards, creates + partial patches covered; no framework |
+| U23 | Publish ordering + cleanup | 3 | — | DONE | audit/U23-publish-ordering | adversarial-name simulation: feed sorts last regardless of filename; gates green | .hearth clutter removed (local hygiene, gitignored) |
+
+## Iteration log
+
+_(Append one line per completed iteration: date · unit · result · branch.)_
+
+- 2026-06-09 · U1 · DONE — CI gate live, PR #4 checks green (push + PR runs, ~30s each); clean-clone sim 390/390; gate-bites check red→green · audit/U1-ci-workflow
+- 2026-06-09 · U2 · DONE — freshness gate in typecheck path (covers validate.ts + CI transitively); deleted-route → red verified in clone; 395/395 · audit/U2-route-tree-gate
+- 2026-06-09 · U3 · DONE — 7 characterization tests pin the agentPrompt lifecycle, unmodified handler via mock.module; reorder→red proven · audit/U3-turn-lifecycle-tests
+- 2026-06-09 · U4 · DONE — fsWrite hard-deny via writeFileGuarded + FilesTab surface; live eval_js deny/allow observed · audit/U4-fswrite-hard-deny
+- 2026-06-09 · U5 · DONE — adapter death first-class: onExit→host evict→typed reject→attributed broadcast; kill -9 verified live end-to-end · audit/U5-agent-exit-recovery
+- 2026-06-09 · U7 · DONE — fail-closed bg permission policy (pure module + presence flag); FakeAgent live verify: bg reject/fg wait/auto approve · audit/U7-bg-permission-policy
+- 2026-06-09 · U8 · DONE — Host/Origin allowlist before token check; live 200/403/403 observed · audit/U8-bridge-host-check
+- 2026-06-09 · U9 · DONE — tar declared; payload = computed import closure (21→53 pkgs, 19.8MB); payload-rooted vite build green; clean-clone build green · audit/U9-release-integrity
+- 2026-06-09 · U10 · DONE (awaiting merge sign-off) — 33→36→38→40→42.4.0 stepwise-verified; toolchain bumped; signed dist smoke VALID · audit/U10-electron-upgrade
+- 2026-06-09 · U11 · DONE — memo(MessageView)+TextBlock+no highlightAuto; on-screen stream 2/9114 long frames; copy + sanitize live-verified · audit/U11-memoize-chat
+- 2026-06-09 · U12 · DONE — pure transcript-reducer.ts + 13 tests; ChatView −190 lines; on-screen render identical · audit/U12-transcript-reducer (stacked on U11)
+- 2026-06-09 · U6 · DONE — replay buffers live updates + positional dedup vs snapshot; atBottom-gated scroll; all 4 plan scenarios observed live · audit/U6-replay-live-ordering (stacked on U12)
+- 2026-06-09 · U13 · DONE — TurnCoordinator extracted verbatim w/ DI; 10 tests; 5-line transport handler; live turn green · audit/U13-turn-coordinator
+- 2026-06-09 · U14 · DONE — rotating file logger + uncaught handlers + stderr routing + Reveal log; live adapter error observed in main.log · audit/U14-file-logging
+- 2026-06-09 · U15 · DONE — 30s-grace stop-on-unmount; live process-check: death +31s, reuse same pid within grace · audit/U15-microapp-stop
+- 2026-06-09 · U16 · DONE — State section rewritten to the real 5-store nonce-refetch design; broadcast recorded as deliberately unbuilt · audit/U16-architecture-state-doc
+- 2026-06-09 · U17 · DONE — design/handoff → docs/design via git mv; referrers fixed · audit/U17-relocate-design
+- 2026-06-09 · U18 · DONE — index-bump debounce (first-bump write-through) + presence persist throttle; fs-observed in tests · audit/U18-throttle-writes
+- 2026-06-09 · U19 · DONE — react-hooks rules shipped (0 violations, 10 deliberate dep warnings); noUncheckedIndexedAccess REJECTED on churn (79 errors, 41 in island) · audit/U19-lint-strictness
+- 2026-06-09 · U20 · DONE — 3 silencers fixed; live bad-cwd terminal shows reason + logs · audit/U20-error-silencers (stacked on U14)
+- 2026-06-09 · U21 · DONE — useWorkspaces across 7 components + shared scaffold toast; live rail verified · audit/U21-useworkspaces
+- 2026-06-09 · U22 · DONE — hand-rolled guards for MCP/routine/soul inputs incl. patches; live malformed create rejected typed · audit/U22-ipc-validation
+- 2026-06-09 · U23 · DONE — explicit feed-last upload; clutter removed · audit/U23-publish-ordering
+
+**ALL 23 UNITS RESOLVED.** Recommended merge order: U1 (PR #4) → U2 → U3 → U4 → U5 → U7 → U8 → U9 → [U10 after owner sign-off] → U6-stack (brings U11+U12) → U13 → U20-stack (brings U14) → U15 → U16 → U17 → U18 → U19 → U21 → U22 → U23. Expect small manual merges in package.json (scripts/devDeps across U1/U2/U9/U10/U19), ipc.ts (U4/U5/U13/U14/U20/U22), ChatView.tsx (U5/U6-stack/U21). After merging U10, run `bun install` (node_modules already holds the Electron 42 binary).
