@@ -23,13 +23,13 @@ test('always lists the built-in Hearth workspace first', async () => {
 })
 
 test('adds a user folder and persists it', async () => {
-  const ws = await reg.add('/Users/jordan/dev/ledger-api')
-  expect(ws.name).toBe('ledger-api')
+  const ws = await reg.add('/Users/x/dev/some-api')
+  expect(ws.name).toBe('some-api')
   expect(ws.isHearth).toBe(false)
 
   const reloaded = new WorkspaceRegistry(join(dir, 'workspaces.json'), REPO)
   const list = await reloaded.list()
-  expect(list.map((w) => w.name)).toEqual(['Hearth', 'ledger-api'])
+  expect(list.map((w) => w.name)).toEqual(['Hearth', 'some-api'])
 })
 
 test('adding the same path twice is idempotent', async () => {
@@ -46,16 +46,16 @@ test('adding the repo root returns the built-in Hearth workspace', async () => {
 })
 
 test('contains() accepts the repo root, a registered folder, and paths inside them', async () => {
-  await reg.add('/Users/jordan/dev/ledger-api')
+  await reg.add('/Users/x/dev/some-api')
   expect(await reg.contains(REPO)).toBe(true)
   expect(await reg.contains(join(REPO, 'src/app'))).toBe(true)
-  expect(await reg.contains('/Users/jordan/dev/ledger-api')).toBe(true)
-  expect(await reg.contains('/Users/jordan/dev/ledger-api/electron/main')).toBe(true)
+  expect(await reg.contains('/Users/x/dev/some-api')).toBe(true)
+  expect(await reg.contains('/Users/x/dev/some-api/electron/main')).toBe(true)
 })
 
 test('contains() rejects unregistered paths and traversal lookalikes', async () => {
   await reg.add('/x/proj')
-  expect(await reg.contains('/Users/jordan/.zshrc')).toBe(false)
+  expect(await reg.contains('/Users/x/.zshrc')).toBe(false)
   expect(await reg.contains('/x/proj-evil')).toBe(false) // not a child despite the prefix
   expect(await reg.contains(join('/x/proj', '../../etc/passwd'))).toBe(false)
 })

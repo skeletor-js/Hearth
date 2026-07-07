@@ -24,3 +24,7 @@ micro-apps/*/dist/
 
 # Compound Engineering local config
 .compound-engineering/*.local.yaml
+
+# local agent config
+.claude/settings.local.json
+.claude/.supermemory-claude/
