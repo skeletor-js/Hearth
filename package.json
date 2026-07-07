@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "description": "A self-evolving macOS desktop client for coding agents (Claude Code, Codex) over ACP.",
+  "author": "Jordan Stella <jordanjstella@gmail.com>",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev --watch",
