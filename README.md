@@ -33,10 +33,10 @@ stay on your machine.
 
 ## Install
 
-### [Download for macOS (Apple Silicon)](https://pub-aacb176d4db84288936664754f7f6c5b.r2.dev/Hearth-0.1.0-arm64.dmg)
+### [Download for macOS (Apple Silicon)](https://github.com/skeletor-js/Hearth/releases/latest)
 
-Open the `.dmg`, drag Hearth to Applications, and launch it. The current hosted
-build is not yet notarized, so Gatekeeper will warn on first launch: right-click
+Open the `.dmg`, drag Hearth to Applications, and launch it. The current build is
+signed but not yet notarized, so Gatekeeper will warn on first launch: right-click
 the app and choose Open. A notarized build is coming; building from source (below)
 avoids the warning entirely. Either way you need a locally-authenticated Claude
 Code or Codex before it will do anything useful.
