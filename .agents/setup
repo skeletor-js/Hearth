@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# .agents/setup lives one directory below the repo root. Amp pre-setup
+# already runs with cwd at the repo root — do not climb from a temp path.
+if [[ "$(basename "$(dirname "$0")")" == ".agents" ]]; then
+  cd "$(dirname "$0")/.."
+fi
+
+if [[ -f pnpm-lock.yaml ]]; then
+  if command -v corepack >/dev/null 2>&1; then
+    corepack enable
+  fi
+  pnpm install --frozen-lockfile
+elif [[ -f bun.lock || -f bun.lockb ]]; then
+  bun install --frozen-lockfile
+elif [[ -f package-lock.json ]]; then
+  npm ci
+elif [[ -f yarn.lock ]]; then
+  yarn install --frozen-lockfile
+elif [[ -f uv.lock ]]; then
+  uv sync --frozen
+elif [[ -f pyproject.toml ]]; then
+  if command -v uv >/dev/null 2>&1; then
+    uv sync
+  else
+    pip install -e .
+  fi
+else
+  echo "no lockfile at repo root; skipping dependency install"
+fi
